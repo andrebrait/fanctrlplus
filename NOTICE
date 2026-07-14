@@ -1,0 +1,45 @@
+FanCtrl Plus 2
+Copyright (C) 2026 Andre Brait
+
+FanCtrl Plus 2 is derived from FanCtrl Plus by ck9393:
+Copyright (C) 2025 ck9393
+https://github.com/ck9393/fanctrlplus
+
+FanCtrl Plus is derived from Dynamix System AutoFan:
+Copyright (C) 2012-2023 Bergware International
+Plugin development contribution by gfjardim
+Multifan support contribution by InfinityMod
+https://github.com/bergware/dynamix
+
+The Dynamix AutoFan shell-script history attributes contributions to Aiden,
+Dan Stroot, Guzzi, gfjardim, Bergware, syntactic-salt, andreiio, InfinityMod,
+and doron. That script lineage developed from earlier Unraid community fan
+control work, including the script published by xamindar in 2010.
+
+The repository history preserves the licensing and provenance evidence:
+
+- bergware/dynamix commit d1953b3f20ce5c150227a8cc2d5e7beaa2136436
+  added the Dynamix AutoFan sources with GNU GPL version 2 notices in 2015.
+- bergware/dynamix commit 900f103246ea8fee1c63a13d916f9567511f0f91
+  is the last AutoFan update before FanCtrl Plus was created. Its core PHP
+  files retain the same GNU GPL version 2 notices.
+- ck9393/fanctrlplus commit 0e8300c9d3eae96731a43fc1fca472dde3dccd44
+  introduced the derivative plugin. It retained the Dynamix identity and a
+  GNU GPL version 2 notice in source/include/update.autofan.php, while other
+  copied core files omitted their existing notices.
+- ck9393/fanctrlplus commit 6869501886f533e6ded2353cb524cf4c8e155963
+  repackaged the derivative and omitted the remaining notice.
+- ck9393/fanctrlplus commit 2a29af1d11ff7866b0922d359b0571b75734772c
+  then removed the original source directory containing that notice.
+- ck9393/fanctrlplus commit 26a029d658ccf7db3c33c3fa2f1e47cd1c9114e2
+  added byte-identical copies of the repackaged core files at the repository
+  root. The present FanCtrl Plus 2 files descend from those files through the
+  repository's normal modification and rename history.
+
+Deleting a license notice from a derivative does not replace or cancel the
+original license grant. This distribution therefore restores and follows the
+license selected by the original licensor: GNU General Public License version
+2 only (SPDX: GPL-2.0-only). See LICENSE for the complete terms.
+
+Bundled third-party software remains under its own compatible license. See
+THIRD_PARTY_NOTICES.md.

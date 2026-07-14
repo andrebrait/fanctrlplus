@@ -44,6 +44,18 @@ Support / Issues
 - https://github.com/andrebrait/fanctrlplus/issues
 - Original plugin: https://github.com/ck9393/fanctrlplus
 
+## License and provenance
+
+FanCtrl Plus 2 is free software licensed under the GNU General Public
+License, version 2 only (`GPL-2.0-only`). See [LICENSE](LICENSE) for the
+complete license text and [NOTICE](NOTICE) for the copyright, attribution,
+and source-lineage record.
+
+The plugin is derived from FanCtrl Plus by ck9393, which is itself derived
+from Dynamix System AutoFan by Bergware International and its contributors.
+Bundled third-party components retain their own compatible licenses; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 - Support original FanCtrl Plus author ck9393:
 
 <p align="left">

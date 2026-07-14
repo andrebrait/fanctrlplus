@@ -1,4 +1,21 @@
 <?php
+/* Copyright 2012-2023, Bergware International.
+ * Copyright 2025, ck9393.
+ * Copyright 2026, Andre Brait.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * Dynamix System AutoFan plugin development contribution by gfjardim.
+ * Modified for FanCtrl Plus in 2025 by ck9393.
+ * Modified for FanCtrl Plus 2 in 2026 by Andre Brait.
+ *
+ * SPDX-License-Identifier: GPL-2.0-only
+ */
 ob_start(); // Buffer output so unexpected text cannot corrupt JSON.
 
 $plugin = 'fanctrlplus2';
