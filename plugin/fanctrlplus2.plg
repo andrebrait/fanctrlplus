@@ -1,0 +1,145 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN>
+
+<PLUGIN
+  name="fanctrlplus2"
+  author="ck9393 / andrebrait"
+  version="1.4.0"
+  launch="Settings/fanctrlplus2"
+  pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
+  min="6.9.0"
+  support="https://github.com/andrebrait/fanctrlplus/issues"
+  project="https://github.com/andrebrait/fanctrlplus"
+  readme="https://github.com/andrebrait/fanctrlplus#readme"
+>
+
+<ICON>
+/usr/local/emhttp/plugins/fanctrlplus2/images/fanctrlplus2.png
+</ICON>
+
+<CHANGES>
+<![CDATA[
+
+### 1.4.0
+
+FanCtrl Plus 2 is a separately named fork of FanCtrl Plus 1.3.3.
+
+- Adds auxiliary temperature sources through hwmon, storcli, and nvidia-smi.
+- Adds per-disk-group temperature ranges; each fan uses the highest computed PWM.
+- Imports existing FanCtrl Plus configuration on first install, then requires upstream removal before installation can complete.
+
+
+For older releases, see https://github.com/andrebrait/fanctrlplus/releases
+]]>
+</CHANGES>
+
+<FILE Run="/bin/bash">
+<INLINE>
+<![CDATA[
+old_manifest="/boot/config/plugins/fanctrlplus.plg"
+old_runtime="/usr/local/emhttp/plugins/fanctrlplus"
+old_config="/boot/config/plugins/fanctrlplus"
+new_config="/boot/config/plugins/fanctrlplus2"
+marker="$new_config/.migration-v1"
+
+if [[ ! -e "$marker" ]]; then
+  mkdir -p "$new_config"
+
+  if [[ -d "$old_config" ]]; then
+    for old_cfg in "$old_config"/fanctrlplus_*.cfg; do
+      [[ -f "$old_cfg" ]] || continue
+      old_name="${old_cfg##*/}"
+      new_cfg="$new_config/fanctrlplus2_${old_name#fanctrlplus_}"
+      [[ -e "$new_cfg" ]] || cp -p "$old_cfg" "$new_cfg"
+    done
+
+    if [[ -f "$old_config/order.cfg" && ! -e "$new_config/order.cfg" ]]; then
+      sed 's/fanctrlplus_/fanctrlplus2_/g' "$old_config/order.cfg" > "$new_config/order.cfg.tmp" &&
+        mv "$new_config/order.cfg.tmp" "$new_config/order.cfg"
+    fi
+
+    if [[ -f "$old_config/pwm_labels.cfg" && ! -e "$new_config/pwm_labels.cfg" ]]; then
+      cp -p "$old_config/pwm_labels.cfg" "$new_config/pwm_labels.cfg"
+    fi
+  fi
+
+  touch "$marker"
+fi
+
+if [[ -f "$old_manifest" || -d "$old_runtime" ]]; then
+  echo ""
+  echo "FanCtrl Plus configuration imported into FanCtrl Plus 2."
+  echo "Uninstall upstream FanCtrl Plus, then install FanCtrl Plus 2 again."
+  echo "Installation stopped to prevent both plugins controlling the same fans."
+  echo ""
+  exit 1
+fi
+
+exit 0
+]]>
+</INLINE>
+</FILE>
+
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.0-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.0/fanctrlplus2-1.4.0-noarch-1.txz</URL>
+<SHA256>718078496314c4f792e08fe72af08376f8106bbaa575da4b2810539f4e45b925</SHA256>
+</FILE>
+
+<FILE Run="/bin/bash">
+<INLINE>
+<![CDATA[
+for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.0-noarch-1.txz" ]] || rm -f "$package"
+done
+
+src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
+dst="/etc/rc.d/rc.fanctrlplus2"
+if [[ -f "$src" ]]; then
+  ln -sf "$src" "$dst"
+fi
+
+mkdir -p /var/tmp/fanctrlplus2
+rm -f /var/tmp/fanctrlplus2/*
+pkill -f "/usr/local/emhttp/plugins/fanctrlplus2/scripts/array_monitor.sh"
+
+if [[ -x "$dst" ]]; then
+  "$dst" restart
+fi
+
+script="/usr/local/emhttp/plugins/fanctrlplus2/scripts/array_monitor.sh"
+if [[ -x "$script" ]]; then
+  nohup "$script" >/dev/null 2>&1 &
+fi
+
+echo ""
+echo "------------------------------------------------"
+echo " FanCtrl Plus 2 is installed."
+echo " Version: 1.4.0"
+echo "------------------------------------------------"
+echo ""
+exit 0
+]]>
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+<![CDATA[
+/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2 stop 2>/dev/null
+pkill -f "/usr/local/emhttp/plugins/fanctrlplus2/scripts/array_monitor.sh"
+removepkg fanctrlplus2 2>/dev/null || true
+
+rm -rf /usr/local/emhttp/plugins/fanctrlplus2
+rm -rf /boot/config/plugins/fanctrlplus2
+rm -f /etc/rc.d/rc.fanctrlplus2
+
+echo "============================================================"
+echo "    FanCtrl Plus 2 has been removed."
+echo "    Reboot to restore fan control to BIOS or other tools."
+echo "============================================================"
+exit 0
+]]>
+</INLINE>
+</FILE>
+
+</PLUGIN>
