@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Maintainer>
-  <Icon>https://raw.githubusercontent.com/ck9393/fanctrlplus/main/images/fanctrlplus.png</Icon>
+  <Icon>https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/src/usr/local/emhttp/plugins/fanctrlplus2/images/fanctrlplus2.png</Icon>
   <Profile>
-    FanCtrl Plus author. Personal project for Unraid, developed from real-world needs.
+    FanCtrl Plus 2 maintainer. Fork of FanCtrl Plus by ck9393.
   </Profile>
-  <Forum>https://forums.unraid.net/topic/191722-plugin-fancrtl-plus/</Forum>
-  <DonateLink>https://www.paypal.com/paypalme/cck9393</DonateLink>
-  <DonateText>If you like my work, please consider donating!</DonateText>
+  <Forum>https://github.com/andrebrait/fanctrlplus/issues</Forum>
 </Maintainer>

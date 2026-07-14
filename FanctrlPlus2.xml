@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Containers>
+  <Plugin>True</Plugin>
+  <PluginURL>https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg</PluginURL>
+  <PluginAuthor>ck9393 / andrebrait</PluginAuthor>
+  <Category>Tools:System</Category>
+  <Name>FanCtrl Plus 2</Name>
+  <Description>FanCtrl Plus 2 controls fans from disk, CPU, and auxiliary temperatures, including independent temperature ranges for multiple disk groups. Fork of FanCtrl Plus by ck9393.</Description>
+  <MinVer>6.9.0</MinVer>
+  <Support>https://github.com/andrebrait/fanctrlplus/issues</Support>
+  <Project>https://github.com/andrebrait/fanctrlplus</Project>
+  <Icon>https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/src/usr/local/emhttp/plugins/fanctrlplus2/images/fanctrlplus2.png</Icon>
+  <DonateText>Support original FanCtrl Plus author ck9393</DonateText>
+  <DonateLink>https://www.paypal.com/paypalme/cck9393</DonateLink>
+</Containers>

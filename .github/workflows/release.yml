@@ -1,0 +1,19 @@
+name: Release Unraid Plugin
+
+on:
+  release:
+    types: [released]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dkaser/unraid-plugin-release-action@v1.1.4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          plugin_version: ${{ github.event.release.name }}
+          plg_branch: main
+          build_script: cp README.md src/usr/local/emhttp/plugins/fanctrlplus2/README.md

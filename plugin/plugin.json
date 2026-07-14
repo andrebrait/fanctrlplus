@@ -1,0 +1,10 @@
+{
+  "name": "fanctrlplus2",
+  "package_name": "fanctrlplus2",
+  "author": "ck9393 / andrebrait",
+  "min": "6.9.0",
+  "launch": "Settings/fanctrlplus2",
+  "support": "https://github.com/andrebrait/fanctrlplus/issues",
+  "project": "https://github.com/andrebrait/fanctrlplus",
+  "readme": "https://github.com/andrebrait/fanctrlplus#readme"
+}
