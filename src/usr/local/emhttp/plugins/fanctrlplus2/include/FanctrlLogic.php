@@ -23,7 +23,7 @@ if ($op === 'refresh_single' && !empty($_GET['custom'])) {
 
 function json_response($data) {
   while (ob_get_level()) {
-    ob_end_clean(); // 安全清除所有输出缓冲区，避免 notice 错误
+    ob_end_clean(); // Clear all output buffers so notices cannot corrupt the response.
   }
   header('Content-Type: application/json');
   echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -44,29 +44,29 @@ switch ($op) {
     
   case 'identify':
     $pwm  = $_GET['pwm']  ?? '';
-    $mode = $_GET['mode'] ?? 'pause';  // 默认 pause
+    $mode = $_GET['mode'] ?? 'pause';  // Pause is the default mode.
     if (is_file($pwm)) {
       $original_pwm  = trim(@file_get_contents($pwm));
       $pwm_enable    = $pwm . "_enable";
       $original_mode = is_file($pwm_enable) ? trim(@file_get_contents($pwm_enable)) : '2';
 
-      // 强制切到手动
+      // Force manual control mode.
       @file_put_contents($pwm_enable, "1");
 
       if ($mode === 'pause') {
-        // 直接停
+        // Stop immediately.
         @file_put_contents($pwm, "0");
         $restore_cmd = "sleep 30 && echo " . escapeshellarg($original_mode) . " > " . escapeshellarg($pwm_enable) .
                       " && echo " . escapeshellarg($original_pwm) . " > " . escapeshellarg($pwm);
 
       } elseif ($mode === 'max') {
-        // 拉满
+        // Run at full speed.
         @file_put_contents($pwm, "255");
         $restore_cmd = "sleep 30 && echo " . escapeshellarg($original_mode) . " > " . escapeshellarg($pwm_enable) .
                       " && echo " . escapeshellarg($original_pwm) . " > " . escapeshellarg($pwm);
 
       } elseif ($mode === 'pulse') {
-        // 10s 停 -> 10s 满速 -> 10s 停 -> 10s 满速
+        // Stop for 10s, run at full speed for 10s, then repeat once.
         $restore_cmd = 
           "echo 0   > " . escapeshellarg($pwm) . " && " .
           "sleep 10 && echo 255 > " . escapeshellarg($pwm) . " && " .
@@ -93,7 +93,7 @@ switch ($op) {
     $label = $_POST['label'] ?? '';
 
     $label_file = "/boot/config/plugins/fanctrlplus2/pwm_labels.cfg";
-    // 读取现有label
+    // Read existing labels.
     $lines = is_file($label_file) ? file($label_file, FILE_IGNORE_NEW_LINES) : [];
     $found = false;
 
@@ -102,7 +102,7 @@ switch ($op) {
       break;
     }
 
-    // 空label表示删除
+    // An empty label means delete it.
     if ($label === '') {
       $new_lines = [];
       foreach ($lines as $line) {
@@ -113,7 +113,7 @@ switch ($op) {
       break;
     }
 
-    // 正常写入label
+    // Write the label.
     foreach ($lines as &$line) {
       if (strpos($line, "$pwm=") === 0) {
         $line = "$pwm=$label";
@@ -129,7 +129,7 @@ switch ($op) {
   case 'newtemp':
     $cfg_dir = "/boot/config/plugins/$plugin";
 
-    // 找 temp_X.cfg 文件名，不重复
+    // Find an unused temp_X.cfg filename.
     $index_cfg = 0;
     while (file_exists("$cfg_dir/{$plugin}_temp_$index_cfg.cfg")) {
       $index_cfg++;
@@ -163,7 +163,7 @@ switch ($op) {
     $cfg = parse_ini_file($temp_file);
     $cfg['file'] = basename($temp_file);
 
-    // ✅ 页面传来的 index 决定 <input name="x[INDEX]"> 的值
+    // The page index determines the <input name="x[INDEX]"> value.
     $page_index = intval($_REQUEST['index'] ?? 99);
     $pwms = list_pwm();
     $disks = list_valid_disks_by_id();
@@ -247,7 +247,7 @@ switch ($op) {
       $name = trim($cfg['custom'] ?? '');
       $enabled = trim($cfg['service'] ?? '0') === '1';
 
-      // 保持和 rc.fanctrlplus2 的一致性（自定义名 → pid 文件名）
+      // Match rc.fanctrlplus2 when converting custom names to PID filenames.
       $name_trimmed = trim($name);
       $custom_safe = preg_replace('/\W+/', '_', $name_trimmed);
       $pid_file = "/var/run/{$plugin}_{$custom_safe}.pid";
@@ -330,7 +330,7 @@ switch ($op) {
 
   case 'read_temp_rpm':
     $custom = $_GET['custom'] ?? '';
-    $custom = basename($custom); // 安全过滤
+    $custom = basename($custom); // Strip unsafe path components.
 
     $plugin = 'fanctrlplus2';
     $temp_file = "/var/tmp/{$plugin}/temp_{$plugin}_{$custom}";
@@ -339,7 +339,7 @@ switch ($op) {
     $temp = is_file($temp_file) ? trim(file_get_contents($temp_file)) : '*';
     $rpm  = is_file($rpm_file)  ? trim(file_get_contents($rpm_file))  : '?';
 
-    echo "$temp|$rpm";  // 示例："48 (CPU)|1150"
+    echo "$temp|$rpm";  // Example: "48 (CPU)|1150"
     exit;
 
   case 'fcp_airflow_toggle':

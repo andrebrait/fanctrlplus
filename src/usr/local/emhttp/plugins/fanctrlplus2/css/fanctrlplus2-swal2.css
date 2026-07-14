@@ -1,6 +1,6 @@
-/* 白色主题（默认适用于 Light / Azure） */
+/* Light theme (default for Light and Azure). */
 
-/* 确保弹窗宽度和字体 */
+/* Modal width and typography. */
 .swal2-popup {
   width: 520px !important;
   font-size: 14px;
@@ -11,36 +11,36 @@
   border-radius: 10px
 }
 
-/* 标题与表单间距 */
+/* Title-to-form spacing. */
 .swal2-title {
   margin-bottom: 22px !important;
   font-size: 20px;
 }
 
-/* table 结构间距优化 */
+/* Table spacing. */
 .swal2-popup table {
   width: 100%;
   margin: 0 auto 20px auto !important;
-  border-spacing: 0 10px; /* 增加行与行之间的垂直间距 */
+  border-spacing: 0 10px; /* Add vertical space between rows. */
 }
 
-/* label 与输入框靠得太近的问题 */
+/* Keep labels separated from inputs. */
 .swal2-popup td {
   vertical-align: middle;
   padding: 6px 8px;
 }
 
-/* 下方按钮整体区域与表单分离 */
+/* Separate the action area from the form. */
 .swal2-popup .swal2-html-container > div:last-child {
   margin-top: 24px !important;
 }
 
-/* CLOSE按钮与其上面的按钮分隔清晰 */
+/* Separate the Close button from the preceding actions. */
 .swal2-actions {
   margin-top: 28px !important;
 }
 
-/* 主体文字区域的对齐 */
+/* Body text alignment. */
 .swal2-html-container {
   text-align: left;
   margin: 0 !important;
@@ -59,14 +59,14 @@
   border-radius: 0 !important;
 }
 
-/* 焦点时颜色变深 */
+/* Darken focused controls. */
 .swal2-popup input:focus,
 .swal2-popup select:focus {
   border-bottom: 1px solid #000000 !important;
   outline: none !important;
 }
 
-/* label 标签统一样式 */
+/* Shared label styling. */
 .swal2-popup label {
   color: #000000 !important;
   font-weight: 500;
@@ -79,13 +79,13 @@
   border-spacing: 0 !important;
 }  
 
-/* 操作按钮居中 */
+/* Center action buttons. */
 .swal2-popup .swal2-actions {
   justify-content: center;
   margin-top: 16px;
 }
 
-/* 内嵌按钮区（Identify / Save Label）居中显示 */
+/* Center the inline Identify and Save Label actions. */
 .swal2-popup #identify-btn,
 .swal2-popup #save-label-btn {
   margin: 0 6px;
@@ -93,11 +93,11 @@
 
 input:focus {
   border-bottom: 1px solid #888;
-  background-color: #eee; /* 或 #eee，看主题 */
+  background-color: #eee;
   outline: none;
 }
 
-/* span 提示文字样式 */
+/* Hint text. */
 .save-tip {
   display: inline-block;
   width: 100px;
@@ -115,13 +115,13 @@ input:focus {
   font-size: 14px;
   border-radius: 10px;
   box-shadow: 0 0 12px rgba(0, 0, 0, 0.15);
-  --fan-grid:  rgba(0,0,0,0.10);  /* 网格线：浅灰 */
-  --fan-tick:  rgba(0,0,0,0.60);  /* 坐标/标题 */
-  --fan-cross: rgba(0,0,0,0.50);  /* 十字线：比网格略深 */
-  --fan-dot:   #444444;           /* 中心点 */
+  --fan-grid:  rgba(0,0,0,0.10);  /* Light gray grid. */
+  --fan-tick:  rgba(0,0,0,0.60);  /* Axis labels and title. */
+  --fan-cross: rgba(0,0,0,0.50);  /* Crosshair, slightly darker than the grid. */
+  --fan-dot:   #444444;           /* Center point. */
 }
 
-/* 十字线 & 黑点 */
+/* Crosshair and center point. */
 .chart-vline,
 .chart-hline {
   background: var(--fan-cross, rgba(0,0,0,0.40)) !important;
@@ -131,21 +131,21 @@ input:focus {
   background: var(--fan-dot, #444444) !important;
 }
 
-/* 顶部Current */
+/* Current value header. */
 .chart-current {
   color: #000 !important;
 }
 
-/* Identify 模态：语义类，替代内联样式 */
+/* Identify modal semantic classes replace inline styles. */
 .fcp-swal-intro { font-size:13px; margin-bottom:12px; line-height:1.5; }
 
-/* 表单布局的小工具类 */
+/* Form layout utilities. */
 .fcp-td-right { text-align:right; padding-right:12px; }
 .fcp-pt-12   { padding-top:12px; }
 .fcp-field-220 { width:100%; max-width:220px; }
 
-/* 动作区（Identify / Save Label） */
+/* Identify and Save Label actions. */
 .fcp-swal-actions { text-align:center; margin-top:16px; }
 
-/* 焦点陷阱，替代 dummy 的行内样式 */
+/* Focus trap replacing the dummy element's inline style. */
 .fcp-focus-trap { position:absolute; opacity:0; width:1px; height:1px; overflow:hidden; }

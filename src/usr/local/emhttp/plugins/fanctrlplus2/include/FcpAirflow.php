@@ -2,8 +2,8 @@
 header('Content-Type: application/json; charset=utf-8');
 
 /**
- * 从 pwm_labels.cfg 读取：/abs/.../pwmN=Name
- * 用 realpath(dirname(...)) + 通道号N 作为 key，映射到同目录 fanN_input。
+ * Read /abs/.../pwmN=Name entries from pwm_labels.cfg.
+ * Use realpath(dirname(...)) plus channel N as the key and map it to fanN_input.
  */
 function load_labels(): array {
   $cfg = '/boot/config/plugins/fanctrlplus2/pwm_labels.cfg';
@@ -32,14 +32,14 @@ function load_labels(): array {
 }
 
 /**
- * 用 sensors -A 列出“真实存在”的风扇通道号 N。
- * sensors 通常只输出已接 tach 的 fanN 行，未接的口不会出现。
- * 我们不在这里过滤 RPM=0，以免停转时被误隐藏。
+ * Use sensors -A to list fan channel numbers that actually exist.
+ * sensors normally reports only fanN entries with a connected tachometer.
+ * Keep RPM=0 entries so stopped fans are not hidden by mistake.
  */
 function detect_present_channels(): array {
   $present = [];
 
-  // A) 从 sensors 抓 fanN：fanN:/FANN.../Array Fan N: 三种格式
+  // A) Read fanN from sensors in fanN:, FANN..., or Array Fan N: format.
   $lines = [];
   @exec('sensors -A 2>/dev/null', $lines);
   foreach ($lines as $ln) {
@@ -49,7 +49,7 @@ function detect_present_channels(): array {
     if (preg_match('/^Array\s+Fan\s*([0-9]+)\s*:\s*([0-9]+)\s*RPM/i', $ln, $m)) { $present[(int)$m[1]] = true; continue; }
   }
 
-  // B) 用 sysfs 兜底：凡是有“正转速(RPM>0)”的一律加入
+  // B) Fall back to sysfs and include every channel with RPM > 0.
   foreach (glob('/sys/class/hwmon/hwmon*/fan*_input') as $f) {
     if (!preg_match('/fan(\d+)_input$/', basename($f), $mm)) continue;
     $n   = (int)$mm[1];
@@ -57,7 +57,7 @@ function detect_present_channels(): array {
     if (is_numeric($rpm) && (int)$rpm > 0) $present[$n] = true;
   }
 
-  // C) 如果什么都没抓到（极少数平台），退回把所有 fan*_input 都列出来
+  // C) On rare platforms where neither works, list every fan*_input file.
   if (!$present) {
     foreach (glob('/sys/class/hwmon/hwmon*/fan*_input') as $f) {
       if (preg_match('/fan(\d+)_input$/', basename($f), $mm)) $present[(int)$mm[1]] = true;
@@ -65,7 +65,7 @@ function detect_present_channels(): array {
   }
 
   ksort($present, SORT_NUMERIC);
-  return array_keys($present);  // 例如 [1,2,4,5,7]
+  return array_keys($present);  // For example: [1,2,4,5,7].
 }
 
 $dirN_to_label = load_labels();
@@ -73,7 +73,7 @@ $presentNs     = detect_present_channels();
 
 $fans = [];
 foreach ($presentNs as $n) {
-  // 在所有 hwmon 下寻找对应的 fanN_input（通常只会命中一个）
+  // Find the matching fanN_input across all hwmon directories.
   $match = null;
   foreach (glob('/sys/class/hwmon/hwmon*/fan'.$n.'_input') as $path) {
     if (is_file($path)) { $match = $path; break; }
@@ -97,10 +97,10 @@ foreach ($presentNs as $n) {
   ];
 }
 
-// 固定排序：按通道号 N 升序
+// Sort consistently by channel number N.
 usort($fans, fn($a,$b) => $a['index'] <=> $b['index']);
 
-// Fan count：保持与渲染列表一致（包含 0 RPM）
+// Keep the fan count consistent with the rendered list, including 0 RPM.
 echo json_encode([
   'count' => count($fans),
   'fans'  => $fans,

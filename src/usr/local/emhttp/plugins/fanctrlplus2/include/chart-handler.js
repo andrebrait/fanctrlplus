@@ -6,15 +6,15 @@ async function fetchRealtimeData(custom) {
 
   const raw = (await res.text()).trim();
 
-  // 文件不存在 / 还没写 / 占位符
+  // Missing, unwritten, or placeholder cache file.
   if (!raw || raw === '-' || raw.toUpperCase() === 'N/A') {
     return { noCache: true };
   }
 
-  // 统一用同一份 raw
+  // Use one normalized raw value for every branch.
   const [tempPart, rpmStr = ''] = raw.split('|');
 
-  // 1) 星号：磁盘休眠 / Idle
+  // An asterisk means disks are spun down or idle.
   const starMatch = /^\*\s*\((CPU|Disk|Aux|Idle)\)/i.exec(tempPart);
   if (starMatch) {
     const origin = starMatch[1]; // CPU / Disk / Idle
@@ -23,7 +23,7 @@ async function fetchRealtimeData(custom) {
     return { temp: null, origin, rpm, spunDown: true };
   }
 
-  // 2) 正常数字温度
+  // Normal numeric temperature.
   const numMatch = /(\d+)\s*\((CPU|Disk|Aux)\)/i.exec(tempPart);
   if (!numMatch) return { noCache: true };
 
@@ -84,7 +84,7 @@ window.showFanChart = function (btn) {
     return;
   }
 
-  // 插值生成曲线数据点
+  // Interpolate curve data points.
   const makeLinePoints = (x1, y1, x2, y2, segments = x2 - x1) => {
   const data = [];
   for (let i = 0; i <= segments; i++) {
@@ -153,7 +153,7 @@ window.showFanChart = function (btn) {
     });
   }
 
-  // 控制权注解说明文字
+  // Controller ownership note.
   const activeSources = [];
   if (diskSelected) activeSources.push('Disk');
   if (cpuEnabled) activeSources.push('CPU');
@@ -181,14 +181,14 @@ window.showFanChart = function (btn) {
 
   customClass: 'chart-swal',
   didOpen: () => {
-    // 1) 只取一次的快照（避免 5s 刷新时 DOM 状态抖动）
-    const customName = custom; // 供后端取 /var 的 key
+    // Snapshot once so five-second refreshes cannot change the DOM state.
+    const customName = custom; // Backend key used under /var.
     const snapCpuEnabled = getSelectVal('[name^="cpu_enable["]') === '1';
     const snapAuxEnabled = getSelectVal('[name^="aux_enable["]') === '1';
     const snapDiskSelected = [...block.querySelectorAll('.disk-group-row .disk-select')]
       .some(sel => [...sel.selectedOptions].some(opt => opt.value));
 
-    // 找到对应的 dataset（有可能没有）
+    // Find the matching dataset, if any.
     const dsCPU  = datasets.find(d => d.label && d.label.includes('CPU'));
     const dsAux  = datasets.find(d => d.label && d.label.includes('Aux'));
     // ponytail: the loop/refresh_single scripts report the live temp's origin
@@ -199,20 +199,20 @@ window.showFanChart = function (btn) {
     // precise per-group.
     const dsDisk = datasets.find(d => d.label && d.label.includes('Disk:'));
 
-    // 顶部 Current 文本节点
+    // Current value header node.
     const liveNote = document.getElementById('fan-chart-live-note');
     if (liveNote) {
-      liveNote.classList.add('chart-current'); // 给 current 文本加类名
+      liveNote.classList.add('chart-current');
     }
 
-    // 工具：取 dataset 最近温度的百分比
+    // Return the latest dataset temperature as a percentage.
     function pickPercentNearest(ds, t) {
       if (!ds || !ds.data || !ds.data.length || typeof t !== 'number') return null;
       let best = ds.data[0];
       for (const p of ds.data) if (Math.abs(p.x - t) < Math.abs(best.x - t)) best = p;
       return typeof best.y === 'number' ? best.y : null;
     }
-    // 工具：取 dataset 最低温度点（给 spun down 用）
+    // Return the dataset minimum for spun-down disks.
     function pickPercentAtMin(ds) {
       if (!ds || !ds.data || !ds.data.length) return null;
       let minPoint = ds.data[0];
@@ -220,24 +220,24 @@ window.showFanChart = function (btn) {
       return typeof minPoint.y === 'number' ? minPoint.y : null;
     }
 
-    // 2) 画图（含空数据时的安全范围）+ 创建十字线元素
+    // Draw the chart with a safe empty-data range and create its crosshair.
     setTimeout(() => {
       const canvas  = document.getElementById('fan-chart');
       const wrapper = document.getElementById('fan-chart-wrapper');
       if (!canvas || !wrapper) return;
 
-      // 让 wrapper 成为定位容器
+      // Use the wrapper as the positioning container.
       if (getComputedStyle(wrapper).position === 'static') {
         wrapper.style.position = 'relative';
       }
 
-      // 固定像素，避免模糊
+      // Use integer pixels to avoid blurring.
       canvas.width  = wrapper.offsetWidth;
       canvas.height = 400;
 
       const ctx = canvas.getContext('2d');
 
-      // 汇总所有温度点；如 datasets 为空，用一个保底范围
+      // Aggregate temperatures, with a fallback range for empty datasets.
       const allTemps = datasets
         .flatMap(ds => (ds.data || []).map(p => p.x))
         .filter(x => typeof x === 'number');
@@ -252,13 +252,13 @@ window.showFanChart = function (btn) {
       const range = Math.max(1, maxTemp - minTemp);
       const stepSize = range <= 10 ? 1 : range <= 20 ? 2 : 5;
 
-      // 从弹窗读取主题变量（没有就用兜底值）
+      // Read theme variables from the modal, with fallbacks.
       const popupEl   = document.querySelector('.swal2-popup.chart-swal');
       const styles    = getComputedStyle(popupEl);
       const gridColor = (styles.getPropertyValue('--fan-grid') || 'rgba(255,255,255,.18)').trim();
       const tickColor = (styles.getPropertyValue('--fan-tick') || 'rgba(255,255,255,.82)').trim();
 
-      // 创建图表
+      // Create the chart.
       const chart = new Chart(ctx, {
         type: 'line',
         data: { datasets },
@@ -307,7 +307,7 @@ window.showFanChart = function (btn) {
         }
       });
 
-      // 十字线元素（竖线、横线、点）
+      // Crosshair elements: vertical line, horizontal line, and point.
       const vLine = document.createElement('div');
       const hLine = document.createElement('div');
       const dot   = document.createElement('div');
@@ -330,18 +330,18 @@ window.showFanChart = function (btn) {
       wrapper.appendChild(hLine);
       wrapper.appendChild(dot);
 
-      // 3) 顶部 Current + 十字线（每 5 秒）
+      // Refresh the Current value and crosshair every five seconds.
       async function updateTopNote() {
         const data = await fetchRealtimeData(customName);
         if (!liveNote) return;
 
-        // ✅ 新增：完全读不到缓存 → 新 fan block 的大概率场景
+        // A new fan block may not have a cache entry yet.
         if (!data || data.noCache) {
           liveNote.innerHTML = `Current: --<br><span style="color:#999;">
             No runtime data yet. If this is a new fan, click <b>Apply</b> to start the loop, 
             or wait a few seconds after saving.
           </span>`;
-          // 隐藏十字线
+          // Hide the crosshair.
           vLine.style.display = hLine.style.display = dot.style.display = 'none';
           return;
         }  
@@ -351,11 +351,11 @@ window.showFanChart = function (btn) {
         const isCPU = /^cpu$/i.test(ori);
 
 
-        // 算当前百分比
+        // Calculate the current percentage.
         let percent = null, html = '';
         if (spunDown) {
           if (origin === 'Idle') {
-            // Idle：无温度源；若本 block 只选 HDD 且 CPU 未启用，补充“磁盘已休眠”的语义
+            // For HDD-only control without CPU input, idle means the disks are spun down.
             const suffix = (snapDiskSelected && !snapCpuEnabled)
               ? '(All selected HDDs are spun down — using Idle Speed)'
               : '(No temperature source — using Idle Speed)';
@@ -373,49 +373,49 @@ window.showFanChart = function (btn) {
             const pwm = Math.round(percent * 2.55);
             html = `Current: ${temp}°C (${origin}) → Fan Speed ${percent.toFixed(0)}% (PWM ${pwm}) → RPM ${rpm}`;
 
-            // 定位十字线（限制在图表绘图区）
+            // Position the crosshair within the chart area.
             const xScale = chart.scales.x;
             const yScale = chart.scales.y;
             const ca = chart.chartArea; // {left, top, right, bottom}
 
-            // 转成像素
+            // Convert chart coordinates to pixels.
             let x = xScale.getPixelForValue(temp);
             let y = yScale.getPixelForValue(percent);
 
-            // 计算相对 wrapper 的偏移（更稳，包含 padding）
+            // Calculate wrapper-relative offsets, including padding.
             const wb = wrapper.getBoundingClientRect();
             const cb = canvas.getBoundingClientRect();
             const offsetLeft = cb.left - wb.left;
             const offsetTop  = cb.top  - wb.top;
 
-            // 夹到绘图区内，防止越界
+            // Clamp the point to the chart area.
             x = Math.min(Math.max(x, ca.left),  ca.right);
             y = Math.min(Math.max(y, ca.top),   ca.bottom);
 
-            // 竖线：贴在 x，长度 = 绘图区高度
+            // Vertical line at x, spanning the chart height.
             vLine.style.left   = (offsetLeft + x) + 'px';
             vLine.style.top    = (offsetTop  + ca.top) + 'px';
             vLine.style.height = (ca.bottom - ca.top) + 'px';
             vLine.style.display = 'block';
 
-            // 横线：贴在 y，长度 = 绘图区宽度
+            // Horizontal line at y, spanning the chart width.
             hLine.style.left   = (offsetLeft + ca.left) + 'px';
             hLine.style.top    = (offsetTop  + y) + 'px';
             hLine.style.width  = (ca.right - ca.left) + 'px';
             hLine.style.display = 'block';
 
-            // 中点
+            // Center point.
             dot.style.left = (offsetLeft + x) + 'px';
             dot.style.top  = (offsetTop  + y) + 'px';
             dot.style.display = 'block';
           } else {
-            // 没对应曲线：隐藏十字线，只报 RPM
+            // Without a matching curve, hide the crosshair and report RPM only.
             html = `Current: ${temp ?? '*'}°C (${origin}) → RPM ${rpm}<br><span style="color:#999;">(${origin} data not shown in chart)</span>`;
             vLine.style.display = hLine.style.display = dot.style.display = 'none';
           }
         }
 
-        // 同步/未同步的小提示（用快照判断）
+        // Determine the synchronization note from the snapshot.
         if (origin === 'CPU' && !snapCpuEnabled) {
           html += '<br><span style="color:#999;">(CPU was disabled, still active until Apply)</span>';
         } else if (origin === 'Disk' && !snapDiskSelected) {
@@ -427,7 +427,7 @@ window.showFanChart = function (btn) {
         liveNote.innerHTML = html;
       }
 
-      // 第一次立即刷新 + 每 5 秒刷新
+      // Refresh immediately, then every five seconds.
       updateTopNote();
       if (window.__fanChartTimer) clearInterval(window.__fanChartTimer);
       window.__fanChartTimer = setInterval(updateTopNote, 5000);

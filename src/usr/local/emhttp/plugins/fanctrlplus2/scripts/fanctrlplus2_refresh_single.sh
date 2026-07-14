@@ -63,7 +63,7 @@ disk_group_max_temp() {
   (( found == 1 )) && echo "$max_valid"
 }
 
-# === CPU 温度 ===
+# === CPU temperature ===
 cpu_pwm_val=0
 if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
   raw=$(cat "$cpu_sensor")
@@ -132,7 +132,7 @@ if [[ "${aux_enable:-0}" == "1" && -n "$aux_sensor" ]]; then
   fi
 fi
 
-# === Disk 温控 PWM ===
+# === Disk-temperature PWM ===
 disk_pwm_val=0
 disk_max="*"
 
@@ -183,7 +183,7 @@ elif [ -n "$disks" ]; then
   fi
 fi
   
-# === 取较高 PWM 作为最终值，同时设定 max_temp 与来源 ===
+# === Use the higher PWM and record its temperature and source ===
 if (( cpu_pwm_val > disk_pwm_val )); then
   pwm_val=$cpu_pwm_val
   max_temp=$cpu_temp
@@ -200,18 +200,18 @@ if (( aux_pwm_val > pwm_val )); then
   temp_origin="(Aux)"
 fi
 
-# 避免空写入
+# Do not write an empty value.
 if [[ ! "$max_temp" =~ ^[0-9]+$ ]]; then
   max_temp="*"
   temp_origin=""
 fi
 
-# 强制写 PWM
+# Force the PWM value.
 [[ -f "$controller_enable" ]] && echo 1 > "$controller_enable"
 echo "$pwm_val" > "$controller"
 sleep 4
 
-# 采集 RPM
+# Read the RPM value.
 fan_index=""
 if [[ "$controller" =~ pwm([0-9]+)$ ]]; then
   fan_index="${BASH_REMATCH[1]}"

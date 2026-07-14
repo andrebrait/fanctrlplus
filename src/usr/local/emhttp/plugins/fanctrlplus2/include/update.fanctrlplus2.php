@@ -1,5 +1,5 @@
 <?php
-ob_start(); // 开启缓冲，防止意外输出破坏 JSON
+ob_start(); // Buffer output so unexpected text cannot corrupt JSON.
 
 $plugin = 'fanctrlplus2';
 $cfgpath = "/boot/config/plugins/$plugin";
@@ -13,7 +13,7 @@ if (!is_dir($cfgpath)) {
 
 header('Content-Type: application/json');
 
-// 校验提交数据结构
+// Validate the submitted data structure.
 if (!isset($_POST['#file']) || !is_array($_POST['#file'])) {
   ob_clean();
   echo json_encode(['status' => 'error', 'message' => 'No fan config received']);
@@ -29,11 +29,11 @@ foreach ($_POST['#file'] as $i => $file) {
   $old_path = "$cfgpath/$old_file";
   $new_path = "$cfgpath/$expected_file";
   
-  // ✅ 先取原始文本
+  // Read the raw values first.
   $pwm_percent_raw = $_POST['pwm_percent'][$i] ?? '';
   $max_percent_raw = $_POST['max_percent'][$i] ?? '';
 
-  // ✅ 清除非数字并 fallback（空值 fallback: 40% / 100%）
+  // Remove non-digits and default empty values to 40% and 100%.
   $pwm_percent = is_numeric($p = preg_replace('/[^0-9]/', '', $pwm_percent_raw)) ? intval($p) : 40;
   $max_percent = is_numeric($m = preg_replace('/[^0-9]/', '', $max_percent_raw)) ? intval($m) : 100;
 
@@ -75,13 +75,13 @@ foreach ($_POST['#file'] as $i => $file) {
   $legacy_disks = implode(',', array_unique(array_filter($legacy_disks_union)));
 
   // ===== Fan Speed on Idle (%) → cfg: idle(0..255) =====
-  // 1) 读取 Idle 百分比（默认 0）
+  // 1) Read Idle Speed as a percentage, defaulting to 0.
   $idle_percent_raw = $_POST['idle_percent'][$i] ?? '0';
   $idle_percent_val = preg_replace('/[^0-9]/', '', $idle_percent_raw);
   $idle_percent     = ($idle_percent_val !== '' && is_numeric($idle_percent_val)) ? intval($idle_percent_val) : 0;
   $idle_percent     = max(0, min(100, $idle_percent));
 
-  // 2) 已有的最小值（“Min Speed”）就是 pwm_percent
+  // 2) pwm_percent is the existing Min Speed value.
   if ($idle_percent > $pwm_percent) {
     ob_clean();
     echo json_encode([
@@ -92,10 +92,10 @@ foreach ($_POST['#file'] as $i => $file) {
     exit;
   }
 
-  // 3) 百分比 → 绝对 PWM（你的体系按 255 做基准）
+  // 3) Convert the percentage to an absolute PWM value based on 255.
   $idle_abs = (int) round($idle_percent * 255 / 100);
 
-  // 4) 夹到 [0, $pwm]（双保险；保存层已拦，但再保一次）
+  // 4) Clamp to [0, $pwm] as a second validation layer.
   if ($idle_abs > $pwm) $idle_abs = $pwm;
   if ($idle_abs < 0)    $idle_abs = 0;
 
@@ -129,14 +129,14 @@ foreach ($_POST['#file'] as $i => $file) {
     $aux_max_temp = '';
   }
 
-  // Custom Name 不能为空
+  // Custom Name is required.
   if ($custom === '') {
     ob_clean();
     echo json_encode(['status' => 'error', 'message' => "Custom Name is required."]);
     exit;
   }
 
-  // 校验 Custom Name 合法性（仅允许 A-Z a-z 0-9 和 _）
+  // Allow only letters, numbers, and underscores in Custom Name.
   if (!preg_match('/^[A-Za-z0-9_]+$/', $custom)) {
     ob_clean();
     echo json_encode(['status' => 'error', 'message' => "Custom Name can only contain letters, numbers, and underscores."]);
@@ -149,7 +149,7 @@ foreach ($_POST['#file'] as $i => $file) {
     exit;
   }
 
-  $syslog_val = '1'; // 默认 1（开启）
+  $syslog_val = '1'; // Enabled by default.
   if (file_exists($old_path)) {
     $lines = file($old_path, FILE_IGNORE_NEW_LINES);
     foreach ($lines as $line) {
@@ -160,11 +160,11 @@ foreach ($_POST['#file'] as $i => $file) {
     }
   }
 
-  // 检查是否已有相同 custom 名称的 cfg
+  // Check whether another configuration uses the same custom name.
   foreach (glob("$cfgpath/{$plugin}_*.cfg") as $existing) {
     $info = parse_ini_file($existing);
     if (isset($info['custom']) && trim($info['custom']) === $custom) {
-      // 排除自身（重命名 temp → 正式名时允许自己）
+      // Ignore the current file when renaming a temporary configuration.
       if (basename($existing) !== $old_file) {
         ob_clean();
         echo json_encode(['status' => 'error', 'message' => "Custom Name \"$custom\" is already used."]);
@@ -173,7 +173,7 @@ foreach ($_POST['#file'] as $i => $file) {
     }
   }
   
-  //重命名custom name后 cfg文件名同步重命名
+  // Rename the cfg file when Custom Name changes.
   if ($old_file !== $expected_file) {
       if (file_exists($old_path)) {
           // detect case-only rename
@@ -194,14 +194,14 @@ foreach ($_POST['#file'] as $i => $file) {
 
   file_put_contents($old_path, "custom=\"$custom\"\n...");
 
-  // 校验 interval 合法性（必须为正整数）
+  // Require Interval to be a positive integer.
   if (!ctype_digit($interval) || intval($interval) <= 0) {
     ob_clean();
     echo json_encode(['status' => 'error', 'message' => "Interval cannot be empty or 0 (recommended: 1–5 min)."]);
     exit;
   } 
 
-  // === 临时文件：以 custom 命名为正式文件 ===
+  // === Rename temporary files to the final custom-name filename ===
   if (strpos($old_file, 'temp_') !== false && !empty($controller)) {
     $new_file = $plugin . "_$custom.cfg";
     $rename_map[$old_file] = $new_file;
@@ -209,7 +209,7 @@ foreach ($_POST['#file'] as $i => $file) {
     $new_file = $old_file;
   }  
 
-  // 避免命名冲突
+  // Avoid filename collisions.
   $basefile = pathinfo($new_file, PATHINFO_FILENAME);
   $suffix = 1;
   while (in_array($new_file, $used_files)) {
@@ -220,7 +220,7 @@ foreach ($_POST['#file'] as $i => $file) {
   $used_files[] = $new_file;
   $filepath = "$cfgpath/$new_file";
 
-  // 拼接配置内容
+  // Build the configuration contents.
   $cfg = [
     'custom'     => $custom,
     'label'      => $custom,
@@ -257,13 +257,13 @@ foreach ($_POST['#file'] as $i => $file) {
 
   file_put_contents($filepath, $content, LOCK_EX);
 
-  // 删除旧临时文件
+  // Remove the old temporary file.
   if ($old_file !== $new_file && is_file("$cfgpath/$old_file")) {
     @unlink("$cfgpath/$old_file");
   }
 }
 
-// 删除未使用的旧 cfg 文件
+// Remove cfg files that are no longer used.
 foreach (glob("$cfgpath/{$plugin}_*.cfg") as $cfgfile) {
   $base = basename($cfgfile);
   if (!in_array($base, $used_files)) {
@@ -271,7 +271,7 @@ foreach (glob("$cfgpath/{$plugin}_*.cfg") as $cfgfile) {
   }
 }
 
-// === 写入 order.cfg 排序顺序（转移至OrderManager。php）===
+// === Write order.cfg through OrderManager.php ===
 require_once "$docroot/plugins/fanctrlplus2/include/OrderManager.php";
 
 $order_left = array_map(function($f) use ($rename_map) {
@@ -284,7 +284,7 @@ $order_right = array_map(function($f) use ($rename_map) {
 
 OrderManager::writeOrder(array_values($order_left), array_values($order_right));
 
-// 重启 fanctrlplus2 守护进程
+// Restart the fanctrlplus2 daemon.
 $script = "/usr/local/emhttp/plugins/$plugin/scripts/rc.fanctrlplus2";
 if (is_file($script)) {
   exec("bash $script stop > /dev/null 2>&1");

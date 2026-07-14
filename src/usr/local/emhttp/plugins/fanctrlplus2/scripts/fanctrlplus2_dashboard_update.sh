@@ -1,5 +1,5 @@
 #!/bin/bash
-# fanctrlplus2_dashboard_update.sh - 实时更新 Dashboard 所需的 RPM 和 PWM
+# fanctrlplus2_dashboard_update.sh - Update dashboard RPM and PWM data in real time.
 plugin="fanctrlplus2"
 cfg_path="/boot/config/plugins/$plugin"
 tmp_path="/var/tmp/$plugin"
@@ -14,7 +14,7 @@ while true; do
     [[ "$service" != "1" ]] && continue
     [[ -z "$controller" || -z "$custom" ]] && continue
 
-    # 提取 fan 路径：从 pwmX 推导为 fanX_input
+    # Derive the fanX_input path from pwmX.
     if [[ "$controller" =~ pwm([0-9]+)$ ]]; then
       fan_index="${BASH_REMATCH[1]}"
       fan_path="$(dirname "$controller")/fan${fan_index}_input"
@@ -22,21 +22,21 @@ while true; do
       continue
     fi
 
-    # 读取 RPM
+    # Read RPM.
     rpm="-"
     [[ -f "$fan_path" ]] && rpm=$(< "$fan_path")
 
-    # ✅ 写入RPM文件
+    # Write the RPM cache file.
     echo "$rpm" > "$tmp_path/rpm_${plugin}_${custom}"
 
-    # 读取 PWM
+    # Read PWM.
     pwm_val="-"
     [[ -f "$controller" ]] && pwm_val=$(< "$controller")
 
-    # ✅ 写入PWM文件
+    # Write the PWM cache file.
     echo "$pwm_val" > "$tmp_path/pwm_${plugin}_${custom}"
 
-    # ✅ 状态判断
+    # Determine the current status.
     if [[ "$rpm" =~ ^[0-9]+$ ]] && (( rpm > 0 )); then
       echo "Running" > "$tmp_path/status_${plugin}_${custom}"
     else
@@ -44,5 +44,5 @@ while true; do
     fi
   done
 
-  sleep 5  # dashboard 刷新频率，不影响风扇控制逻辑
+  sleep 5  # Dashboard refresh interval; this does not affect fan control.
 done

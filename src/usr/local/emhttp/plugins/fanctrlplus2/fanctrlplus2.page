@@ -29,16 +29,16 @@ HTML;
 $plugin = "fanctrlplus2";
 $cfg_dir = "/boot/config/plugins/$plugin";
 
-// 包含公用函数
+// Load shared functions.
 require_once "$docroot/plugins/$plugin/include/Common.php";
 require_once "$docroot/plugins/$plugin/include/FanBlockRender.php";
 
-// 初始化配置目录
+// Initialize the configuration directory.
 if (!is_dir($cfg_dir)) {
   mkdir($cfg_dir, 0777, true);
 }
 
-// === 第一步：读取所有 fanctrlplus2_*.cfg 文件 ===
+// Read every fanctrlplus2_*.cfg file.
 $cfg_files = glob("$cfg_dir/{$plugin}_*.cfg");
 
 if (empty($cfg_files)) {
@@ -62,11 +62,11 @@ cpu_max_temp=""
 INI
 );
   }
-  // 重新加载 cfg_files
+  // Reload the configuration-file list.
   $cfg_files = glob("$cfg_dir/{$plugin}_*.cfg");
 }  
 
-// === 第二步：从 order.cfg 读取左右栏顺序 ===
+// Read the left and right column order from order.cfg.
 $order_left = [];
 $order_right = [];
 
@@ -79,15 +79,15 @@ if (is_file($order_file)) {
   }
 }
 
-// === 第三步：已出现在 order.cfg 的 cfg 列表，避免重复加载 ===
+// Track configurations already present in order.cfg.
 $seen = array_flip(array_merge($order_left, $order_right));
 
-// === 第四步：准备 fan block 渲染数组（含左右栏 + 其他）===
+// Prepare fan blocks for the left, right, and fallback groups.
 $fan_column_left  = [];
 $fan_column_right = [];
 $all_cfg = [];
 
-// 左栏渲染
+// Render the left column.
 foreach ($order_left as $file) {
   $path = "$cfg_dir/$file";
   if (is_file($path)) {
@@ -98,7 +98,7 @@ foreach ($order_left as $file) {
   }
 }
 
-// 右栏渲染
+// Render the right column.
 foreach ($order_right as $file) {
   $path = "$cfg_dir/$file";
   if (is_file($path)) {
@@ -109,7 +109,7 @@ foreach ($order_right as $file) {
   }
 }
 
-// === 第五步：加载未在 order.cfg 出现的正式 cfg（默认塞入右栏）===
+// Put saved configurations missing from order.cfg in the right column.
 foreach ($cfg_files as $path) {
   $basename = basename($path);
   if (!isset($seen[$basename]) && strpos($basename, '_temp_') === false) {
@@ -120,7 +120,7 @@ foreach ($cfg_files as $path) {
   }
 }
 
-// === 第六步：加载所有 temp_x.cfg，默认加入右栏 ===
+// Put every temp_x.cfg in the right column by default.
 foreach ($cfg_files as $path) {
   $basename = basename($path);
   if (strpos($basename, '_temp_') !== false) {
@@ -136,7 +136,7 @@ $width = 300;
 $cpu_sensors = detect_cpu_sensors();
 $aux_sensors = detect_aux_sensors();
 
-// === 读取 FCP Airflow 开关 ===
+// Read the FCP Airflow switch.
 function fcp_airflow_enabled(string $cfg_dir): bool {
   $labels_file = $cfg_dir.'/pwm_labels.cfg';
   if (!is_file($labels_file)) return false;
@@ -166,7 +166,7 @@ $fcp_airflow_enabled = fcp_airflow_enabled($cfg_dir);
 </div>
 
 <script>
-const DEBUG = false; // ✅ 设置是否开启调试输出
+const DEBUG = false; // Enables diagnostic console output.
 
 const themeClass = document.documentElement.className;
 let cssFile = '/plugins/fanctrlplus2/css/fanctrlplus2-swal2.css';
@@ -180,14 +180,14 @@ link.href = cssFile;
 document.head.appendChild(link);
 
 function updatePwmDropdowns() {
-  // 统计所有已选PWM（不为空）
+  // Collect every non-empty PWM selection.
   const selected = [];
   $('.pwm-controller').each(function() {
     const val = $(this).val();
     if (val) selected.push(val);
   });
 
-  // 逐个select处理option
+  // Update each select option.
   $('.pwm-controller').each(function() {
     const self = $(this);
     const ownVal = self.val();
@@ -219,6 +219,35 @@ const dropdownChecklistOptions = {
   }
 };
 
+function decorateDiskDropdowns(scope) {
+  const $scope = $(scope || document);
+  const $selects = $scope.is('.disk-select') ? $scope : $scope.find('.disk-select');
+
+  $selects.each(function () {
+    const $select = $(this);
+    const $cell = $select.closest('td');
+
+    $select.find('option').each(function () {
+      const $option = $(this);
+      const value = $option.val();
+      const $item = $cell.find('.ui-dropdownchecklist-item').filter(function () {
+        return $(this).find('input').val() === value;
+      }).first();
+      if (!$item.length) return;
+
+      const $text = $item.find('.ui-dropdownchecklist-text').first();
+      $item.find('.fcp-disk-option-icon').remove();
+      $('<i>')
+        .addClass('fcp-disk-option-icon ' + ($option.data('icon') || 'icon-disk'))
+        .attr('title', $option.data('type') || 'Disk')
+        .insertBefore($text);
+      $text.empty()
+        .append($('<span class="fcp-disk-option-name">').text($option.data('name') || 'Device'))
+        .append($('<span class="fcp-disk-option-description">').text($option.data('description') || ''));
+    });
+  });
+}
+
 const auxDropdownChecklistOptions = {
   emptyText: '(None)',
   width: 300,
@@ -237,7 +266,7 @@ const auxDropdownChecklistOptions = {
 };
 
 $(function() {
-  // 跳动绿点动画
+  // Animate the pulsing green status dot.
   let dotIndex = 0;
   const dotEls = document.querySelectorAll('#fanctrl-indicator .fanctrl-dot');
   dotEls.forEach(dot => dot.classList.remove('visible'));
@@ -251,7 +280,7 @@ $(function() {
   }
   setInterval(animateDots, 2000);
 
-  // 初始化 SVG 风扇转动
+  // Initialize SVG fan rotation.
   $('.fan-block svg[id^="fan-icon-"]').each(function() {
     const id = $(this).attr('id');
     updateRotorById(id, true);
@@ -424,7 +453,7 @@ $(function() {
             clearInterval(interval);
             $btn.text($btn.data('orig')).prop('disabled', false);
           } else {
-            // 显示不同模式的倒计时提示
+            // Show the countdown message for the active mode.
             let label = mode === 'pause' ? 'Paused'
                       : mode === 'max'   ? 'Max'
                       : 'Pulse';
@@ -460,6 +489,7 @@ $(function() {
       initOriginalForBlock($html);
 
       $html.find('.disk-select').dropdownchecklist(dropdownChecklistOptions);
+      decorateDiskDropdowns($html);
       $html.find('.aux-select').dropdownchecklist(auxDropdownChecklistOptions);
 
       updateAllFanStatus();
@@ -511,7 +541,7 @@ $(function() {
     return parseInt(String(str).replace('%', '').replace(/\D/g, '') || '0', 10);
   }
 
-  // 在更新 PWM 显示时，连带更新 input 的 title 提示
+  // Update the input title when the displayed PWM changes.
   function updateFanSpeedDisplay(i) {
     const $minInput = $(`#pwm_percent_input_${i}`);
     const $maxInput = $(`#max_percent_input_${i}`);
@@ -563,7 +593,7 @@ $(function() {
 
     let idleVal = Math.min(100, Math.max(0, parseInt(rawIdle, 10)));
 
-    // 软夹到 Min（若 Min 有值）
+    // Clamp to Min when Min is set.
     const rawMin = stripUnit($minInput.val());
     if (rawMin) {
       const minVal = Math.min(100, Math.max(0, parseInt(rawMin, 10)));
@@ -599,7 +629,7 @@ $(function() {
         const enforceUnit = () => {
           let val = (input.value ?? '').toString().replace(/\D/g, '');
 
-          // 如果转换后是空字符串，就不设置单位
+          // Do not add a unit when conversion produced an empty value.
           if (!val) {
             input.value = '';
             return;
@@ -608,7 +638,7 @@ $(function() {
           val = Math.min(Math.max(parseInt(val), min), max);
           input.value = val + unit;
 
-          // 光标移到单位前
+          // Move the cursor before the unit.
           const pos = input.value.indexOf(unit);
           input.setSelectionRange(pos, pos);
         };
@@ -622,7 +652,7 @@ $(function() {
           }, 0);
         });
 
-        enforceUnit();  // 初始执行一次
+        enforceUnit();  // Apply once during initialization.
       });
     });
   }
@@ -648,7 +678,7 @@ $(function() {
     return (val ?? '').toString().replace(/\s*(min|°C|%)/gi, '').trim();
   }
 
-  // Identify 弹窗块
+  // Identify modal.
   function showIdentifyModal(pwm = '') {
     const html = `
       <div class="fcp-swal-intro">
@@ -708,28 +738,28 @@ $(function() {
       cancelButtonText: 'Close',
       customClass: 'wide-swal',
       didOpen: () => {
-        // 焦点陷阱
+        // Focus trap.
         const dummy = document.createElement('div');
         dummy.tabIndex = -1;
         dummy.className = 'fcp-focus-trap';
         Swal.getPopup().prepend(dummy);
         dummy.focus();
 
-        // 加载并选中 pwm
+        // Load and select the PWM controller.
         if (pwm) {
           loadPWMOptions('identify-modal-select', pwm);
         } else {
           loadPWMOptions('identify-modal-select');
         }
 
-        // 事件绑定：Identify
+        // Bind the Identify action.
         $('#identify-btn').off('click').on('click', function () {
           const pwmVal  = $('#identify-modal-select').val();
           const modeVal = $('#identify-modal-mode-select').val();
-          identifyFan(pwmVal, modeVal, this);  // 使用你已实现的 identifyFan()
+          identifyFan(pwmVal, modeVal, this);
         });
 
-        // 事件绑定：保存标签
+        // Bind the Save Label action.
         $('#save-label-btn').off('click').on('click', function () {
           savePWMLabel('identify-modal-select', 'identify-modal-label-input', 'identify-modal-label-tip');
         });
@@ -774,12 +804,12 @@ $(function() {
           let display = pwm.chip + ' - ' + pwm.name;
           if (pwm.label) display += `（${pwm.label}）`;
 
-          // 判断是否选中
+          // Apply the selected state.
           const isSelected = (selectedPWM && pwm.sensor === selectedPWM) ? ' selected' : '';
           select.append(`<option value="${pwm.sensor}"${isSelected}>${display}</option>`);
         });
 
-        // 如果传了 selectedPWM 但找不到匹配选项，强制设置
+        // Preserve selectedPWM when no matching option was discovered.
         if (selectedPWM && !select.val()) {
           select.val(selectedPWM);
         }
@@ -845,11 +875,11 @@ $(function() {
       const selectedPWM = $(this).val();
       if (!selectedPWM) return;
 
-      // 查询当前 PWM 是否有 label
+      // Check whether the current PWM controller has a label.
       $.getJSON('/plugins/fanctrlplus2/include/FanctrlLogic.php?op=getpwm', function (pwmList) {
         const match = pwmList.find(pwm => pwm.sensor === selectedPWM);
         if (match && !match.label) {
-          // 如果该 PWM 没有 label，才弹窗
+          // Prompt only when this PWM controller has no label.
           showIdentifyModal(selectedPWM);
         }
       });
@@ -858,7 +888,7 @@ $(function() {
 
   function refreshAllFanBlockPWMLabels() {
     $.getJSON('/plugins/fanctrlplus2/include/FanctrlLogic.php?op=getpwm', function(pwmList) {
-      // 收集所有 fan block 已选中的 PWM
+      // Collect the PWM controller selected by each fan block.
       const usedPWMs = [];
       $('.pwm-controller').each(function () {
         const val = $(this).val();
@@ -959,6 +989,11 @@ $(function() {
     ['#fan-column-left', '#fan-column-right'].forEach(function (selector) {
       const $col = $(selector);
 
+      if (!sortableUnlocked) {
+        $col.find('.sortable-placeholder').remove();
+        return;
+      }
+
       if (
         $col.children('.fan-block:not(.sortable-placeholder)').length === 0 &&
         $col.find('.sortable-placeholder').length === 0
@@ -974,10 +1009,10 @@ $(function() {
     });
   }
 
-  // 全局：默认上锁
+  // Sorting is locked by default.
   let sortableUnlocked = false;
 
-  // 锁 = destroy，解锁 = 重新 sortable(opts)
+  // Locking destroys the sortable; unlocking recreates it.
   function applySortableState() {
     const $cols = $('#fan-column-left, #fan-column-right');
 
@@ -987,12 +1022,15 @@ $(function() {
     });
 
     if (!sortableUnlocked) {
+      $cols.find('.sortable-placeholder').remove();
       $cols.removeClass('ui-sortable ui-sortable-disabled');
       $cols.find('.fan-block').removeClass('ui-sortable-handle');
       return;
     }
 
-    // 解锁：重建实例
+    ensureColumnDroppable();
+
+    // Recreate the sortable when unlocked.
     const hasHandle = $cols.find('.fcp-drag-handle').length > 0;
     const opts = {
       items: '> .fan-block:not(.sortable-placeholder)',
@@ -1026,6 +1064,7 @@ $(function() {
   });
 
   $('.disk-select').dropdownchecklist(dropdownChecklistOptions);
+  decorateDiskDropdowns(document);
   $('.aux-select').dropdownchecklist(auxDropdownChecklistOptions);
 
   $('.fan-block').each(function () {
@@ -1172,7 +1211,7 @@ $(function() {
     $('#fan-form')[0].submit();
   }); 
 
-  // 通用 click 处理：syslog-switch + fcp-airflow-switch
+  // Shared click handler for the syslog and FCP Airflow switches.
   $(document).on('click', '.switch-button-background, .switch-button-label', function() {
     var $area = $(this).closest('.switch-area');
     var $input = $area.find('input[type="checkbox"]');
@@ -1181,24 +1220,24 @@ $(function() {
     var checked = !$input.prop('checked');
     $input.prop('checked', checked);
 
-    // 切换 class 和文本
+    // Toggle the state class and text.
     $area.find('.switch-button-label.on').css('display', checked ? '' : 'none');
     $area.find('.switch-button-label.off').css('display', checked ? 'none' : '');
     $area.find('.switch-button-background').toggleClass('checked', checked);
 
-    // 滑块动画
+    // Animate the slider.
     $area.find('.switch-button-button').css('left', checked ? '12px' : '-1px');
 
-    // 根据不同开关调用不同保存逻辑
+    // Persist the relevant switch.
     if ($input.hasClass('syslog-switch')) {
       var cfgFile = $input.data('cfg');
       saveSyslogSwitchState(cfgFile, checked);
     } else if ($input.hasClass('fcp-airflow-switch')) {
-      saveAirflowSwitchState(checked);   // ✅ 用 jQuery $.post
+      saveAirflowSwitchState(checked);
     }
   });
 
-  // 通用 change 处理：syslog-switch + fcp-airflow-switch
+  // Shared change handler for the syslog and FCP Airflow switches.
   $(document).on('change', '.syslog-switch, .fcp-airflow-switch', function() {
     var checked = $(this).prop('checked');
     var $area = $(this).closest('.switch-area');
@@ -1247,6 +1286,7 @@ $(function() {
       const $row = $(html);
       $container.append($row);
       $row.find('.disk-select').dropdownchecklist(dropdownChecklistOptions);
+      decorateDiskDropdowns($row);
       bindUnitInputs([
         { selector: 'input[id^="low_temp_input_"]', unit: '°C', min: 1, max: 100 },
         { selector: 'input[id^="high_temp_input_"]', unit: '°C', min: 1, max: 100 }
@@ -1288,14 +1328,14 @@ $(function() {
         $('#syslog-row-' + safeId).remove();
 
         setTimeout(() => {
-          // 保证始终至少有一个 fan block
+          // Keep at least one fan block.
           const realBlocks = $('.fan-block').not('.sortable-placeholder, .ui-sortable-placeholder');
           if (realBlocks.length === 0) {
             ensureAtLeastOneFanBlock();
           }
           ensureColumnDroppable();
 
-          // 非 temp 才更新顺序
+          // Update the saved order only for permanent blocks.
           if (!isTemp) {
             let order = [];
             $('.fan-block').each(function () {
@@ -1348,7 +1388,7 @@ $(function() {
     e.stopPropagation();
   });
 
-    // 初始化sortable
+    // Initialize sortable columns.
     function initSortableUnlocked() {
       const $cols = $('#fan-column-left, #fan-column-right');
 
@@ -1390,18 +1430,20 @@ $(function() {
       }
 
       $cols.sortable(opts);
+      ensureColumnDroppable();
     }
 
-    // 锁定时彻底销毁；并防止后续旧代码再去 set option 报错
+    // Destroy locked sortables and guard older option-setting code.
     function destroySortableLocked() {
       const $cols = $('#fan-column-left, #fan-column-right');
       $cols.each(function () {
         const inst = $(this).sortable('instance');
         if (inst) $(this).sortable('destroy');
       });
+      $cols.find('.sortable-placeholder').remove();
     }
 
-    // 切换解锁按钮逻辑
+    // Toggle sorting lock state.
     $('#fanctrlplus2-sort-toggle').on('click', function () {
       if (!sortableUnlocked) {
         if ($('.fan-block[data-file*="_temp_"]').length > 0) {
@@ -1412,7 +1454,7 @@ $(function() {
 
       sortableUnlocked = !sortableUnlocked;
 
-      // 启用或禁用 sortable
+      // Enable or disable sorting.
       if (sortableUnlocked) {
         initSortableUnlocked();
       } else {
@@ -1420,7 +1462,7 @@ $(function() {
       }
 
       if (sortableUnlocked) {
-        // 解锁状态
+        // Unlocked state.
         $('.fan-block').addClass('draggable');
         $('.fan-svg-container').hide();
         $('.drag-handle').show();
@@ -1429,7 +1471,7 @@ $(function() {
           .addClass('icon-u-lock-open red-text')
           .attr('title', 'Lock sorting fan configurations');
       } else {
-        // 锁回状态
+        // Locked state.
         $('.fan-block').removeClass('draggable');
         $('.fan-svg-container').show();
         $('.drag-handle').hide();
@@ -1438,21 +1480,21 @@ $(function() {
           .addClass('icon-u-lock green-text')
           .attr('title', 'Unlock sorting fan configurations');
 
-        // 延迟保存排序
+        // Save the order after a short delay.
         setTimeout(() => {
           saveFanOrder();
         }, 300);
       }
     });
 
-    // 保存排序的函数
+    // Persist the column order.
     function saveFanOrder() {
       const order = {
         left: [],
         right: []
       };
 
-      // 清空旧的隐藏 input
+      // Remove old hidden inputs.
       $('input[name^="order_left"]').remove();
       $('input[name^="order_right"]').remove();
 
@@ -1472,7 +1514,7 @@ $(function() {
         }
       });
 
-      // 提交 AJAX（用于立即保存至 /plugins/fanctrlplus2/order.cfg）
+      // Save immediately to /plugins/fanctrlplus2/order.cfg.
       if (order.left.length > 0 || order.right.length > 0) {
         $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', {
           op: 'saveorder',
@@ -1488,7 +1530,7 @@ $(function() {
   window.handleCpuEnableChange = function(selectEl, index) {
     const enabled = selectEl.value === "1";
 
-    // 选中所有 CPU 控制相关的 tr（包含 sensor 和 temp）
+    // Select every CPU-control row, including sensor and temperature rows.
     const rows = document.querySelectorAll(`.cpu-control-${index}`);
     rows.forEach(row => {
       row.querySelectorAll('.cpu-input').forEach(el => {
@@ -1501,7 +1543,7 @@ $(function() {
       label.classList.toggle('disabled', !enabled);
     });
 
-    // 若启用且输入为空，则填入默认温度
+    // Fill default temperatures when CPU control is enabled with empty inputs.
     if (enabled) {
       const lowInput  = document.querySelector(`#cpu_low_temp_input_${index}`);
       const highInput = document.querySelector(`#cpu_high_temp_input_${index}`);
@@ -1551,12 +1593,12 @@ $(function() {
     }
   };
 
-  // 初始化所有 block 的状态，并绑定 onchange
+  // Initialize every block and bind its change handler.
   window.addEventListener('load', function () {
     requestAnimationFrame(() => {
       document.querySelectorAll('select[id^="cpu-enable-"]').forEach(select => {
         const index = select.id.replace('cpu-enable-', '');
-        window.handleCpuEnableChange(select, index);  // 初始状态应用
+        window.handleCpuEnableChange(select, index);  // Apply the initial state.
 
         select.addEventListener('change', function () {
           window.handleCpuEnableChange(this, index);
@@ -1594,7 +1636,7 @@ $(function() {
 <form id="fan-form" method="POST" action="/update.php" target="progressFrame">
   <input type="hidden" name="#include" value="plugins/fanctrlplus2/include/update.fanctrlplus2.php">
 
-  <!--------------- Fan block 区域保持原状 --------------->
+  <!--------------- Fan block area --------------->
   <div id="fan-area">
     <div id="fan-column-left" class="fan-column">
       <?php $i = 0;
@@ -1786,10 +1828,10 @@ $(function() {
   </blockquote>
 </div>
 
-  <!----------------- 两栏设置区块 --------------->
+  <!----------------- Two-column settings area --------------->
   <div class="fcp-block-wrap">
 
-    <!-- 左侧：Identify PWM Controller -->
+    <!-- Left: Identify PWM Controller. -->
     <div class="fcp-card-480">
       <div class="title">
         <span class="fcp-title-left"><i class="fa fa-tag fcp-icon-gap"></i>Identify PWM Controller</span>
@@ -1841,7 +1883,7 @@ $(function() {
         </blockquote>
 
         <!-- Form -->
-        <!-- 表单容器（2 列 grid） -->
+        <!-- Two-column form grid. -->
         <div class="fcp-section">
           <dl class="fcp-formgrid">
             <dt class="fcp-formgrid-label">Select PWM Controller:</dt>
@@ -1914,7 +1956,7 @@ $(function() {
         </div>
       </div>
 
-    <!-- 右侧：Syslog Switch -->
+    <!-- Right: Syslog switch. -->
     <div class="fcp-card-480">
       <div class="title">
         <span class="fcp-title-left"><i class="fa fa-tag fcp-icon-gap"></i>Syslog Setting</span>

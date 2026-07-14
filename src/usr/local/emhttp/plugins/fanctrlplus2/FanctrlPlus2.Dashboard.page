@@ -10,17 +10,17 @@ $order_file = "$cfg_path/order.cfg";
 $order = [];
 $all_cfg = [];
 
-// 获取状态
+// Read the service state.
 $status_text = file_exists("/var/run/{$pluginname}.pid") ? "Running" : "Inactive";
 $status_color = $status_text === "Running" ? "green-text" : "red-text";
 
-// 先读取 order.cfg 顺序
+// Read the saved order first.
 if (file_exists($order_file)) {
   $ini = parse_ini_file($order_file);
   $order = array_values($ini);
 }
 
-// 1. 先按 order.cfg 顺序添加（只要实际存在）
+// Add existing configurations in saved order.
 foreach ($order as $file) {
   $path = "$cfg_path/$file";
   if (is_file($path)) {
@@ -30,7 +30,7 @@ foreach ($order as $file) {
   }
 }
 
-// 2. 把未出现在 order.cfg 的 cfg 文件（包含 _temp_）加进去
+// Append configurations missing from the saved order, including temporary ones.
 $seen = array_flip($order);
 foreach ($cfg_files as $path) {
   $basename = basename($path);
@@ -41,13 +41,13 @@ foreach ($cfg_files as $path) {
   }
 }
 
-// 3. 构建 HTML row
+// Build the HTML rows.
 $fan_rows = "";
 foreach ($all_cfg as $cfg) {
   $file = $cfg['file'];
   $label = $cfg['custom'] ?? $file;
 
-  // 跳过未命名的风扇（custom 名为空）
+  // Skip unnamed fans.
   if (empty($cfg['custom'])) continue;
 
   $fan_rows .= <<<ROW
@@ -75,11 +75,11 @@ foreach ($all_cfg as $cfg) {
   ROW;
 }
 
-// 样式输出
+// Tile styles.
 echo '<link rel="stylesheet" href="/plugins/fanctrlplus2/fonts/style.css">' . PHP_EOL;
 echo <<<STYLE
 <style>
-/* ====== 顶部状态（保留原样） ====== */
+/* Top status. */
 .fanctrlplus2-status{
   font-weight: normal;
   font-size: 12px;
@@ -92,33 +92,33 @@ echo <<<STYLE
   display: inline-block;
   text-align: center;
 }
-/* ====== 表头：桌面全称，≤1080px 用短写 ====== */
+/* Use full desktop headings and abbreviated mobile headings. */
 #fanctrlplus2-dashboard .fcp-col-head .mobile{ display:none; }
 @media (max-width:1080px){
   #fanctrlplus2-dashboard .fcp-col-head .full  { display:none; }
   #fanctrlplus2-dashboard .fcp-col-head .mobile{ display:inline; }
 }
 
-/* ====== 温度列（新结构）====== */
-/* 外层容器：桌面一行排列 */
+/* Temperature column. */
+/* Keep the desktop layout on one line. */
 #fanctrlplus2-dashboard .fcp-col-temp{
   display:inline-flex; gap:6px; align-items:baseline;
 }
 
-/* 数值部分 */
+/* Numeric value. */
 #fanctrlplus2-dashboard .fcp-col-temp .fp-tval{
   display: inline-block;
   min-width: 16px;
   text-align: center;
 }
 
-/* 单位（兼容旧 */
+/* Unit, including legacy markup. */
 #fanctrlplus2-dashboard .fcp-col-temp{
   display:grid;
   grid-template-columns: 30px 55px;
 }
 
-/* 来源 */
+/* Temperature source. */
 #fanctrlplus2-dashboard .fcp-col-temp .fp-origin{
   display:inline-block;
   min-width:55px;
@@ -128,22 +128,22 @@ echo <<<STYLE
   letter-spacing: 1px;
 }
 
-/* 无来源时的占位（与来源宽度匹配，避免跳动） */
+/* Preserve the source width when no source is available. */
 #fanctrlplus2-dashboard .fcp-col-temp .fp-origin-placeholder{
   text-align:center;
   color:inherit;
 }
 
-/* ====== ≤1080px：两行布局，避免 w18 溢出 ====== */
+/* Use two rows below 1080px to prevent w18 overflow. */
 @media (max-width:1080px){
   #fanctrlplus2-dashboard .fcp-col-temp{
     display:block; line-height:1.1;
   }
   #fanctrlplus2-dashboard .fcp-col-temp .fp-tval{
-    display:inline-block;         /* 上行：温度 */
+    display:inline-block;         /* Temperature row. */
   }
   #fanctrlplus2-dashboard .fcp-col-temp .fp-origin {
-    display:block;             /* 下行：来源 */
+    display:block;             /* Source row. */
     font-size:80%;
     opacity:.65;
     margin-top:2px;
@@ -159,7 +159,7 @@ echo <<<STYLE
 </style>
 STYLE;
 
-// 输出 tile
+// Render the tile.
 $isResponsiveWebgui = version_compare((parse_ini_file('/etc/unraid-version')['version'] ?? '0.0.0'), '7.2.0-beta', '>=');
 $tbodyClass = $isResponsiveWebgui ? 'mixed' : 'sortable';
 
@@ -206,12 +206,12 @@ $mytiles[$pluginname]['column2'] = <<<EOT
 EOT;
 ?>
 <script>
-// 设置温度与来源。支持 *, --，以及无来源时用占位“-”
+// Set temperature and source, including *, --, and the no-source placeholder.
 function setTempCell(label, val, origin) {
   const tile = document.getElementById('fanctrlplus2-dashboard');
   if (!tile) return;
 
-  // 保险：label 里若有特殊字符，避免 querySelector 失效
+  // Escape label characters before using them in a selector.
   const key = (window.CSS && CSS.escape) ? CSS.escape(label) : String(label).replace(/"/g, '\\"');
 
   const wrap = tile.querySelector(`.fcp-col-temp[data-label="${key}"]`);
@@ -220,17 +220,17 @@ function setTempCell(label, val, origin) {
   const t = wrap.querySelector('.fp-tval');
   const o = wrap.querySelector('.fp-origin');
 
-  // —— 温度文本 ——
+  // Temperature text.
   let show;
   if (val === '*') show = '*';
   else if (val == null || val === '-' || val === '--') show = '--';
   else show = `${val} °C`;
   if (t) t.textContent = show;
 
-  // —— 来源文本 —— 
+  // Source text.
   if (!o) return;
 
-  // 规范化 origin：去掉包裹的括号、trim
+  // Normalize the source by trimming whitespace and surrounding parentheses.
   const oriRaw = (origin ?? '').toString().trim();
   const ori = oriRaw.replace(/^$begin:math:text$(.*)$end:math:text$$/, '$1');   // "(Idle)" -> "Idle"
 
@@ -255,14 +255,14 @@ function updateFanctrlplusTile() {
   fetch("/plugins/fanctrlplus2/Fanctrl2Dashboard.php")
     .then(res => res.json())
     .then(data => {
-      // 顶部状态
+      // Top status.
       const statusSpan = tile.querySelector(".fanctrlplus2-status");
       if (statusSpan) {
         statusSpan.textContent = `Status: ${data.status}`;
         statusSpan.className = "fanctrlplus2-status " + (data.status === "Running" ? "green-text" : "red-text");
       }
 
-      // 行数据（仅新结构）
+      // Row data for the current markup.
       (data.fans || []).forEach(f => {
         setTempCell(f.label, f.temp_raw, f.temp_origin);
 
@@ -284,7 +284,7 @@ function updateFanctrlplusTile() {
       const statusSpan = tile?.querySelector(".fanctrlplus2-status");
       if (statusSpan) statusSpan.textContent = "Status: Loading...";
 
-      // 仅复位新结构
+      // Reset the current markup only.
       tile?.querySelectorAll('.fcp-col-temp .fp-tval').forEach(n => n.textContent = '--');
       tile?.querySelectorAll('.fcp-col-temp .fp-origin').forEach(n => n.textContent = '');
       tile?.querySelectorAll('.fcp-col-rpm .fp-rval').forEach(n => n.textContent = '--');
@@ -293,10 +293,10 @@ function updateFanctrlplusTile() {
     });
 }
 
-// 单风扇立即执行 (Run Now)
+// Run a single fan immediately.
 function refreshSingleFan(custom) {
   fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=refresh_single&custom=${encodeURIComponent(custom)}`)
-    .then(() => setTimeout(updateFanctrlplusTile, 2000)); // 2秒后刷新界面
+    .then(() => setTimeout(updateFanctrlplusTile, 2000)); // Refresh after two seconds.
 }
 
 document.addEventListener("DOMContentLoaded", function () {

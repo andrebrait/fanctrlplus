@@ -50,7 +50,7 @@ class OrderManager {
   }
 
   public static function replaceFileName($old_file, $new_file) {
-        $cfg_dir = "/boot/config/plugins/fanctrlplus2"; // 路径可按你实际定义
+        $cfg_dir = "/boot/config/plugins/fanctrlplus2"; // Adjust the path here if needed.
         $order_file = "$cfg_dir/order.cfg";
 
         if (!file_exists($order_file)) return;
@@ -58,7 +58,7 @@ class OrderManager {
         $lines = file($order_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         $out = [];
         foreach ($lines as $line) {
-            // 只替换 value
+            // Replace values only.
             if (preg_match('/^(left\d+|right\d+)="([^"]+)"/', $line, $m)) {
                 $key = $m[1];
                 $val = $m[2];

@@ -49,15 +49,17 @@ function render_disk_group_row($i, $g, $grp, $disks) {
       <tr>
         <td class="fcp-help-cursor" title="A short label for this group of devices, e.g. HDD, SATA SSD, NVMe.">Group Name:</td>
         <td>
-          <input type="text"
-                id="disk_group_name_input_<?=$i?>_<?=$g?>"
-                name="disk_group_name[<?=$i?>][<?=$g?>]"
-                class="disk-group-name-input fcp-w-300"
-                value="<?=htmlspecialchars($grp['name'])?>"
-                placeholder="e.g. HDD">
-          <button type="button" class="remove-disk-group-btn" data-fan-index="<?=$i?>" data-group="<?=$g?>" title="Remove this disk group">
-            <i class="fa fa-trash"></i>
-          </button>
+          <div class="disk-group-heading">
+            <input type="text"
+                  id="disk_group_name_input_<?=$i?>_<?=$g?>"
+                  name="disk_group_name[<?=$i?>][<?=$g?>]"
+                  class="disk-group-name-input"
+                  value="<?=htmlspecialchars($grp['name'])?>"
+                  placeholder="e.g. HDD">
+            <button type="button" class="remove-disk-group-btn" data-fan-index="<?=$i?>" data-group="<?=$g?>" title="Remove this disk group">
+              <i class="fa fa-trash"></i>
+            </button>
+          </div>
         </td>
       </tr>
       <tr>
@@ -67,9 +69,16 @@ function render_disk_group_row($i, $g, $grp, $disks) {
             <?php foreach ($disks as $group => $entries): ?>
               <optgroup label="<?=htmlspecialchars($group)?>">
                 <?php foreach ($entries as $disk):
-                  $sel = in_array($disk['id'], $grp['disks']) ? 'selected' : '';
+                  $aliases = $disk['aliases'] ?? [$disk['id']];
+                  $sel = array_intersect($aliases, $grp['disks']) ? 'selected' : '';
                 ?>
-                  <option value="<?=$disk['id']?>" <?=$sel?> title="<?=$disk['id']?>&#10;<?=$disk['dev']?>"><?=htmlspecialchars($disk['label'])?></option>
+                  <option value="<?=htmlspecialchars($disk['id'], ENT_QUOTES)?>"
+                          <?=$sel?>
+                          data-name="<?=htmlspecialchars($disk['name'], ENT_QUOTES)?>"
+                          data-description="<?=htmlspecialchars($disk['description'], ENT_QUOTES)?>"
+                          data-icon="<?=htmlspecialchars($disk['icon'], ENT_QUOTES)?>"
+                          data-type="<?=htmlspecialchars($disk['type'], ENT_QUOTES)?>"
+                          title="<?=htmlspecialchars($disk['title'], ENT_QUOTES)?>"><?=htmlspecialchars($disk['label'])?></option>
                 <?php endforeach; ?>
               </optgroup>
             <?php endforeach; ?>
@@ -111,7 +120,7 @@ function render_disk_group_row($i, $g, $grp, $disks) {
 }
 
 function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors = []) {
-  // PWM fallback（如果值为空，则默认 fallback 为 40% 和 100%）
+  // Use 40% and 100% as the PWM defaults when values are missing.
   $pwm_raw = isset($cfg['pwm']) && is_numeric($cfg['pwm']) ? $cfg['pwm'] : 102;
   $max_raw = isset($cfg['max']) && is_numeric($cfg['max']) ? $cfg['max'] : 255;
 
@@ -163,7 +172,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
             <span class="drag-handle" ><i class="fa fa-reorder"></i></span>
       </div> 
 
-      <!-- 放在每个风扇 fan-block 内部 -->
+      <!-- Fan controls inside each fan block. -->
       <div class="fan-tools fcp-fan-tools">
         <button type="button" class="show-chart-btn" onclick="showFanChart(this)" title="Preview this fan's speed curve based on current Disk/CPU settings">
           <i class="fa fa-line-chart" style= "color: var(--blue-800); font:"></i> Chart
@@ -228,7 +237,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
           <td>
             <div class="fcp-range-grid">
 
-              <!-- 左侧 Min -->
+              <!-- Minimum. -->
               <input type="text"
                     id="pwm_percent_input_<?=$i?>"
                     name="pwm_percent[<?=$i?>]"
@@ -239,10 +248,10 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                     placeholder="Min %">
 
 
-              <!-- 中间波浪号 -->
+              <!-- Range separator. -->
               <span class="fcp-center">~</span>
 
-              <!-- 右侧 Max -->
+              <!-- Maximum. -->
               <input type="text"
                     id="max_percent_input_<?=$i?>"
                     name="max_percent[<?=$i?>]"

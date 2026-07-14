@@ -1,5 +1,5 @@
 /* ======== base styles extracted from inline rules in FanBlockRender.php ======= */
-/* 顶部小风扇图标容器 */
+/* Header fan icon container. */
 .fcp-fan-icon-wrap {
   position: absolute;
   top: 10px;
@@ -8,7 +8,7 @@
   height: 36px;
 }
 
-/* 充满父容器 */
+/* Fill the parent container. */
 .fcp-abs-fill {
   position: absolute;
   top: 0; left: 0;
@@ -16,7 +16,7 @@
   height: 100%;
 }
 
-/* 充满 + 帮助光标覆盖层 */
+/* Full-size help-cursor overlay. */
 .fcp-abs-fill-help {
   position: absolute;
   top: 0; left: 0;
@@ -26,7 +26,7 @@
   z-index: 1;
 }
 
-/* SVG 尺寸与居中 */
+/* SVG size and centering. */
 .fcp-fan-icon {
   width: 36px;
   height: 36px;
@@ -34,7 +34,7 @@
   margin: auto;
 }
 
-/* 右下工具区（纵向按钮/开关等） */
+/* Bottom-right vertical controls. */
 .fcp-fan-tools {
   position: absolute;
   bottom: 10px;
@@ -45,11 +45,43 @@
   height: 96px;
 }
 
-/* 宽度辅助 */
+/* Width utilities. */
 .fcp-w-100 { width: 100%; }
 .fcp-w-300 { width: 300px; }
 
-/* 表格左列帮助光标 */
+.disk-group-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 340px;
+  min-width: 0;
+}
+.disk-group-heading .disk-group-name-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.disk-group-heading .remove-disk-group-btn {
+  margin: 0;
+  flex: none;
+}
+
+.fcp-disk-option-icon {
+  display: inline-block;
+  width: 1.4em;
+  margin: 0 5px 0 2px;
+  text-align: center;
+  vertical-align: middle;
+}
+.fcp-disk-option-name { font-weight: 600; }
+.fcp-disk-option-description {
+  margin-left: 5px;
+  font-family: bitstream, monospace;
+}
+
+/* Help cursor for the left table column. */
 .fcp-help-cursor { cursor: help; }
 
 .fcp-input-idle,
@@ -65,23 +97,23 @@
   box-sizing: border-box;
 }
 
-/* 区间一行：左输入 ~ 中间符号 ~ 右输入 */
+/* Range row: lower input, separator, upper input. */
 .fcp-range-grid {
   display: grid;
   grid-template-columns: 130px 40px 130px;
   align-items: center;
 }
 
-/* 100% 宽度 + 左对齐输入框 */
+/* Full-width, left-aligned input. */
 #fan-form .fcp-input-fullleft {
   width: 100%;
   text-align: left;
 }
 
-/* 居中（用于 ~ 符号） */
+/* Center the range separator. */
 .fcp-center { text-align: center; }
 
-/* 默认：小屏（手机 ≤1080px），Interval 全宽，Run Now 换行 */
+/* Mobile: full-width interval with Run Now on the next line. */
 #fan-form .fcp-interval-input {
   width: 100%;
   max-width: 300px;
@@ -101,7 +133,7 @@
   margin-left: 1px;
 }
 
-/* 大屏（桌面 >1080px）：Interval 固定宽度 + Run Now 同排 */
+/* Desktop: fixed-width interval with Run Now on the same line. */
 @media (min-width: 1086px) {
   #fan-form .fcp-interval-input {
     width: 225px;
@@ -118,7 +150,7 @@
   }
 }
 
-/* 统一 13px（内部图标等） */
+/* Use 13px for nested icons and controls. */
 .fcp-fs-13 { font-size: 13px; }
 
 /* ===== FanCtrl Plus 2: variables (auto light/dark) ===== */
@@ -347,7 +379,7 @@ dt.containerSettingsDt {
   text-align: center;
 }
 
-/* 按钮禁用态一致化（可选） */
+/* Consistent disabled-button state. */
 .fcp-actions .btn[disabled],
 .fcp-actions button[disabled] {
   opacity: .6;
@@ -367,7 +399,7 @@ dt.containerSettingsDt {
 }
 .fcp-help-icon{ margin-right:4px; }
 
-/* 白色格子（随内容大小） */
+/* Content-sized white panel. */
 .fc-help-box{
   display: block;
   max-width: 100%;
@@ -381,7 +413,7 @@ dt.containerSettingsDt {
   line-height: 1.6;
 }
 
-/* ====== 外层包裹：Identify PWM Controller and Syslog Setting ===== */
+/* Identify PWM Controller and Syslog Setting wrapper. */
 .fcp-block-wrap{
   display: flex;
   justify-content: center;
@@ -391,7 +423,7 @@ dt.containerSettingsDt {
   margin-top: 20px;
 }
 
-/* --- 卡片尺寸：原 flex:1 1 480px; min-width:380px --- */
+/* Card sizing. */
 .fcp-card-480{
   flex: 1 1 480px;
   width: 100%;
@@ -408,7 +440,7 @@ dt.containerSettingsDt {
   padding-top: 2rem;
 }
 
-/* 表单网格：左标签右输入，间距更紧凑、对齐更稳 */
+/* Compact two-column form grid. */
 .fcp-formgrid{
   display:grid;
   grid-template-columns: 50% 1fr;
@@ -417,12 +449,12 @@ dt.containerSettingsDt {
 }
 .fcp-formgrid-label{ text-align:right; padding-top:6px; }
 
-/* 输入控件统一宽度（避免被系统样式拉满宽） */
+/* Keep controls from being stretched by system styles. */
 #fan-form .fcp-w-200{ width: 100%; max-width: 200px;}
 #fan-form .fcp-input{ padding-top:6px; }
 #fan-form .fcp-select{ padding-top:6px; }
 
-/* dt dd不被 7.1.4或以下版本影响 */
+/* Isolate definition-list layout from Unraid 7.1.4 and older styles. */
 .fcp-formgrid dt,
 .fcp-formgrid dd{
   float: none !important;
@@ -444,7 +476,7 @@ dt.containerSettingsDt {
   display: flex;
 }  
 
-/* 底部按钮与保存提示 */
+/* Footer actions and save hint. */
 .fcp-actions{
   width:100%;
   text-align:center;
@@ -459,7 +491,7 @@ dt.containerSettingsDt {
   text-align:left;
 }
 
-/* --- Syslog 表格区域 --- */
+/* Syslog table. */
 .syslog-table-wrap{
   margin: 32px auto;
   max-width: 500px;
@@ -472,7 +504,7 @@ dt.containerSettingsDt {
 .syslog-table th.switch{ text-align: center; width: 20%; padding: 8px; }
 .syslog-table td.switch{ text-align: center; padding: 6px; }
 
-/* --- syslog开关按钮 --- */
+/* Syslog switch. */
 .switch-area{
   display: inline-flex;
   align-items: center;
@@ -507,17 +539,17 @@ dt.containerSettingsDt {
 .switch-button-background.checked ~ .switch-button-label.on{ display: inline; }
 .switch-button-background.checked ~ .switch-button-label.off{ display: none; }
 
-/* 针对窄屏手机的 fan-block 进一步优化 */
+/* Additional fan-block adjustments for narrow screens. */
 /* ===== Mobile overrides for FanCtrl Plus 2 ===== */
 @media (min-width: 768px) {
   #fan-area {
-    grid-template-columns: 1fr 1fr;  /* 横屏或平板 → 两列 */
+    grid-template-columns: 1fr 1fr;  /* Two columns in landscape or on tablets. */
     align-items: start;
   }
 }
 
 @media (max-width: 1399px) {
-  /* fan block & fieldset 自适应全宽 */
+  /* Let fan blocks and fieldsets use the full width. */
   .fan-block,
   .fan-fieldset {
     width: 100%;
@@ -526,15 +558,15 @@ dt.containerSettingsDt {
     padding-bottom: 8px;
   }
 
-  /* 让 fieldset 支持内部 flex 布局 */
+  /* Allow a flex layout inside the fieldset. */
   .fan-fieldset {
     display: flex !important;
     flex-direction: column !important;
   }
 
   .fcp-fan-tools {
-    order: 99 !important;          /* 永远在最后 */
-    margin-top: auto !important;   /* 推到底部 */
+    order: 99 !important;          /* Keep this item last. */
+    margin-top: auto !important;   /* Push it to the bottom. */
     position: static !important;
     width: 100% !important;
     height: auto !important;
@@ -560,7 +592,7 @@ dt.containerSettingsDt {
     margin: auto;
   }
 
-  /* 覆盖下拉框行内 300px 宽度 */
+  /* Override the dropdown's inline 300px width. */
   .ui-dropdownchecklist-selector,
   .ui-dropdownchecklist-selector-wrapper,
   .cpu-input {
@@ -575,7 +607,7 @@ dt.containerSettingsDt {
 }
   
 @media (max-width: 1024px) {
-  /* fan block & fieldset 自适应全宽 */
+  /* Let fan blocks and fieldsets use the full width. */
   .fan-block,
   .fan-fieldset {
     width: 100%;
@@ -584,15 +616,15 @@ dt.containerSettingsDt {
     padding-bottom: 8px;
   }
 
-  /* 让 fieldset 支持内部 flex 布局 */
+  /* Allow a flex layout inside the fieldset. */
   .fan-fieldset {
     display: flex !important;
     flex-direction: column !important;
   }
 
   .fcp-fan-tools {
-    order: 99 !important;          /* 永远在最后 */
-    margin-top: auto !important;   /* 推到底部 */
+    order: 99 !important;          /* Keep this item last. */
+    margin-top: auto !important;   /* Push it to the bottom. */
     position: static !important;
     width: 100% !important;
     height: auto !important;
@@ -618,7 +650,7 @@ dt.containerSettingsDt {
     margin: auto;
   }
 
-  /* 覆盖掉固定宽度的 input / select / dropdown */
+  /* Override fixed-width inputs, selects, and dropdowns. */
   .custom-name-input,
   .fcp-input-idle,
   .pwm-controller,
@@ -627,7 +659,7 @@ dt.containerSettingsDt {
     max-width: 100% !important;
   }
 
-  /* 覆盖下拉框行内 300px 宽度 */
+  /* Override the dropdown's inline 300px width. */
   .ui-dropdownchecklist-selector,
   .ui-dropdownchecklist-selector-wrapper,
   .cpu-input {
@@ -640,9 +672,9 @@ dt.containerSettingsDt {
     text-overflow: initial !important;
   }
 
-  /* Disk / CPU Temp Range 输入框 grid 自适应 */
+  /* Let disk and CPU temperature range inputs share available space. */
   .fcp-range-grid {
-    grid-template-columns: 1fr auto 1fr !important; /* 左输入框 ~ 右输入框 */
+    grid-template-columns: 1fr auto 1fr !important; /* Lower input, separator, upper input. */
     gap: 4px !important;
   }
   .fcp-range-grid input[type="text"] {

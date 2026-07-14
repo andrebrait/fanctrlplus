@@ -7,12 +7,12 @@ dashboard_updater="/usr/local/emhttp/plugins/$plugin/scripts/fanctrlplus2_dashbo
 pid_dir="/var/run"
 
 fanctrlplus2.start() {
-  # 清除用户手动 stop 标记
+  # Clear the user-requested stop marker.
   rm -f /var/run/fanctrlplus2.user_stopped
 
   pkill -f "$loop_script" 2>/dev/null
 
-  # 启动前执行migrate_cfg_and_labels
+  # Migrate configuration and labels before starting.
   php -r "require_once '/usr/local/emhttp/plugins/fanctrlplus2/include/Common.php'; migrate_cfg_and_labels('fanctrlplus2');"
 
   for cfg in "$cfg_path"/${plugin}_*.cfg; do
@@ -21,7 +21,7 @@ fanctrlplus2.start() {
     service=$(grep -Po '^service="\K[^"]+' "$cfg")
     [[ "$service" != "1" ]] && continue
 
-    # 取出并清洗 custom 名称（作为 pid 文件名一部分）
+    # Sanitize the custom name before using it in a PID filename.
     raw_custom=$(grep -Po '^custom="\K[^"]+' "$cfg")
     clean_custom=$(echo "$raw_custom" | tr -d '\r\n\t ')
     custom_safe=$(echo "$clean_custom" | tr -cd '[:alnum:]_-')
@@ -33,13 +33,13 @@ fanctrlplus2.start() {
     logger -t "$plugin" "Started [$custom_safe] from $cfg"
   done
 
-  # ✅ 确保 array_monitor.sh 已启动（若未运行）
+  # Start array_monitor.sh if it is not already running.
   script="/usr/local/emhttp/plugins/fanctrlplus2/scripts/array_monitor.sh"
   if [ -x "$script" ] && ! pgrep -f "$script" >/dev/null; then
     nohup "$script" >/dev/null 2>&1 &
   fi
 
-  # 启动 dashboard updater（避免重复）
+  # Restart the dashboard updater without creating duplicates.
   pkill -f "$dashboard_updater" 2>/dev/null
   if [[ -x "$dashboard_updater" ]]; then
     nohup "$dashboard_updater" >/dev/null 2>&1 &
@@ -47,17 +47,17 @@ fanctrlplus2.start() {
 }
 
 fanctrlplus2.stop() {
-  # 设置用户手动停止标记
+  # Record that the user requested a stop.
   touch /var/run/fanctrlplus2.user_stopped
 
   pkill -f "$loop_script"
   rm -f "$pid_dir"/${plugin}_*.pid
   logger -t "$plugin" "All fanctrlplus2 stopped"
 
-  # 停止 dashboard updater
+  # Stop the dashboard updater.
   pkill -f "$dashboard_updater"
 
-  # ✅ 只对 fanctrlplus2 控制的 pwm 设为 50%，其他不动
+  # Set only fanctrlplus2-controlled PWM outputs to 50%.
   for cfg in "$cfg_path"/${plugin}_*.cfg; do
     [[ -f "$cfg" ]] || continue
 

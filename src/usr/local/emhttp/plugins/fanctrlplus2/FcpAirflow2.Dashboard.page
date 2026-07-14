@@ -4,18 +4,18 @@ Cond="version_compare(parse_ini_file('/etc/unraid-version')['version'],'6.11.9',
 <?php
 $pluginname = "fanctrlplus2";
 
-// Unraid 7.2+ 使用 mixed；旧版用 sortable（与官方一致）
+// Unraid 7.2+ uses mixed; older versions use sortable, matching the built-in tiles.
 $isResponsiveWebgui = version_compare((parse_ini_file('/etc/unraid-version')['version'] ?? '0.0.0'), '7.2.0-beta', '>=');
 $tbodyClass = $isResponsiveWebgui ? 'mixed' : 'sortable';
 
-// 没有任何 PWM 文件则不渲染本 tile（按你的要求隐藏）
+// Do not render the tile when no PWM files exist.
 $hasPwm = false;
 foreach (glob('/sys/class/hwmon/hwmon*/pwm*') as $p) {
   if (is_file($p)) { $hasPwm = true; break; }
 }
 if (!$hasPwm) return;
 
-// 头部在 7.2+ 与旧版排版略不同（照你现有 tile 的做法）
+// Match the existing version-specific tile header layout.
 $headerSection = $isResponsiveWebgui
   ? "<h3 class='tile-header-main'>FCP Airflow</h3>\n<span id='fcp-airflow-count'><i class=\"ups fa fa-sort-amount-asc\"></i>Fan count: --</span>"
   : "FCP Airflow<br>\n<span id='fcp-airflow-count'><i class=\"ups fa fa-sort-amount-asc\"></i>Fan count: --</span><br>";
@@ -42,7 +42,7 @@ $mytiles[$pluginname]['column2'] .= <<<EOT
     </td>
   </tr>
 
-  <!-- 内容：与官方 Airflow 一样，上排名字、下排数值、每组三个 -->
+  <!-- Match the built-in Airflow tile: names above values, grouped in threes. -->
   <tr>
     <td>
       <div id="fcp-airflow-grid"></div>
@@ -67,7 +67,7 @@ $mytiles[$pluginname]['column2'] .= <<<EOT
     const fans = d.fans || [];
     count.innerHTML = '<i class="ups fa fa-sort-amount-asc"></i>Fan count: ' + fans.length;
 
-    // 三列分组：名字行 / 数值行 / 空行
+    // Group three columns into name, value, and spacer rows.
     let html = '';
     for (let i=0; i<fans.length; i+=3) {
       const group = fans.slice(i, i+3);

@@ -1,5 +1,5 @@
 #!/bin/bash
-# fanctrlplus2_loop.sh - 实际运行的风扇控制脚本（支持 Disk + CPU 温控合并）
+# fanctrlplus2_loop.sh - Fan-control loop combining disk and CPU temperatures.
 
 cfg_file="$1"
 [[ -f "$cfg_file" ]] || exit 1
@@ -7,7 +7,7 @@ source "$cfg_file"
 max="${max:-255}"
 
 # ===== Fan Speed on Idle (ABS) =====
-# 最小档（绝对值）：cfg 里的 pwm 就是 Min
+# Minimum absolute value: the cfg pwm value is Min Speed.
 min_pwm_abs="${pwm:-0}"
 
 if [[ -n "${idle:-}" ]]; then
@@ -18,11 +18,11 @@ else
   idle_pwm_abs=0
 fi
 
-# 基本夹值到 [0, max]
+# Clamp the base value to [0, max].
 (( idle_pwm_abs < 0 )) && idle_pwm_abs=0
 (( idle_pwm_abs > max )) && idle_pwm_abs="$max"
 
-# Idle 不高于 Min
+# Idle Speed must not exceed Min Speed.
 if (( idle_pwm_abs > min_pwm_abs )); then
   idle_pwm_abs="$min_pwm_abs"
 fi
@@ -85,7 +85,7 @@ plugin="fanctrlplus2"
 custom="${custom:-$(basename "$cfg_file" .cfg)}"
 controller_enable="${controller}_enable"
 
-# 推导 RPM 读取路径
+# Derive the RPM input path.
 if [[ "$controller" =~ pwm([0-9]+)$ ]]; then
   fan_index="${BASH_REMATCH[1]}"
   fan_path="$(dirname "$controller")/fan${fan_index}_input"
@@ -96,7 +96,7 @@ fi
 prev_pwm=-1
 
 while true; do
-  # === CPU 温度 ===
+  # === CPU temperature ===
   cpu_pwm_val=0
   if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
     raw=$(cat "$cpu_sensor")
@@ -165,7 +165,7 @@ while true; do
     fi
   fi
 
-  # === Disk 温控 PWM ===
+  # === Disk-temperature PWM ===
   disk_pwm_val=0
   disk_max="*"
 
@@ -216,7 +216,7 @@ while true; do
     fi
   fi
 
-  # === 取较高 PWM 作为最终值，同时设定 max_temp 与来源 ===
+  # === Use the higher PWM and record its temperature and source ===
   if (( cpu_pwm_val > disk_pwm_val )); then
     pwm_val=$cpu_pwm_val
     max_temp=$cpu_temp
@@ -233,22 +233,22 @@ while true; do
     temp_origin="(Aux)"
   fi
 
-  # 避免空写入
+  # Do not write an empty value.
   if [[ ! "$max_temp" =~ ^[0-9]+$ ]]; then
     max_temp="*"
     temp_origin=""
   fi
 
-  # 若无任何有效温度源 → 覆盖为 idle，并标注来源
+  # If no temperature source is valid, use Idle Speed and label the source.
   if [[ "$max_temp" == "*" ]]; then
     pwm_val="$idle_pwm_abs"
     temp_origin="(Idle)"
   fi
 
-  # 每轮都写入 Dashboard 缓存
+  # Refresh the dashboard cache on every iteration.
   echo "${max_temp} ${temp_origin}" > "/var/tmp/fanctrlplus2/temp_${plugin}_${custom}"
 
-  # === 若 PWM 有明显变化，或首次 ===
+  # === Write when PWM changes materially or on the first iteration ===
   if [[ "$prev_pwm" == -1 ]]; then
     [[ -f "$controller_enable" ]] && echo 1 > "$controller_enable"
     echo "$pwm_val" > "$controller"
@@ -259,7 +259,7 @@ while true; do
       rpm="?"
     fi
 
-    # 无条件写一次
+    # Always perform the initial write.
     label="[${custom}]"
     logger -t fanctrlplus2 "$label Temp=${max_temp}°C $temp_origin → PWM=$pwm_val → RPM=$rpm"
     prev_pwm=$pwm_val
