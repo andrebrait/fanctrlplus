@@ -991,11 +991,16 @@ $(function() {
     ['#fan-column-left', '#fan-column-right'].forEach(function (selector) {
       const $col = $(selector);
 
+      if (!sortableUnlocked) {
+        $col.find('.sortable-placeholder').remove();
+        return;
+      }
+
       if (
         $col.children('.fan-block:not(.sortable-placeholder)').length === 0 &&
         $col.find('.sortable-placeholder').length === 0
       ) {
-        $col.append(`<div class="fan-block sortable-placeholder">Drag Fan Configuration Here</div>`);
+        $col.append('<div class="fan-block sortable-placeholder"></div>');
       }
 
       if ($col.children('.fan-block:not(.sortable-placeholder)').length > 0) {
@@ -1019,7 +1024,7 @@ $(function() {
     });
 
     if (!sortableUnlocked) {
-      ensureColumnDroppable();
+      $cols.find('.sortable-placeholder').remove();
       $cols.removeClass('ui-sortable ui-sortable-disabled');
       $cols.find('.fan-block').removeClass('ui-sortable-handle');
       return;
@@ -1040,7 +1045,7 @@ $(function() {
         const hasReal = $col.children('.fan-block:not(.sortable-placeholder)').length > 0;
         if (!hasReal && $col.find('.sortable-placeholder').length === 0) {
           const h = $('.fan-block:not(.sortable-placeholder):first').outerHeight() || 100;
-          $('<div class="fan-block sortable-placeholder">Drag Fan Configuration Here</div>')
+          $('<div class="fan-block sortable-placeholder"></div>')
             .css('min-height', h + 'px').appendTo($col);
         }
       },
@@ -1410,7 +1415,7 @@ $(function() {
           const hasReal = $col.children('.fan-block:not(.sortable-placeholder)').length > 0;
           if (!hasReal && $col.find('.sortable-placeholder').length === 0) {
             const h = $('.fan-block:not(.sortable-placeholder):first').outerHeight() || 100;
-            $('<div class="fan-block sortable-placeholder">Drag Fan Configuration Here</div>')
+            $('<div class="fan-block sortable-placeholder"></div>')
               .css('min-height', h + 'px').appendTo($col);
           }
         },
@@ -1437,7 +1442,7 @@ $(function() {
         const inst = $(this).sortable('instance');
         if (inst) $(this).sortable('destroy');
       });
-      ensureColumnDroppable();
+      $cols.find('.sortable-placeholder').remove();
     }
 
     // Toggle sorting lock state.

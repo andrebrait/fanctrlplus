@@ -307,7 +307,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #bbb;
+  border: 1px dashed #bbb;
   margin: 10px;
   border-radius: 6px;
   text-align: center;

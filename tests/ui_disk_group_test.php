@@ -15,14 +15,20 @@ if (preg_match('/class="disk-group-name-input[^\"]*fcp-w-300/', $render)) {
 if (!str_contains($css, 'grid-template-columns: minmax(0, 1fr) auto;')) {
   $failures[] = 'The disk group heading must reserve space for the remove button.';
 }
-if (preg_match('/if \(!sortableUnlocked\) \{\s*\$col\.find\(\'\.sortable-placeholder\'\)\.remove\(\);\s*return;/s', $page)) {
-  $failures[] = 'Empty columns must keep their drag target while sorting is locked.';
+if (!preg_match('/if \(!sortableUnlocked\) \{\s*\$col\.find\(\'\.sortable-placeholder\'\)\.remove\(\);\s*return;/s', $page)) {
+  $failures[] = 'Empty-column drop zones must stay hidden while sorting is locked.';
 }
 if (!preg_match('/function initSortableUnlocked\(\).*?\$cols\.sortable\(opts\);\s*ensureColumnDroppable\(\);/s', $page)) {
   $failures[] = 'Unlocking sorting must add a drop target to each empty column.';
 }
-if (!preg_match('/function destroySortableLocked\(\).*?ensureColumnDroppable\(\);/s', $page)) {
-  $failures[] = 'Locking sorting must preserve empty-column drag targets.';
+if (!preg_match('/function destroySortableLocked\(\).*?\$cols\.find\(\'\.sortable-placeholder\'\)\.remove\(\);/s', $page)) {
+  $failures[] = 'Locking sorting must remove empty-column drop zones.';
+}
+if (str_contains($page, 'Drag Fan Configuration Here')) {
+  $failures[] = 'Empty-column drop zones must not contain instructional text.';
+}
+if (!preg_match('/\.sortable-placeholder\s*\{[^}]*border:\s*1px\s+dashed\s+#bbb;/s', $css)) {
+  $failures[] = 'Empty-column drop zones must use a dashed border.';
 }
 if (!preg_match('/\.ui-dropdownchecklist-item\s+\.ui-dropdownchecklist-text\s*\{[^}]*white-space:\s*nowrap\s*!important;/s', $css)) {
   $failures[] = 'Expanded disk selector rows must not wrap into adjacent rows.';
