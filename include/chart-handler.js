@@ -54,22 +54,33 @@ window.showFanChart = function (btn) {
   const name = getSelectVal('[name^="custom["]') || '(Unnamed)';
   const pwmMin = getNum('[name^="pwm_percent["]');
   const pwmMax = getNum('[name^="max_percent["]');
-  const disksEl = block.querySelector('[name^="disks["], [name^="include[]"]');
-  const diskSelected = disksEl && [...disksEl.selectedOptions].some(opt => opt.value);
-  const tempLow = getNum('[name^="low["]');
-  const tempHigh = getNum('[name^="high["]');
+
+  // Each disk group gets its own Temp -> PWM curve (own Low/High range, driven
+  // by that group's own hottest selected disk -- see fanctrlplus_loop.sh).
+  const diskGroupPalette = ['#4285f4', '#8e44ad', '#16a085', '#e67e22', '#c0392b', '#2c3e50'];
+  const diskGroups = [...block.querySelectorAll('.disk-group-row')].map((row, idx) => {
+    const selectEl = row.querySelector('.disk-select');
+    const lowStr = (row.querySelector('.low-temp-input')?.value ?? '').replace(/[^\d.]/g, '');
+    const highStr = (row.querySelector('.high-temp-input')?.value ?? '').replace(/[^\d.]/g, '');
+    return {
+      name: row.querySelector('.disk-group-name-input')?.value || `Group ${idx + 1}`,
+      selected: !!(selectEl && [...selectEl.selectedOptions].some(opt => opt.value)),
+      low: lowStr ? parseFloat(lowStr) : null,
+      high: highStr ? parseFloat(highStr) : null,
+      color: diskGroupPalette[idx % diskGroupPalette.length],
+    };
+  });
+  const diskSelected = diskGroups.some(g => g.selected);
+
   const cpuEnabled = getSelectVal('[name^="cpu_enable["]') === '1';
   const cpuLow = getNum('[name^="cpu_min_temp["]');
   const cpuHigh = getNum('[name^="cpu_max_temp["]');
   const auxEnabled = getSelectVal('[name^="aux_enable["]') === '1';
   const auxLow = getNum('[name^="aux_min_temp["]');
   const auxHigh = getNum('[name^="aux_max_temp["]');
-  const hasDiskChart = diskSelected && pwmMin !== null && pwmMax !== null;
-  const hasCpuChart = cpuEnabled && cpuLow !== null && cpuHigh !== null;
-  const hasAuxChart = auxEnabled && auxLow !== null && auxHigh !== null;
 
-  if ([pwmMin, pwmMax, tempLow, tempHigh].some(v => v === null)) {
-    Swal.fire('⚠️ Missing input', 'Please fill in all Disk Temp and PWM values.', 'warning');
+  if ([pwmMin, pwmMax].some(v => v === null)) {
+    Swal.fire('⚠️ Missing input', 'Please fill in the Fan Speed Range (Min/Max %).', 'warning');
     return;
   }
 
@@ -90,23 +101,25 @@ window.showFanChart = function (btn) {
   };
 
   const datasets = [];
+  const diskDatasetsByGroup = new Map();
 
-  if (diskSelected && tempLow !== null && tempHigh !== null) {
-    const diskPoints = makeLinePoints(tempLow, pwmMin, tempHigh, pwmMax);
-    const diskRadius = makePointRadiusArray(diskPoints.length);
-
-    datasets.push({
-    label: 'Disk Temp → PWM (%)',
-    data: diskPoints,
-    borderColor: '#4285f4',
-    backgroundColor: 'rgba(66,133,244,0.1)',
-    borderWidth: 2,
-    pointRadius: diskRadius,
-    pointHoverRadius: 6,
-    fill: false,
-    tension: 0.4,
-    });
-  }
+  diskGroups.forEach(g => {
+    if (!g.selected || g.low === null || g.high === null || g.low >= g.high) return;
+    const points = makeLinePoints(g.low, pwmMin, g.high, pwmMax);
+    const ds = {
+      label: `Disk: ${g.name} Temp → PWM (%)`,
+      data: points,
+      borderColor: g.color,
+      backgroundColor: g.color + '1a',
+      borderWidth: 2,
+      pointRadius: makePointRadiusArray(points.length),
+      pointHoverRadius: 6,
+      fill: false,
+      tension: 0.4,
+    };
+    datasets.push(ds);
+    diskDatasetsByGroup.set(g.name, ds);
+  });
 
   if (cpuEnabled && cpuLow !== null && cpuHigh !== null) {
     const cpuPoints = makeLinePoints(cpuLow, pwmMin, cpuHigh, pwmMax);
@@ -174,13 +187,19 @@ window.showFanChart = function (btn) {
     const customName = custom; // 供后端取 /var 的 key
     const snapCpuEnabled = getSelectVal('[name^="cpu_enable["]') === '1';
     const snapAuxEnabled = getSelectVal('[name^="aux_enable["]') === '1';
-    const disksElSnap = block.querySelector('[name^="disks["], [name^="include[]"]');
-    const snapDiskSelected = !!(disksElSnap && disksElSnap.selectedOptions && disksElSnap.selectedOptions.length > 0);
+    const snapDiskSelected = [...block.querySelectorAll('.disk-group-row .disk-select')]
+      .some(sel => [...sel.selectedOptions].some(opt => opt.value));
 
     // 找到对应的 dataset（有可能没有）
     const dsCPU  = datasets.find(d => d.label && d.label.includes('CPU'));
-    const dsDisk = datasets.find(d => d.label && d.label.includes('Disk'));
     const dsAux  = datasets.find(d => d.label && d.label.includes('Aux'));
+    // ponytail: the loop/refresh_single scripts report the live temp's origin
+    // only as "(Disk)", not which group -- with 2+ groups the live crosshair
+    // can't know which curve actually produced the current reading, so it
+    // falls back to the first configured group's curve. Upgrade path: have
+    // the backend also report the winning group's name if this needs to be
+    // precise per-group.
+    const dsDisk = datasets.find(d => d.label && d.label.includes('Disk:'));
 
     // 顶部 Current 文本节点
     const liveNote = document.getElementById('fan-chart-live-note');

@@ -47,6 +47,40 @@ if [[ "${aux_sensor:-}" == *nvidia:* ]]; then
   [[ -z "$nvidia_smi_bin" ]] && nvidia_smi_bin=$(command -v nvidia-smi 2>/dev/null || true)
 fi
 
+# Reads smartctl temp for a comma-separated disk-by-id list; echoes the max
+# valid temp found (spun-down/unreadable disks skipped), or nothing if no
+# disk in the list had a valid temp. Shared by the legacy single-range path
+# and each disk group's own range.
+disk_group_max_temp() {
+  local disks_csv="$1" disk disk_path real_path temp max_valid found=0
+  IFS=',' read -ra disks_list <<< "$disks_csv"
+  for disk in "${disks_list[@]}"; do
+    [[ -z "$disk" ]] && continue
+    disk_path="/dev/disk/by-id/$disk"
+    real_path=$(realpath "$disk_path" 2>/dev/null)
+    [[ ! -b "$real_path" ]] && continue
+
+    smartctl -n standby -A "$real_path" | grep -q "Device is in STANDBY" && continue
+
+    if [[ "$real_path" == /dev/nvme* ]]; then
+      temp=$(smartctl -A "$real_path" | awk '/Temperature:/ {print $2; exit}')
+    else
+      temp=$(smartctl -A "$real_path" | awk '
+        $1 == 190 || $1 == 194                   { print $10; exit }
+        $1 == "Temperature_Celsius"             { print $10; exit }
+        $1 == "Airflow_Temperature_Cel"         { print $10; exit }
+        $1 == "Current" && $3 == "Temperature:" { print $4; exit }
+      ')
+    fi
+
+    if [[ "$temp" =~ ^[0-9]+$ ]]; then
+      (( found == 0 || temp > max_valid )) && max_valid=$temp
+      found=1
+    fi
+  done
+  (( found == 1 )) && echo "$max_valid"
+}
+
 plugin="fanctrlplus"
 custom="${custom:-$(basename "$cfg_file" .cfg)}"
 controller_enable="${controller}_enable"
@@ -135,41 +169,39 @@ while true; do
   disk_pwm_val=0
   disk_max="*"
 
-  # 有勾选 disk 时才处理
-  if [ -n "$disks" ]; then
-    disk_max_valid=0
-    found_valid_temp=0
+  if [[ "${disk_group_count:-0}" -gt 0 ]]; then
+    # Disk groups: each has its own Low/High range, driven by its own hottest
+    # selected disk. Fan reacts to whichever group's computed PWM is highest.
+    disk_group_hit=0
+    for (( g=0; g<disk_group_count; g++ )); do
+      dvar="disk_group_${g}_disks"; lvar="disk_group_${g}_low"; hvar="disk_group_${g}_high"
+      g_disks="${!dvar:-}"
+      [[ -z "$g_disks" ]] && continue
+      g_low="${!lvar:-40}"
+      g_high="${!hvar:-60}"
+      g_temp=$(disk_group_max_temp "$g_disks")
+      [[ -z "$g_temp" ]] && continue
 
-    IFS=',' read -ra disks_list <<< "$disks"
-    for disk in "${disks_list[@]}"; do
-      disk_path="/dev/disk/by-id/$disk"
-      real_path=$(realpath "$disk_path" 2>/dev/null)
-      [[ ! -b "$real_path" ]] && continue
-
-      # 跳过休眠磁盘
-      smartctl -n standby -A "$real_path" | grep -q "Device is in STANDBY" && continue
-
-      # 获取温度
-      if [[ "$real_path" == /dev/nvme* ]]; then
-        temp=$(smartctl -A "$real_path" | awk '/Temperature:/ {print $2; exit}')
+      if (( g_temp <= g_low )); then
+        g_pwm=$pwm
+      elif (( g_temp >= g_high )); then
+        g_pwm=$max
       else
-        temp=$(smartctl -A "$real_path" | awk '
-          $1 == 190 || $1 == 194                   { print $10; exit }
-          $1 == "Temperature_Celsius"             { print $10; exit }
-          $1 == "Airflow_Temperature_Cel"         { print $10; exit }
-          $1 == "Current" && $3 == "Temperature:" { print $4; exit }
-        ')
+        g_delta=$((g_temp - g_low))
+        g_range=$((g_high - g_low))
+        g_pwm=$((pwm + g_delta * (max - pwm) / g_range))
       fi
 
-      # 有效温度，更新最大值
-      if [[ "$temp" =~ ^[0-9]+$ ]]; then
-        (( temp > disk_max_valid )) && disk_max_valid=$temp
-        found_valid_temp=1
+      if (( disk_group_hit == 0 || g_pwm > disk_pwm_val )); then
+        disk_pwm_val=$g_pwm
+        disk_max=$g_temp
+        disk_group_hit=1
       fi
     done
-
-    # 若取得有效温度，再执行 PWM 推算
-    if (( found_valid_temp == 1 )); then
+  elif [ -n "$disks" ]; then
+    # Legacy single-range path (pre-group configs) -- unchanged behavior.
+    disk_max_valid=$(disk_group_max_temp "$disks")
+    if [[ -n "$disk_max_valid" ]]; then
       disk_max=$disk_max_valid
 
       if (( disk_max <= low )); then

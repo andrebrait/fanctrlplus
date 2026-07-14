@@ -9,6 +9,107 @@ if (is_file($label_file)) {
   }
 }
 
+// Build the list of disk groups for a fan cfg: [{name, disks:[...], low, high}, ...].
+// disk_group_count>0 -> read disk_group_{g}_* keys. Otherwise fall back to ONE group
+// synthesized from the legacy flat disks/low/high fields (pre-group configs, or a
+// brand-new never-saved fan block) -- keeps every existing config rendering exactly
+// as before until the user actually saves it in the new group shape.
+function fcp_build_disk_groups($cfg) {
+  $count = isset($cfg['disk_group_count']) ? intval($cfg['disk_group_count']) : 0;
+  if ($count > 0) {
+    $groups = [];
+    for ($g = 0; $g < $count; $g++) {
+      $groups[] = [
+        'name'  => $cfg["disk_group_{$g}_name"] ?? '',
+        'disks' => array_filter(explode(',', $cfg["disk_group_{$g}_disks"] ?? '')),
+        'low'   => isset($cfg["disk_group_{$g}_low"]) && is_numeric($cfg["disk_group_{$g}_low"]) ? intval($cfg["disk_group_{$g}_low"]) : 40,
+        'high'  => isset($cfg["disk_group_{$g}_high"]) && is_numeric($cfg["disk_group_{$g}_high"]) ? intval($cfg["disk_group_{$g}_high"]) : 60,
+      ];
+    }
+    return $groups;
+  }
+  return [[
+    'name'  => '',
+    'disks' => array_filter(explode(',', $cfg['disks'] ?? '')),
+    'low'   => isset($cfg['low']) && is_numeric($cfg['low']) ? intval($cfg['low']) : 40,
+    'high'  => isset($cfg['high']) && is_numeric($cfg['high']) ? intval($cfg['high']) : 60,
+  ]];
+}
+
+// Render one disk-group row for fan $i, group $g. $grp = {name, disks:[...], low, high}.
+// Single source of truth for the row markup -- both the initial page render (via
+// fcp_build_disk_groups()) and the "Add Disk Group" AJAX button (FanctrlLogic.php
+// op=newdiskgroup, an empty $grp) call this, so there is never a second template to
+// keep in sync.
+function render_disk_group_row($i, $g, $grp, $disks) {
+  ob_start();
+  ?>
+  <div class="disk-group-row" data-fan-index="<?=$i?>" data-group="<?=$g?>">
+    <table class="fcp-w-100">
+      <tr>
+        <td class="fcp-help-cursor" title="A short label for this group of devices, e.g. HDD, SATA SSD, NVMe.">Group Name:</td>
+        <td>
+          <input type="text"
+                id="disk_group_name_input_<?=$i?>_<?=$g?>"
+                name="disk_group_name[<?=$i?>][<?=$g?>]"
+                class="disk-group-name-input fcp-w-300"
+                value="<?=htmlspecialchars($grp['name'])?>"
+                placeholder="e.g. HDD">
+          <button type="button" class="remove-disk-group-btn" data-fan-index="<?=$i?>" data-group="<?=$g?>" title="Remove this disk group">
+            <i class="fa fa-trash"></i>
+          </button>
+        </td>
+      </tr>
+      <tr>
+        <td class="fcp-help-cursor" title="Select disks, NVMe drives, or other block devices belonging to this group.">Include Disk(s):</td>
+        <td>
+          <select class="disk-select fcp-w-300" name="disk_group_disks[<?=$i?>][<?=$g?>][]" multiple>
+            <?php foreach ($disks as $group => $entries): ?>
+              <optgroup label="<?=htmlspecialchars($group)?>">
+                <?php foreach ($entries as $disk):
+                  $sel = in_array($disk['id'], $grp['disks']) ? 'selected' : '';
+                ?>
+                  <option value="<?=$disk['id']?>" <?=$sel?> title="<?=$disk['id']?>&#10;<?=$disk['dev']?>"><?=htmlspecialchars($disk['label'])?></option>
+                <?php endforeach; ?>
+              </optgroup>
+            <?php endforeach; ?>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td class="fcp-help-cursor" title="Fan runs at minimum speed at or below Low Temp, and maximum speed at or above High Temp for this group's hottest selected disk.">Group Temperature Range:</td>
+        <td>
+          <div class="fcp-range-grid">
+            <input type="text"
+                  id="low_temp_input_<?=$i?>_<?=$g?>"
+                  name="disk_group_low[<?=$i?>][<?=$g?>]"
+                  class="low-temp-input fcp-input-fullleft"
+                  inputmode="numeric"
+                  value="<?=$grp['low']?>°C"
+                  title="Low Temp: <?=$grp['low']?>°C"
+                  placeholder="Low °C">
+
+            <span class="fcp-center">~</span>
+
+            <input type="text"
+                  id="high_temp_input_<?=$i?>_<?=$g?>"
+                  name="disk_group_high[<?=$i?>][<?=$g?>]"
+                  class="high-temp-input fcp-input-fullleft"
+                  inputmode="numeric"
+                  value="<?=$grp['high']?>°C"
+                  title="High Temp: <?=$grp['high']?>°C"
+                  placeholder="High °C">
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <?php
+  $html = ob_get_contents();
+  ob_end_clean();
+  return $html;
+}
+
 function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors = []) {
   // PWM fallback（如果值为空，则默认 fallback 为 40% 和 100%）
   $pwm_raw = isset($cfg['pwm']) && is_numeric($cfg['pwm']) ? $cfg['pwm'] : 102;
@@ -17,9 +118,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
   $pwm_pct = round($pwm_raw * 100 / 255) . '%';
   $max_pct = round($max_raw * 100 / 255) . '%';
 
-  // 温度 fallback（防止空值出现 UI 上显示为 0°C）
-  $low = isset($cfg['low']) && is_numeric($cfg['low']) ? intval($cfg['low']) : 40;
-  $high = isset($cfg['high']) && is_numeric($cfg['high']) ? intval($cfg['high']) : 60;
+  $disk_groups = fcp_build_disk_groups($cfg);
 
   $idle_abs = isset($cfg['idle']) && is_numeric($cfg['idle']) ? (int)$cfg['idle'] : 0;
   $idle_pct = round($idle_abs * 100 / 255) . '%';
@@ -195,57 +294,21 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
         <tr><td colspan="2" class="subhead">Disk Temperature Settings</td></tr>
 
-        <!-- Include Disk(s) -->
+        <!-- Disk Groups: each group has its own disk selection and its own
+             Low/High temperature range. The fan reacts to whichever group's
+             computed PWM (driven by ITS hottest selected disk) is highest --
+             lets e.g. HDDs, SATA SSDs, and NVMe SSDs each get their own range
+             on the same fan. -->
         <tr>
-          <td class="fcp-help-cursor" title="Select disks, NVMe drives, or other block devices to monitor for this fan. If you only want to monitor CPU temperature for this fan, leave all disks unchecked.">Include Disk(s):</td>
-          <td>
-            <select class="disk-select fcp-w-300" name="disks[<?=$i?>][]" multiple>
-              <?php
-              $selected = explode(',', $cfg['disks'] ?? '');
-              foreach ($disks as $group => $entries):
-              ?>
-                <optgroup label="<?=htmlspecialchars($group)?>">
-                  <?php foreach ($entries as $disk):
-                    $sel = in_array($disk['id'], $selected) ? 'selected' : '';
-                  ?>
-                    <option value="<?=$disk['id']?>" <?=$sel?> title="<?=$disk['id']?>&#10;<?=$disk['dev']?>"><?=htmlspecialchars($disk['label'])?></option>
-                  <?php endforeach; ?>
-                </optgroup>
+          <td colspan="2">
+            <div class="disk-groups" id="disk-groups-<?=$i?>">
+              <?php foreach ($disk_groups as $g => $grp): ?>
+                <?= render_disk_group_row($i, $g, $grp, $disks) ?>
               <?php endforeach; ?>
-            </select>
-          </td>
-        </tr>
-
-        <!-- Disk Temperature Range -->
-        <tr>
-          <td class="fcp-help-cursor" title="Fan runs at minimum speed at or below Low Temp, and maximum speed at or above High Temp. See chart for details.">Disk Temperature Range:</td>
-          <td>
-            <div class="fcp-range-grid">
-
-              <!-- 左侧 Low Temp -->
-              <input type="text"
-                    id="low_temp_input_<?=$i?>"
-                    name="low[<?=$i?>]"
-                    class="low-temp-input fcp-input-fullleft"
-                    inputmode="numeric"
-                    value="<?=$low?>°C"
-                    title="Low Temp: <?=intval($cfg['low'] ?? 40)?>°C"
-                    placeholder="Low °C">
-
-              <!-- 中间波浪号 -->
-              <span class="fcp-center">~</span>
-
-              <!-- 右侧 High Temp -->
-              <input type="text"
-                    id="high_temp_input_<?=$i?>"
-                    name="high[<?=$i?>]"
-                    class="high-temp-input fcp-input-fullleft"
-                    inputmode="numeric"
-                    value="<?=$high?>°C"
-                    title="High Temp: <?=intval($cfg['high'] ?? 60)?>°C"
-                    placeholder="High °C">
-
             </div>
+            <button type="button" class="add-disk-group-btn" data-fan-index="<?=$i?>" title="Add another disk group with its own temperature range">
+              <i class="fa fa-plus"></i> Add Disk Group
+            </button>
           </td>
         </tr>
 

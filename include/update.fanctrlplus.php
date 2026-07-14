@@ -40,11 +40,39 @@ foreach ($_POST['#file'] as $i => $file) {
   $pwm = round($pwm_percent * 255 / 100);
   $max_pwm = round($max_percent * 255 / 100);
 
-  // ✅ 温度 fallback（°C）
-  $low_raw = $_POST['low'][$i] ?? '';
-  $high_raw = $_POST['high'][$i] ?? '';
-  $low_temp = is_numeric($l = preg_replace('/[^0-9]/', '', $low_raw)) ? intval($l) : 40;
-  $high_temp = is_numeric($h = preg_replace('/[^0-9]/', '', $high_raw)) ? intval($h) : 60;
+  // ===== Disk Groups =====
+  // disk_group_{name,disks,low,high}[$i] arrive keyed by the group's DOM index,
+  // possibly non-contiguous (a middle group removed client-side). Renumber
+  // contiguously 0..N-1 on write -- the loop scripts iterate disk_group_count
+  // that way. Also derive the legacy flat disks/low/high (union of all groups'
+  // disks; low/high from group 0) so an older plugin version, or anything still
+  // reading those keys, sees a sane single-range fallback instead of nothing.
+  $group_names_raw = $_POST['disk_group_name'][$i] ?? [];
+  $disk_groups_out = [];
+  $legacy_disks_union = [];
+  $gi = 0;
+  foreach ($group_names_raw as $g => $name_raw) {
+    $g_disks = isset($_POST['disk_group_disks'][$i][$g]) ? implode(',', $_POST['disk_group_disks'][$i][$g]) : '';
+    $g_low_raw = $_POST['disk_group_low'][$i][$g] ?? '';
+    $g_high_raw = $_POST['disk_group_high'][$i][$g] ?? '';
+    $g_low = is_numeric($l = preg_replace('/[^0-9]/', '', $g_low_raw)) ? intval($l) : 40;
+    $g_high = is_numeric($h = preg_replace('/[^0-9]/', '', $g_high_raw)) ? intval($h) : 60;
+
+    $disk_groups_out["disk_group_{$gi}_name"] = trim((string)$name_raw);
+    $disk_groups_out["disk_group_{$gi}_disks"] = $g_disks;
+    $disk_groups_out["disk_group_{$gi}_low"] = $g_low;
+    $disk_groups_out["disk_group_{$gi}_high"] = $g_high;
+
+    if ($g_disks !== '') {
+      $legacy_disks_union = array_merge($legacy_disks_union, explode(',', $g_disks));
+    }
+    $gi++;
+  }
+  $disk_group_count = $gi;
+
+  $low_temp = $disk_group_count > 0 ? intval($disk_groups_out['disk_group_0_low']) : 40;
+  $high_temp = $disk_group_count > 0 ? intval($disk_groups_out['disk_group_0_high']) : 60;
+  $legacy_disks = implode(',', array_unique(array_filter($legacy_disks_union)));
 
   // ===== Fan Speed on Idle (%) → cfg: idle(0..255) =====
   // 1) 读取 Idle 百分比（默认 0）
@@ -204,7 +232,8 @@ foreach ($_POST['#file'] as $i => $file) {
     'low'        => $low_temp,
     'high'       => $high_temp,
     'interval'   => $_POST['interval'][$i] ?? '',
-    'disks'      => isset($_POST['disks'][$i]) ? implode(',', $_POST['disks'][$i]) : '',
+    'disks'      => $legacy_disks,
+    'disk_group_count' => (string)$disk_group_count,
     'syslog'     => $syslog_val,
     'cpu_enable'    => $cpu_enable,
     'cpu_sensor'    => $cpu_sensor,
@@ -214,7 +243,7 @@ foreach ($_POST['#file'] as $i => $file) {
     'aux_sensor'    => $aux_sensor,
     'aux_min_temp'  => $aux_min_temp,
     'aux_max_temp'  => $aux_max_temp,
-  ];
+  ] + $disk_groups_out;
 
   $content = '';
   foreach ($cfg as $k => $v) {

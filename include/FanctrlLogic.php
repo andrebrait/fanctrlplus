@@ -174,6 +174,17 @@ switch ($op) {
     echo render_fan_block($cfg, $page_index, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors);
     exit;
 
+  case 'newdiskgroup':
+    require_once "$docroot/plugins/$plugin/include/FanBlockRender.php";
+    $fan_index = intval($_REQUEST['fan_index'] ?? 0);
+    $group_index = intval($_REQUEST['group_index'] ?? 0);
+    $disks = list_valid_disks_by_id();
+    $empty_group = ['name' => '', 'disks' => [], 'low' => 40, 'high' => 60];
+
+    header('Content-Type: text/html; charset=utf-8');
+    echo render_disk_group_row($fan_index, $group_index, $empty_group, $disks);
+    exit;
+
   case 'setsyslog':
       $cfg_file = basename($_POST['cfg']);
       $enabled = isset($_POST['enabled']) && $_POST['enabled'] == 1 ? 1 : 0;
