@@ -1236,7 +1236,10 @@ $(function() {
     const $btn = $(this);
     const fanIndex = $btn.data('fan-index');
     const $container = $('#disk-groups-' + fanIndex);
-    const groupIndex = $container.find('.disk-group-row').length;
+    const groupIndexes = $container.find('.disk-group-row').map(function () {
+      return Number($(this).data('group'));
+    }).get();
+    const groupIndex = Math.max(-1, ...groupIndexes) + 1;
 
     $.post('/plugins/fanctrlplus/include/FanctrlLogic.php', {
       op: 'newdiskgroup', fan_index: fanIndex, group_index: groupIndex

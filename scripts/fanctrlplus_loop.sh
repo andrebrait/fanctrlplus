@@ -275,7 +275,7 @@ while true; do
       fi
 
       label="[${custom}]"
-      log_enable=$(grep '^syslog=' "$cfg_file" | cut -d'"' -f2)
+      log_enable="${syslog:-1}"
       if [[ -z "$log_enable" || "$log_enable" == "1" ]]; then
         logger -t fanctrlplus "$label Temp=${max_temp}°C $temp_origin → PWM=$pwm_val → RPM=$rpm"
       fi

@@ -101,7 +101,6 @@ window.showFanChart = function (btn) {
   };
 
   const datasets = [];
-  const diskDatasetsByGroup = new Map();
 
   diskGroups.forEach(g => {
     if (!g.selected || g.low === null || g.high === null || g.low >= g.high) return;
@@ -118,7 +117,6 @@ window.showFanChart = function (btn) {
       tension: 0.4,
     };
     datasets.push(ds);
-    diskDatasetsByGroup.set(g.name, ds);
   });
 
   if (cpuEnabled && cpuLow !== null && cpuHigh !== null) {

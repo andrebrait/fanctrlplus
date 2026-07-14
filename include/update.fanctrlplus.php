@@ -154,7 +154,7 @@ foreach ($_POST['#file'] as $i => $file) {
     $lines = file($old_path, FILE_IGNORE_NEW_LINES);
     foreach ($lines as $line) {
       if (strpos($line, 'syslog=') === 0) {
-        $syslog_val = trim(explode('=', $line, 2)[1], "\" \t\r\n");
+        $syslog_val = trim(explode('=', $line, 2)[1], "\"' \t\r\n");
         break;
       }
     }
@@ -247,7 +247,11 @@ foreach ($_POST['#file'] as $i => $file) {
 
   $content = '';
   foreach ($cfg as $k => $v) {
-    $v = str_replace('"', '', $v);
+    $v = str_replace(
+      ["\\", '"', '$', '`', "\r", "\n"],
+      ["\\\\", '\\"', '\\$', '\\`', '', ''],
+      (string)$v
+    );
     $content .= "$k=\"$v\"\n";
   }
 
