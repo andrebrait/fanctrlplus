@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.4.2"
+  version="1.4.3"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,18 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.4.3
+
+## What's changed
+
+- Hide the empty-column fan drop zone while sorting is locked.
+- Show a clean, unlabeled drop zone when sorting is unlocked.
+- Use a dashed border and a 40% opaque background for the drop zone.
+
+## Upgrade compatibility
+
+The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
 
 ### 1.4.2
 
@@ -48,14 +60,6 @@ The configuration format is unchanged. Existing FanCtrl Plus 2 configurations co
 ## Upgrade compatibility
 
 The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
-
-### 1.4.0
-
-FanCtrl Plus 2 is a separately named fork of FanCtrl Plus 1.3.3.
-
-- Adds auxiliary temperature sources through hwmon, storcli, and nvidia-smi.
-- Adds per-disk-group temperature ranges; each fan uses the highest computed PWM.
-- Imports existing FanCtrl Plus configuration on first install, then requires upstream removal before installation can complete.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -109,16 +113,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.2-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.2/fanctrlplus2-1.4.2-noarch-1.txz</URL>
-<SHA256>b8005242f743b312b4856435cd5026c0cfbf0caf1fbbe985c8c39081b963fcc3</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.3-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.3/fanctrlplus2-1.4.3-noarch-1.txz</URL>
+<SHA256>bb58b3d72accbd4a6d044c27e51e47e1a2999b73bba357440376d69a27643ca1</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.2-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.3-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -143,7 +147,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.4.2"
+echo " Version: 1.4.3"
 echo "------------------------------------------------"
 echo ""
 exit 0
