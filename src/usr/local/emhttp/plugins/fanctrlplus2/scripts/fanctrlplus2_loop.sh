@@ -81,6 +81,8 @@ disk_group_max_temp() {
   (( found == 1 )) && echo "$max_valid"
 }
 
+source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/disk_group_control.sh"
+
 plugin="fanctrlplus2"
 custom="${custom:-$(basename "$cfg_file" .cfg)}"
 controller_enable="${controller}_enable"
@@ -166,55 +168,7 @@ while true; do
   fi
 
   # === Disk-temperature PWM ===
-  disk_pwm_val=0
-  disk_max="*"
-
-  if [[ "${disk_group_count:-0}" -gt 0 ]]; then
-    # Disk groups: each has its own Low/High range, driven by its own hottest
-    # selected disk. Fan reacts to whichever group's computed PWM is highest.
-    disk_group_hit=0
-    for (( g=0; g<disk_group_count; g++ )); do
-      dvar="disk_group_${g}_disks"; lvar="disk_group_${g}_low"; hvar="disk_group_${g}_high"
-      g_disks="${!dvar:-}"
-      [[ -z "$g_disks" ]] && continue
-      g_low="${!lvar:-40}"
-      g_high="${!hvar:-60}"
-      g_temp=$(disk_group_max_temp "$g_disks")
-      [[ -z "$g_temp" ]] && continue
-
-      if (( g_temp <= g_low )); then
-        g_pwm=$pwm
-      elif (( g_temp >= g_high )); then
-        g_pwm=$max
-      else
-        g_delta=$((g_temp - g_low))
-        g_range=$((g_high - g_low))
-        g_pwm=$((pwm + g_delta * (max - pwm) / g_range))
-      fi
-
-      if (( disk_group_hit == 0 || g_pwm > disk_pwm_val )); then
-        disk_pwm_val=$g_pwm
-        disk_max=$g_temp
-        disk_group_hit=1
-      fi
-    done
-  elif [ -n "$disks" ]; then
-    # Legacy single-range path (pre-group configs) -- unchanged behavior.
-    disk_max_valid=$(disk_group_max_temp "$disks")
-    if [[ -n "$disk_max_valid" ]]; then
-      disk_max=$disk_max_valid
-
-      if (( disk_max <= low )); then
-        disk_pwm_val=$pwm
-      elif (( disk_max >= high )); then
-        disk_pwm_val=$max
-      else
-        delta=$((disk_max - low))
-        range=$((high - low))
-        disk_pwm_val=$((pwm + delta * (max - pwm) / range))
-      fi
-    fi
-  fi
+  calculate_disk_pwm
 
   # === Use the higher PWM and record its temperature and source ===
   if (( cpu_pwm_val > disk_pwm_val )); then
@@ -224,7 +178,7 @@ while true; do
   else
     pwm_val=$disk_pwm_val
     max_temp=$disk_max
-    temp_origin=$([ -n "$disks" ] && echo "(Disk)" || echo "(CPU)")
+    temp_origin=$([ -n "${disks:-}" ] && disk_temperature_origin "$disk_group_name" || echo "(CPU)")
   fi
 
   if (( aux_pwm_val > pwm_val )); then

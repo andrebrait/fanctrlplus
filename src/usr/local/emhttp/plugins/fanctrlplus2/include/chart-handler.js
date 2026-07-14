@@ -5,7 +5,10 @@ async function fetchRealtimeData(custom) {
   if (!res.ok) return { noCache: true };
 
   const raw = (await res.text()).trim();
+  return parseRealtimeData(raw);
+}
 
+function parseRealtimeData(raw) {
   // Missing, unwritten, or placeholder cache file.
   if (!raw || raw === '-' || raw.toUpperCase() === 'N/A') {
     return { noCache: true };
@@ -15,7 +18,7 @@ async function fetchRealtimeData(custom) {
   const [tempPart, rpmStr = ''] = raw.split('|');
 
   // An asterisk means disks are spun down or idle.
-  const starMatch = /^\*\s*\((CPU|Disk|Aux|Idle)\)/i.exec(tempPart);
+  const starMatch = /^\*\s*\((CPU|Disk(?:: [^)]+)?|Aux|Idle)\)/i.exec(tempPart);
   if (starMatch) {
     const origin = starMatch[1]; // CPU / Disk / Idle
     const rpm = /^\d+$/.test(rpmStr) ? parseInt(rpmStr, 10) : null;
@@ -24,7 +27,7 @@ async function fetchRealtimeData(custom) {
   }
 
   // Normal numeric temperature.
-  const numMatch = /(\d+)\s*\((CPU|Disk|Aux)\)/i.exec(tempPart);
+  const numMatch = /(\d+)\s*\((CPU|Disk(?:: [^)]+)?|Aux)\)/i.exec(tempPart);
   if (!numMatch) return { noCache: true };
 
   const temp   = parseInt(numMatch[1], 10);
@@ -32,6 +35,25 @@ async function fetchRealtimeData(custom) {
   const rpm    = /^\d+$/.test(rpmStr) ? parseInt(rpmStr, 10) : null;
 
   return { temp, origin, rpm, spunDown: false };
+}
+
+function realtimeOriginType(origin) {
+  return (origin ?? '').toString().split(':', 1)[0];
+}
+
+function findDatasetForOrigin(datasets, origin) {
+  const type = realtimeOriginType(origin);
+  if (type === 'CPU') return datasets.find(d => d.label && d.label.includes('CPU'));
+  if (type === 'Aux') return datasets.find(d => d.label && d.label.includes('Aux'));
+  if (type !== 'Disk') return undefined;
+
+  const group = origin.includes(':') ? origin.slice(origin.indexOf(':') + 1).trim() : '';
+  if (group) {
+    const prefix = `Disk: ${group} Temp`;
+    const match = datasets.find(d => d.label && d.label.startsWith(prefix));
+    if (match) return match;
+  }
+  return datasets.find(d => d.label && d.label.includes('Disk:'));
 }
 
 window.showFanChart = function (btn) {
@@ -106,7 +128,7 @@ window.showFanChart = function (btn) {
     if (!g.selected || g.low === null || g.high === null || g.low >= g.high) return;
     const points = makeLinePoints(g.low, pwmMin, g.high, pwmMax);
     const ds = {
-      label: `Disk: ${g.name} Temp → PWM (%)`,
+      label: `Disk: ${g.name.replace(/\)/g, ']')} Temp → PWM (%)`,
       data: points,
       borderColor: g.color,
       backgroundColor: g.color + '1a',
@@ -189,16 +211,6 @@ window.showFanChart = function (btn) {
       .some(sel => [...sel.selectedOptions].some(opt => opt.value));
 
     // Find the matching dataset, if any.
-    const dsCPU  = datasets.find(d => d.label && d.label.includes('CPU'));
-    const dsAux  = datasets.find(d => d.label && d.label.includes('Aux'));
-    // ponytail: the loop/refresh_single scripts report the live temp's origin
-    // only as "(Disk)", not which group -- with 2+ groups the live crosshair
-    // can't know which curve actually produced the current reading, so it
-    // falls back to the first configured group's curve. Upgrade path: have
-    // the backend also report the winning group's name if this needs to be
-    // precise per-group.
-    const dsDisk = datasets.find(d => d.label && d.label.includes('Disk:'));
-
     // Current value header node.
     const liveNote = document.getElementById('fan-chart-live-note');
     if (liveNote) {
@@ -348,7 +360,8 @@ window.showFanChart = function (btn) {
 
         const { temp, origin, rpm, spunDown } = data;
         const ori = (origin ?? '').toString();
-        const isCPU = /^cpu$/i.test(ori);
+        const originType = realtimeOriginType(origin);
+        const isCPU = /^cpu$/i.test(originType);
 
 
         // Calculate the current percentage.
@@ -367,7 +380,7 @@ window.showFanChart = function (btn) {
           }
           vLine.style.display = hLine.style.display = dot.style.display = 'none';
         } else {
-          const ds = origin === 'CPU' ? dsCPU : origin === 'Aux' ? dsAux : dsDisk;
+          const ds = findDatasetForOrigin(datasets, origin);
           percent = pickPercentNearest(ds, temp);
           if (percent != null) {
             const pwm = Math.round(percent * 2.55);
@@ -416,11 +429,11 @@ window.showFanChart = function (btn) {
         }
 
         // Determine the synchronization note from the snapshot.
-        if (origin === 'CPU' && !snapCpuEnabled) {
+        if (originType === 'CPU' && !snapCpuEnabled) {
           html += '<br><span style="color:#999;">(CPU was disabled, still active until Apply)</span>';
-        } else if (origin === 'Disk' && !snapDiskSelected) {
+        } else if (originType === 'Disk' && !snapDiskSelected) {
           html += '<br><span style="color:#999;">(Disk was deselected, still active until Apply)</span>';
-        } else if (origin === 'Aux' && !snapAuxEnabled) {
+        } else if (originType === 'Aux' && !snapAuxEnabled) {
           html += '<br><span style="color:#999;">(Aux was disabled, still active until Apply)</span>';
         }
 
