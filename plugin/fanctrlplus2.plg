@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.4.0"
+  version="1.4.1"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,22 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.4.1
+
+## What's changed
+
+- Fixed the disk-group Remove button overflowing its panel.
+- Show the empty-column drag target only while fan sorting is unlocked.
+- Display disks using Unraid-style Array, pool, and unassigned-device grouping, names, descriptions, and drive-type icons.
+- Preserve existing disk selections across by-id aliases and normalize them safely on the next save.
+- Identify the controlling disk group in automatic and Manual Run logs, for example `(Disk: Apps-pool)`.
+- Match live chart readings to the controlling disk group's curve.
+- Translate first-party Chinese code comments to English.
+
+## Upgrade compatibility
+
+The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
 
 ### 1.4.0
 
@@ -80,16 +96,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.0-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.0/fanctrlplus2-1.4.0-noarch-1.txz</URL>
-<SHA256>718078496314c4f792e08fe72af08376f8106bbaa575da4b2810539f4e45b925</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.1-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.1/fanctrlplus2-1.4.1-noarch-1.txz</URL>
+<SHA256>1525a0f0b5e080846d8cec2987860673faaf2c923ab659b55005e448b59e4f29</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.0-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.1-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -114,7 +130,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.4.0"
+echo " Version: 1.4.1"
 echo "------------------------------------------------"
 echo ""
 exit 0
