@@ -80,6 +80,12 @@
   margin-left: 5px;
   font-family: bitstream, monospace;
 }
+.ui-dropdownchecklist-item .ui-dropdownchecklist-text {
+  max-width: none;
+  white-space: nowrap !important;
+  overflow: visible;
+  text-overflow: clip;
+}
 
 /* Help cursor for the left table column. */
 .fcp-help-cursor { cursor: help; }

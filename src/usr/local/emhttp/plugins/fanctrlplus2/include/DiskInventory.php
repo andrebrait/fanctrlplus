@@ -32,7 +32,7 @@ function fcp_scan_by_id(): array {
   $records = [];
   foreach (glob('/dev/disk/by-id/*') ?: [] as $path) {
     $id = basename($path);
-    if (!is_link($path) || preg_match('/-part\d+$/', $id)) continue;
+    if (!is_link($path) || preg_match('/-part\d+$/', $id) || str_starts_with($id, 'dm-')) continue;
     $real = realpath($path);
     if ($real === false) continue;
     $records[] = ['id' => $id, 'dev' => fcp_base_device($real)];
@@ -160,7 +160,7 @@ function list_valid_disks_by_id(
   foreach ($byIdRecords as $record) {
     $id = basename((string)($record['id'] ?? ''));
     $device = fcp_base_device((string)($record['dev'] ?? ''));
-    if ($id === '' || $device === '' || preg_match('/-part\d+$/', $id)) continue;
+    if ($id === '' || $device === '' || preg_match('/-part\d+$/', $id) || str_starts_with($id, 'dm-')) continue;
     $aliasesByDevice[$device][] = $id;
   }
   foreach ($aliasesByDevice as &$aliases) {

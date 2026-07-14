@@ -48,6 +48,8 @@ $byIdRecords = [
   ['id' => 'ata-WD_Red_SA500_2TB_TWO', 'dev' => '/dev/sdd'],
   ['id' => 'usb-BOOT_ID', 'dev' => '/dev/sdz'],
   ['id' => 'ata-UNASSIGNED_ID', 'dev' => '/dev/sde'],
+  ['id' => 'dm-name-sdc1', 'dev' => '/dev/dm-0'],
+  ['id' => 'dm-uuid-CRYPT-LUKS1-example', 'dev' => '/dev/dm-0'],
 ];
 
 $groups = list_valid_disks_by_id($disks, $devs, $byIdRecords, '/dev/sdz1');
@@ -59,6 +61,7 @@ expect_same('icon-nvme', $groups['Pool: Apps-pool'][0]['icon'], 'Non-rotational 
 expect_same('WD_Red_SA500_2TB_ONE - 2 TB (sdc)', $groups['Pool: Apps-pool'][0]['description'], 'Device descriptions must match the Unraid format.');
 expect_same('ata-DATA_ID', $groups['Array'][1]['id'], 'The model-based by-id alias must be preferred over WWN aliases.');
 expect_same(['wwn-data', 'ata-DATA_ID'], $groups['Array'][1]['aliases'], 'All aliases must remain available for old config matching.');
+expect_same(false, isset($groups['Other Devices']), 'Device-mapper aliases must not duplicate physical pool disks.');
 
 $row = render_disk_group_row(0, 0, [
   'name' => 'Existing', 'disks' => ['wwn-data'], 'low' => 35, 'high' => 45,
