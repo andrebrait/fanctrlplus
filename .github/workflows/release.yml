@@ -11,7 +11,8 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: dkaser/unraid-plugin-release-action@v1.1.4
+      # Includes checkout v7, setup-go v6, and add-and-commit v10.
+      - uses: dkaser/unraid-plugin-release-action@dd44159f2d27c70b101db9cf76d6f11babc3e6f0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           plugin_version: ${{ github.event.release.name }}
