@@ -313,7 +313,7 @@
   text-align: center;
   color: #999;
   font-size: 16px;
-  background-color: #f9f9f9;
+  background-color: rgba(249, 249, 249, 0.4);
 }
 /* Ghost while dragging */
 .fan-placeholder {

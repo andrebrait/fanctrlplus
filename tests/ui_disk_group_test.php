@@ -30,6 +30,9 @@ if (str_contains($page, 'Drag Fan Configuration Here')) {
 if (!preg_match('/\.sortable-placeholder\s*\{[^}]*border:\s*1px\s+dashed\s+#bbb;/s', $css)) {
   $failures[] = 'Empty-column drop zones must use a dashed border.';
 }
+if (!preg_match('/\.sortable-placeholder\s*\{[^}]*background-color:\s*rgba\(249,\s*249,\s*249,\s*0\.4\);/s', $css)) {
+  $failures[] = 'Empty-column drop zones must use a 40% opaque background.';
+}
 if (!preg_match('/\.ui-dropdownchecklist-item\s+\.ui-dropdownchecklist-text\s*\{[^}]*white-space:\s*nowrap\s*!important;/s', $css)) {
   $failures[] = 'Expanded disk selector rows must not wrap into adjacent rows.';
 }
