@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.4.1"
+  version="1.4.2"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,19 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.4.2
+
+## What's changed
+
+- Restored the empty-column Drag Fan Configuration Here target while fan sorting is locked.
+- Prevented long disk descriptions from wrapping into adjacent rows in the expanded disk selector.
+- Removed device-mapper aliases from Other Devices so encrypted pool members are not listed twice.
+- Replaced the stale hard-coded stylesheet cache key and added automatic cache invalidation for first-party CSS and chart JavaScript.
+
+## Upgrade compatibility
+
+The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
 
 ### 1.4.1
 
@@ -96,16 +109,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.1-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.1/fanctrlplus2-1.4.1-noarch-1.txz</URL>
-<SHA256>1525a0f0b5e080846d8cec2987860673faaf2c923ab659b55005e448b59e4f29</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.2-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.2/fanctrlplus2-1.4.2-noarch-1.txz</URL>
+<SHA256>b8005242f743b312b4856435cd5026c0cfbf0caf1fbbe985c8c39081b963fcc3</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.1-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.2-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -130,7 +143,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.4.1"
+echo " Version: 1.4.2"
 echo "------------------------------------------------"
 echo ""
 exit 0
