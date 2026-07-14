@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.4.3"
+  version="1.4.4"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,19 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.4.4
+
+## What's changed
+
+- Restore the project's license under the upstream GPL-2.0-only terms.
+- Restore source copyright and SPDX headers, with attribution spanning Dynamix AutoFan, Fan Control Plus, and FanCtrl Plus 2.
+- Add the complete license, provenance notice, and third-party notices for the bundled Chart.js and SweetAlert2 libraries.
+- Include the README, license, attribution, and third-party notices in the installed plugin package.
+
+## Upgrade compatibility
+
+The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
 
 ### 1.4.3
 
@@ -40,22 +53,6 @@ The configuration format is unchanged. Existing FanCtrl Plus 2 configurations co
 - Prevented long disk descriptions from wrapping into adjacent rows in the expanded disk selector.
 - Removed device-mapper aliases from Other Devices so encrypted pool members are not listed twice.
 - Replaced the stale hard-coded stylesheet cache key and added automatic cache invalidation for first-party CSS and chart JavaScript.
-
-## Upgrade compatibility
-
-The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
-
-### 1.4.1
-
-## What's changed
-
-- Fixed the disk-group Remove button overflowing its panel.
-- Show the empty-column drag target only while fan sorting is unlocked.
-- Display disks using Unraid-style Array, pool, and unassigned-device grouping, names, descriptions, and drive-type icons.
-- Preserve existing disk selections across by-id aliases and normalize them safely on the next save.
-- Identify the controlling disk group in automatic and Manual Run logs, for example `(Disk: Apps-pool)`.
-- Match live chart readings to the controlling disk group's curve.
-- Translate first-party Chinese code comments to English.
 
 ## Upgrade compatibility
 
@@ -113,16 +110,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.3-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.3/fanctrlplus2-1.4.3-noarch-1.txz</URL>
-<SHA256>bb58b3d72accbd4a6d044c27e51e47e1a2999b73bba357440376d69a27643ca1</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.4-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.4/fanctrlplus2-1.4.4-noarch-1.txz</URL>
+<SHA256>414f11db0ea1c07f7740afb9e1f84c661a9b6aec9e8da6a784d1bc5d08378a62</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.3-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.4-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -147,7 +144,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.4.3"
+echo " Version: 1.4.4"
 echo "------------------------------------------------"
 echo ""
 exit 0
