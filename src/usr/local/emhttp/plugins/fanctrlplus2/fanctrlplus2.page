@@ -1893,7 +1893,7 @@ $(function() {
   </blockquote>
 </div>
 
-  <!----------------- Two-column settings area --------------->
+  <!----------------- Settings area --------------->
   <div class="fcp-block-wrap">
 
     <!-- Left: Identify PWM Controller. -->
@@ -1914,8 +1914,8 @@ $(function() {
         <blockquote class="inline_help">
           <p><strong>Usage Guide:</strong></p>
           <p>
-            Use Identify to help locate each physical fan, then assign a custom label so it's easier to recognize later in the 
-            <strong>Fan Configuration</strong> section or in the <strong>FCP Airflow</strong> tile.
+            Use Identify to help locate each physical fan, then assign a custom label so it's easier to recognize later in the
+            <strong>Fan Configuration</strong> section.
           </p>
           <ol>
             <li>Select a <strong>PWM controller</strong> from the dropdown.</li>
@@ -1930,14 +1930,6 @@ $(function() {
             <li>Click <strong>Identify</strong> — locate the fan by observing which one reacts according to the chosen mode.</li>
             <li>Once identified, enter a clear label (e.g. <em>Rear Fan</em>, <em>Top Fan</em>) in the text field.</li>
             <li>Click <strong>Save Label</strong> to store the name for future reference.</li>
-            <li>
-              Enable the <strong>FCP Airflow</strong> tile — this works similarly to <strong>Unraid’s built-in Airflow</strong> tile,  
-              and makes <strong>PWM Identify</strong> even more useful by showing <strong>all fans</strong> that have been given a <strong>custom label</strong>,  
-              regardless of whether they’re configured in the <strong>Fan Configuration section</strong>.  
-              Unlabeled fans will continue appear as “Fan&nbsp;X”.  
-              If you enable the <strong>FCP Airflow</strong> tile, you can go to <strong>Tile Management</strong> and uncheck  
-              Unraid’s default <strong>Airflow (Fan Information)</strong> tile to avoid duplicate information.
-            </li>
           </ol>
           <p>
             <strong>To remove a label:</strong> select the desired PWM controller, leave the label input empty and click <strong>Save Label</strong>.
@@ -1981,25 +1973,6 @@ $(function() {
             Enter a custom label (e.g. Rear Fan, Top Fan) to add or rename the label,  
             or leave it empty and click <strong>Save Label</strong> to clear the saved label.
           </blockquote>
-
-
-          <dl class="fcp-formgrid">
-            <dt class="fcp-formgrid-label"><strong>Dashboard FCP Airflow Tile:</strong></dt>
-            <dd style="text-align: left;">
-              <span class="switch-area">
-                <div class="switch-button-background <?= $fcp_airflow_enabled ? ' checked' : '' ?>" data-for="fcp-airflow-switch">
-                  <div class="switch-button-button"></div>
-                </div>
-                <input id="fcp-airflow-switch" class="fcp-airflow-switch" type="checkbox" <?= $fcp_airflow_enabled ? 'checked' : '' ?>>
-                <span class="switch-button-label on">ENABLED</span>
-                <span class="switch-button-label off">DISABLED</span>
-              </span>
-            </dd>
-          </dl>
-          <blockquote class="inline_help fcp-help-wide">
-            Enable or disable the <strong>FCP Airflow</strong> tile in Dashboard.  
-            Works like Unraid’s Airflow, but uses <strong>custom labels</strong> when available.
-          </blockquote>
         </div>
 
           <!-- Actions -->
@@ -2021,7 +1994,54 @@ $(function() {
         </div>
       </div>
 
-    <!-- Right: Syslog switch. -->
+    <!-- General Settings. -->
+    <div class="fcp-card-480">
+      <div class="title">
+        <span class="fcp-title-left"><i class="fa fa-cog fcp-icon-gap"></i>General Settings</span>
+      </div>
+
+      <div class="fcp-help-wrap">
+        <dl class="fcp-help-dl">
+          <dt class="fcp-help-dt fcp-help-cursor">
+            <span class="fa fa-info-circle fcp-help-icon"></span>
+            <strong>How to use</strong>
+          </dt>
+          <dd>&nbsp;</dd>
+        </dl>
+        <blockquote class="inline_help">
+          <p><strong>FCP Airflow Tile:</strong></p>
+          <p>
+            Enable the tile to show all detected fans on the Dashboard, using custom PWM labels when available.
+            Unlabeled fans appear as “Fan&nbsp;X”, including fans not used by a Fan Configuration.
+          </p>
+          <p>
+            After enabling it, open <strong>Tile Management</strong> and optionally hide Unraid’s default
+            <strong>Airflow (Fan Information)</strong> tile to avoid duplicate information.
+          </p>
+        </blockquote>
+      </div>
+
+      <div class="fcp-section">
+        <dl class="fcp-formgrid">
+          <dt class="fcp-formgrid-label"><strong>Dashboard FCP Airflow Tile:</strong></dt>
+          <dd style="text-align: left;">
+            <span class="switch-area">
+              <div class="switch-button-background <?= $fcp_airflow_enabled ? ' checked' : '' ?>" data-for="fcp-airflow-switch">
+                <div class="switch-button-button"></div>
+              </div>
+              <input id="fcp-airflow-switch" class="fcp-airflow-switch" type="checkbox" <?= $fcp_airflow_enabled ? 'checked' : '' ?>>
+              <span class="switch-button-label on">ENABLED</span>
+              <span class="switch-button-label off">DISABLED</span>
+            </span>
+          </dd>
+        </dl>
+        <blockquote class="inline_help fcp-help-wide">
+          Enable or disable the <strong>FCP Airflow</strong> tile in Dashboard.
+        </blockquote>
+      </div>
+    </div>
+
+    <!-- Syslog settings. -->
     <div class="fcp-card-480">
       <div class="title">
         <span class="fcp-title-left"><i class="fa fa-tag fcp-icon-gap"></i>Syslog Setting</span>
