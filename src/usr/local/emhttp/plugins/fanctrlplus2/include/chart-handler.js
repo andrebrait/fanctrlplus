@@ -107,6 +107,27 @@ function currentPointTooltipTitle(item) {
   return `${item.parsed.x}°C`;
 }
 
+function currentPointTooltipFilter(item, _index, items) {
+  return !items.some(candidate => candidate.dataset.currentReading) || item.dataset.currentReading;
+}
+
+function configuredMinimumPoint(curveDatasets) {
+  const points = curveDatasets
+    .flatMap(curve => Array.isArray(curve.data) ? curve.data : [])
+    .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+  if (!points.length) return null;
+
+  return {
+    x: Math.min(...points.map(point => point.x)),
+    y: Math.min(...points.map(point => point.y)),
+  };
+}
+
+function stackCrosshairBehindTooltip(canvas, ...overlays) {
+  Object.assign(canvas.style, { position: 'relative', zIndex: '1' });
+  overlays.forEach(element => { element.style.zIndex = '0'; });
+}
+
 function temperatureBounds(curveDatasets) {
   const temperatures = curveDatasets
     .flatMap(ds => (ds.data || []).map(point => point.x))
@@ -416,6 +437,7 @@ window.showFanChart = function (btn) {
               boxHeight: 0,
               mode: 'nearest',
               intersect: false,
+              filter: currentPointTooltipFilter,
               callbacks: {
                 title(items) {
                   return currentPointTooltipTitle(items[0]);
@@ -438,10 +460,9 @@ window.showFanChart = function (btn) {
         }
       });
 
-      // Crosshair elements: vertical line, horizontal line, and point.
+      // Configured-minimum reference lines.
       const vLine = document.createElement('div');
       const hLine = document.createElement('div');
-      const dot   = document.createElement('div');
       Object.assign(vLine.style, {
         position: 'absolute', width: '1.2px',
         display: 'none', pointerEvents: 'none'
@@ -452,16 +473,38 @@ window.showFanChart = function (btn) {
         display: 'none', pointerEvents: 'none'
       });
       hLine.className = 'chart-hline';
-      Object.assign(dot.style, {
-        position: 'absolute', width: '8px', height: '8px', marginLeft: '-4px', marginTop: '-4px',
-        borderRadius: '50%', display: 'none', pointerEvents: 'none'
-      });
-      dot.className = 'chart-dot';
+      stackCrosshairBehindTooltip(canvas, vLine, hLine);
       wrapper.appendChild(vLine);
       wrapper.appendChild(hLine);
-      wrapper.appendChild(dot);
 
-      // Refresh the current values, per-curve points, and crosshair every five seconds.
+      const configuredMinimum = configuredMinimumPoint(datasets);
+      if (configuredMinimum) {
+        const ca = chart.chartArea;
+        let x = chart.scales.x.getPixelForValue(configuredMinimum.x);
+        let y = chart.scales.y.getPixelForValue(configuredMinimum.y);
+        const wb = wrapper.getBoundingClientRect();
+        const cb = canvas.getBoundingClientRect();
+        const offsetLeft = cb.left - wb.left;
+        const offsetTop  = cb.top  - wb.top;
+
+        x = Math.min(Math.max(x, ca.left), ca.right);
+        y = Math.min(Math.max(y, ca.top), ca.bottom);
+
+        Object.assign(vLine.style, {
+          left: (offsetLeft + x) + 'px',
+          top: (offsetTop + ca.top) + 'px',
+          height: (ca.bottom - ca.top) + 'px',
+          display: 'block',
+        });
+        Object.assign(hLine.style, {
+          left: (offsetLeft + ca.left) + 'px',
+          top: (offsetTop + y) + 'px',
+          width: (ca.right - ca.left) + 'px',
+          display: 'block',
+        });
+      }
+
+      // Refresh current values and per-curve points every five seconds.
       async function updateTopNote() {
         const [data, currentReadings] = await Promise.all([
           fetchRealtimeData(customName),
@@ -476,8 +519,6 @@ window.showFanChart = function (btn) {
             No runtime data yet. If this is a new fan, click <b>Apply</b> to start the loop, 
             or wait a few seconds after saving.
           </span>`;
-          // Hide the crosshair.
-          vLine.style.display = hLine.style.display = dot.style.display = 'none';
           return;
         }  
 
@@ -498,7 +539,6 @@ window.showFanChart = function (btn) {
             html = `Current: *°C (${origin}) → RPM ${rpm}<br>
                     <span style="color:#999;">(${origin} is spun down — using rule's minimum temperature)</span>`;
           }
-          vLine.style.display = hLine.style.display = dot.style.display = 'none';
         } else {
           const ds = findDatasetForOrigin(datasets, origin);
           const curvePosition = curvePointAtTemperature(ds, temp);
@@ -509,46 +549,8 @@ window.showFanChart = function (btn) {
           if (percent != null) {
             const pwm = currentReading?.pwm ?? Math.round(percent * 2.55);
             html = `Current: ${temp}°C (${origin}) → Fan Speed ${percent.toFixed(0)}% (PWM ${pwm}) → RPM ${rpm}`;
-
-            // Position the crosshair within the chart area.
-            const xScale = chart.scales.x;
-            const yScale = chart.scales.y;
-            const ca = chart.chartArea; // {left, top, right, bottom}
-
-            // Convert chart coordinates to pixels.
-            let x = xScale.getPixelForValue(curvePosition?.x ?? temp);
-            let y = yScale.getPixelForValue(percent);
-
-            // Calculate wrapper-relative offsets, including padding.
-            const wb = wrapper.getBoundingClientRect();
-            const cb = canvas.getBoundingClientRect();
-            const offsetLeft = cb.left - wb.left;
-            const offsetTop  = cb.top  - wb.top;
-
-            // Clamp the point to the chart area.
-            x = Math.min(Math.max(x, ca.left),  ca.right);
-            y = Math.min(Math.max(y, ca.top),   ca.bottom);
-
-            // Vertical line at x, spanning the chart height.
-            vLine.style.left   = (offsetLeft + x) + 'px';
-            vLine.style.top    = (offsetTop  + ca.top) + 'px';
-            vLine.style.height = (ca.bottom - ca.top) + 'px';
-            vLine.style.display = 'block';
-
-            // Horizontal line at y, spanning the chart width.
-            hLine.style.left   = (offsetLeft + ca.left) + 'px';
-            hLine.style.top    = (offsetTop  + y) + 'px';
-            hLine.style.width  = (ca.right - ca.left) + 'px';
-            hLine.style.display = 'block';
-
-            // Center point.
-            dot.style.left = (offsetLeft + x) + 'px';
-            dot.style.top  = (offsetTop  + y) + 'px';
-            dot.style.display = 'block';
           } else {
-            // Without a matching curve, hide the crosshair and report RPM only.
             html = `Current: ${temp ?? '*'}°C (${origin}) → RPM ${rpm}<br><span style="color:#999;">(${origin} data not shown in chart)</span>`;
-            vLine.style.display = hLine.style.display = dot.style.display = 'none';
           }
         }
 

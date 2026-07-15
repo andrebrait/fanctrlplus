@@ -42,6 +42,47 @@ vm.runInContext(source, context);
     failures.push('The named disk source did not select its matching chart curve.');
   }
 
+  const sourceSpecificCurves = [
+    { label: 'Disk: HDDs Temp → PWM (%)', sourceKey: 'disk:0', data: [{ x: 35, y: 25 }, { x: 45, y: 100 }] },
+    { label: 'Disk: SSDs Temp → PWM (%)', sourceKey: 'disk:1', data: [{ x: 40, y: 25 }, { x: 60, y: 100 }] },
+  ];
+  const configuredMinimum = typeof context.configuredMinimumPoint === 'function'
+    ? context.configuredMinimumPoint(sourceSpecificCurves)
+    : null;
+  if (configuredMinimum?.x !== 35 || configuredMinimum?.y !== 25) {
+    failures.push(`Reference lines must use the global configured minima: ${JSON.stringify(configuredMinimum)}`);
+  }
+
+  const currentTooltipItem = { dataset: { currentReading: true } };
+  const curveTooltipItem = { dataset: { currentReading: false } };
+  if (typeof context.currentPointTooltipFilter !== 'function') {
+    failures.push('Current-marker tooltip filtering is missing.');
+  } else {
+    const overlappingItems = [curveTooltipItem, currentTooltipItem];
+    if (
+      !context.currentPointTooltipFilter(currentTooltipItem, 1, overlappingItems)
+      || context.currentPointTooltipFilter(curveTooltipItem, 0, overlappingItems)
+      || !context.currentPointTooltipFilter(curveTooltipItem, 0, [curveTooltipItem])
+    ) {
+      failures.push('A live marker tooltip must replace its coincident curve tooltip row.');
+    }
+  }
+
+  const fakeCanvas = { style: {} };
+  const fakeOverlays = [{ style: {} }, { style: {} }];
+  if (typeof context.stackCrosshairBehindTooltip !== 'function') {
+    failures.push('Crosshair stacking is missing.');
+  } else {
+    context.stackCrosshairBehindTooltip(fakeCanvas, ...fakeOverlays);
+    if (
+      fakeCanvas.style.position !== 'relative'
+      || fakeCanvas.style.zIndex !== '1'
+      || fakeOverlays.some(element => element.style.zIndex !== '0')
+    ) {
+      failures.push(`Crosshair must render below the canvas tooltip: ${JSON.stringify({ fakeCanvas, fakeOverlays })}`);
+    }
+  }
+
   const curvePoints = await context.fetchCurvePoints('Array');
   const markers = context.buildCurrentPointDatasets(datasets, curvePoints);
   if (markers.length !== 2) {
@@ -96,6 +137,9 @@ vm.runInContext(source, context);
 
   if ((source.match(/pointRadius:\s*0/g) || []).length !== 3 || source.includes('makePointRadiusArray')) {
     failures.push('Curve lines must not render decorative data-point markers.');
+  }
+  if (source.includes("className = 'chart-dot'")) {
+    failures.push('The redundant crosshair dot must not be rendered.');
   }
 
   if (failures.length) {
