@@ -138,6 +138,9 @@ vm.runInContext(source, context);
   if ((source.match(/pointRadius:\s*0/g) || []).length !== 3 || source.includes('makePointRadiusArray')) {
     failures.push('Curve lines must not render decorative data-point markers.');
   }
+  if (source.includes('pointBorderColor') || source.includes('pointBorderWidth')) {
+    failures.push('Live markers must use solid source colors without a contrasting border.');
+  }
   if (source.includes("className = 'chart-dot'")) {
     failures.push('The redundant crosshair dot must not be rendered.');
   }

@@ -86,8 +86,6 @@ function buildCurrentPointDatasets(curveDatasets, readings) {
       borderColor: curve.borderColor,
       backgroundColor: curve.borderColor,
       pointBackgroundColor: curve.borderColor,
-      pointBorderColor: '#fff',
-      pointBorderWidth: 2,
       pointRadius: 7,
       pointHoverRadius: 9,
       showLine: false,
