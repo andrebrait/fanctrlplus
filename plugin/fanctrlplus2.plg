@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.4.4"
+  version="1.4.5"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,25 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.4.5
+
+## What's changed
+
+- Plot a live current-temperature marker on every configured disk, CPU, and auxiliary-sensor curve.
+- Clamp live markers to each curve's configured minimum and maximum while preserving the measured temperature in tooltips.
+- Keep markers for spun-down disk groups, with unavailable temperatures shown as `-`.
+- Remove decorative curve points, marker borders, and the redundant chart footer; keep chart reference lines and tooltips legible.
+- Detect stale first-party UI assets and prompt for a cache-busting reload when CSS or JavaScript changes.
+- Separate disk groups visually, align their compact remove buttons on desktop and mobile, and confirm group removal.
+- Keep the mobile reload button contained within its notice.
+- Load saved PWM labels into the Identify controls so saving without edits cannot clear them accidentally.
+- Move the FCP Airflow Dashboard tile and its help into a dedicated General Settings section.
+- Use selected CPU and auxiliary-sensor temperatures for preview markers before settings are applied; auxiliary previews use the hottest selected sensor.
+
+## Upgrade compatibility
+
+The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
 
 ### 1.4.4
 
@@ -40,19 +59,6 @@ The configuration format is unchanged. Existing FanCtrl Plus 2 configurations co
 - Hide the empty-column fan drop zone while sorting is locked.
 - Show a clean, unlabeled drop zone when sorting is unlocked.
 - Use a dashed border and a 40% opaque background for the drop zone.
-
-## Upgrade compatibility
-
-The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
-
-### 1.4.2
-
-## What's changed
-
-- Restored the empty-column Drag Fan Configuration Here target while fan sorting is locked.
-- Prevented long disk descriptions from wrapping into adjacent rows in the expanded disk selector.
-- Removed device-mapper aliases from Other Devices so encrypted pool members are not listed twice.
-- Replaced the stale hard-coded stylesheet cache key and added automatic cache invalidation for first-party CSS and chart JavaScript.
 
 ## Upgrade compatibility
 
@@ -110,16 +116,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.4-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.4/fanctrlplus2-1.4.4-noarch-1.txz</URL>
-<SHA256>414f11db0ea1c07f7740afb9e1f84c661a9b6aec9e8da6a784d1bc5d08378a62</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.5-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.5/fanctrlplus2-1.4.5-noarch-1.txz</URL>
+<SHA256>e65a606096f135946cb702bd5cb37d24bd64acb688fc577959a8e40d3c956533</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.4-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.5-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -144,7 +150,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.4.4"
+echo " Version: 1.4.5"
 echo "------------------------------------------------"
 echo ""
 exit 0
