@@ -39,8 +39,8 @@ if (!preg_match('/\.ui-dropdownchecklist-item\s+\.ui-dropdownchecklist-text\s*\{
 if (str_contains($page, 'fcp.base.css?v=1.3.1a')) {
   $failures[] = 'The stylesheet must not use a stale hard-coded cache key.';
 }
-if (!preg_match('/filemtime\([^\n]*css\/fcp\.base\.css/', $page)) {
-  $failures[] = 'The stylesheet cache key must follow the installed file version.';
+if (!str_contains($page, "fcp_asset_url('css/fcp.base.css')")) {
+  $failures[] = 'The stylesheet cache key must follow the installed content hash.';
 }
 
 if ($failures) {

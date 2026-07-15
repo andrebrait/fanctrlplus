@@ -29,6 +29,7 @@ require_once "$docroot/plugins/$plugin/include/Common.php";
 require_once "/usr/local/emhttp/plugins/fanctrlplus2/include/OrderManager.php";
 
 header('Content-Type: application/json');
+header('Cache-Control: no-store, max-age=0');
 
 $op = $_GET['op'] ?? $_POST['op'] ?? '';
 
@@ -343,6 +344,10 @@ switch ($op) {
       $pwm['label'] = $labels[$pwm['sensor']] ?? '';
     }
     json_response($pwms);
+    break;
+
+  case 'asset_version':
+    json_response(['version' => fcp_ui_asset_version()]);
     break;
 
   case 'read_temp_rpm':

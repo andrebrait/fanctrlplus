@@ -20,16 +20,29 @@ Icon="fanctrlplus2.png"
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
-$fcpBaseVersion = @filemtime(__DIR__ . '/css/fcp.base.css') ?: 1;
-$chartHandlerVersion = @filemtime(__DIR__ . '/include/chart-handler.js') ?: 1;
+$plugin = 'fanctrlplus2';
+require_once "$docroot/plugins/$plugin/include/Common.php";
+
+$fontStyleUrl = fcp_asset_url('fonts/style.css');
+$sweetAlertCssUrl = fcp_asset_url('css/sweetalert2.min.css');
+$fcpBaseUrl = fcp_asset_url('css/fcp.base.css');
+$sweetAlertJsUrl = fcp_asset_url('js/sweetalert2.min.js');
+$chartJsUrl = fcp_asset_url('js/chart.min.js');
+$chartHandlerUrl = fcp_asset_url('include/chart-handler.js');
+$assetMonitorUrl = fcp_asset_url('include/asset-version.js');
+$swalLightUrl = fcp_asset_url('css/fanctrlplus2-swal2.css');
+$swalDarkUrl = fcp_asset_url('css/fanctrlplus2-swal2-dark.css');
+$uiAssetVersion = fcp_ui_asset_version();
 echo <<<HTML
-<link rel="stylesheet" href="/plugins/fanctrlplus2/fonts/style.css">
+<link rel="stylesheet" href="{$fontStyleUrl}">
 <link rel="stylesheet" type="text/css" href="/webGui/styles/jquery.switchbutton.css">
-<link rel="stylesheet" href="/plugins/fanctrlplus2/css/sweetalert2.min.css">
-<link rel="stylesheet" href="/plugins/fanctrlplus2/css/fcp.base.css?v={$fcpBaseVersion}">
-<script src="/plugins/fanctrlplus2/js/sweetalert2.min.js"></script>
-<script src="/plugins/fanctrlplus2/js/chart.min.js"></script>
-<script src="/plugins/fanctrlplus2/include/chart-handler.js?v={$chartHandlerVersion}"></script>
+<link rel="stylesheet" href="{$sweetAlertCssUrl}">
+<link rel="stylesheet" href="{$fcpBaseUrl}">
+<script>window.FCP_LOADED_ASSET_VERSION = "{$uiAssetVersion}";</script>
+<script src="{$sweetAlertJsUrl}"></script>
+<script src="{$chartJsUrl}"></script>
+<script src="{$chartHandlerUrl}"></script>
+<script src="{$assetMonitorUrl}"></script>
 HTML;
 ?>
 
@@ -45,11 +58,9 @@ HTML;
 </script>
 
 <?PHP
-$plugin = "fanctrlplus2";
 $cfg_dir = "/boot/config/plugins/$plugin";
 
-// Load shared functions.
-require_once "$docroot/plugins/$plugin/include/Common.php";
+// Load the shared fan-block renderer.
 require_once "$docroot/plugins/$plugin/include/FanBlockRender.php";
 
 // Initialize the configuration directory.
@@ -183,14 +194,18 @@ $fcp_airflow_enabled = fcp_airflow_enabled($cfg_dir);
      class="system icon-u-lock green-text fanctrl-sort-toggle"
      title="Unlock to rearrange fans"></b>
 </div>
+<div id="fcp-asset-update-notice" class="fcp-asset-update-notice" hidden>
+  <span>FanCtrl Plus 2 files changed on the server. Reload to use matching interface resources.</span>
+  <button type="button" id="fcp-asset-reload">Reload page</button>
+</div>
 
 <script>
 const DEBUG = false; // Enables diagnostic console output.
 
 const themeClass = document.documentElement.className;
-let cssFile = '/plugins/fanctrlplus2/css/fanctrlplus2-swal2.css';
+let cssFile = <?=json_encode($swalLightUrl, JSON_UNESCAPED_SLASHES)?>;
 if (themeClass.includes('Theme--black') || themeClass.includes('Theme--gray')) {
-  cssFile = '/plugins/fanctrlplus2/css/fanctrlplus2-swal2-dark.css';
+  cssFile = <?=json_encode($swalDarkUrl, JSON_UNESCAPED_SLASHES)?>;
 }
 const link = document.createElement('link');
 link.rel = 'stylesheet';
@@ -336,7 +351,7 @@ $(function() {
 
   window.updateFanControlStatus = function(isRunning = null) {
     if (isRunning === null) {
-      fetch("/plugins/fanctrlplus2/include/FanctrlLogic.php?op=status")
+      fetch("/plugins/fanctrlplus2/include/FanctrlLogic.php?op=status", {cache: 'no-store'})
         .then(res => res.text())
         .then(status => updateFanControlStatus(status.trim() === "running"));
       return;
@@ -1384,7 +1399,7 @@ $(function() {
 
     btn.style.pointerEvents = 'none';
 
-    fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=refresh_single&custom=${encodeURIComponent(label)}`)
+    fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=refresh_single&custom=${encodeURIComponent(label)}`, {cache: 'no-store'})
       .then(res => {
         if (!res.ok) throw new Error("Request failed");
         return res.text();

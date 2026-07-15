@@ -1,5 +1,6 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, max-age=0');
 
 /**
  * Read /abs/.../pwmN=Name entries from pwm_labels.cfg.

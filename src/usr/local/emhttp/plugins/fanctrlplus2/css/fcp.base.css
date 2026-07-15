@@ -255,6 +255,21 @@
   transition: none !important;
 }
 
+.fcp-asset-update-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 8px 24px 12px;
+  padding: 10px 14px;
+  border: 1px solid #d79b00;
+  border-radius: 4px;
+  background: rgba(255, 193, 7, .18);
+  box-sizing: border-box;
+}
+.fcp-asset-update-notice[hidden] { display: none !important; }
+.fcp-asset-update-notice button { margin: 0; white-space: nowrap; }
+
 /* ===== Sort toggle ===== */
 .fanctrl-sort-toggle {
   position: relative;

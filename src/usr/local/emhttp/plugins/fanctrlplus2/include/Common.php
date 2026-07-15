@@ -1,4 +1,43 @@
 <?php
+function fcp_asset_version(string $relative_path): string {
+    $relative_path = ltrim($relative_path, '/');
+    if ($relative_path === '' || strpos($relative_path, '..') !== false) return 'missing';
+
+    $hash = @hash_file('sha256', dirname(__DIR__) . '/' . $relative_path);
+    return $hash === false ? 'missing' : substr($hash, 0, 16);
+}
+
+function fcp_asset_url(string $relative_path): string {
+    $relative_path = ltrim($relative_path, '/');
+    return '/plugins/fanctrlplus2/' . $relative_path . '?v=' . fcp_asset_version($relative_path);
+}
+
+function fcp_ui_asset_paths(): array {
+    return [
+        'fanctrlplus2.page',
+        'fonts/style.css',
+        'css/sweetalert2.min.css',
+        'css/fcp.base.css',
+        'css/fanctrlplus2-swal2.css',
+        'css/fanctrlplus2-swal2-dark.css',
+        'js/sweetalert2.min.js',
+        'js/chart.min.js',
+        'include/Common.php',
+        'include/FanBlockRender.php',
+        'include/FanctrlLogic.php',
+        'include/chart-handler.js',
+        'include/asset-version.js',
+    ];
+}
+
+function fcp_ui_asset_version(): string {
+    $context = hash_init('sha256');
+    foreach (fcp_ui_asset_paths() as $relative_path) {
+        hash_update($context, $relative_path . "\0" . fcp_asset_version($relative_path) . "\0");
+    }
+    return substr(hash_final($context), 0, 16);
+}
+
 // =============================
 // Migrate hwmonX configuration and label paths.
 // =============================

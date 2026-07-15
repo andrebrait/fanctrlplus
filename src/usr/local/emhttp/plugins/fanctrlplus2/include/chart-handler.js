@@ -1,7 +1,9 @@
 // chart-handler.js - Show temp→PWM chart for a fan block
 
 async function fetchRealtimeData(custom) {
-  const res = await fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=read_temp_rpm&custom=${encodeURIComponent(custom)}`);
+  const res = await fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=read_temp_rpm&custom=${encodeURIComponent(custom)}`, {
+    cache: 'no-store',
+  });
   if (!res.ok) return { noCache: true };
 
   const raw = (await res.text()).trim();
@@ -9,7 +11,9 @@ async function fetchRealtimeData(custom) {
 }
 
 async function fetchCurvePoints(custom) {
-  const res = await fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=read_curve_points&custom=${encodeURIComponent(custom)}`);
+  const res = await fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=read_curve_points&custom=${encodeURIComponent(custom)}`, {
+    cache: 'no-store',
+  });
   if (!res.ok) return [];
 
   try {

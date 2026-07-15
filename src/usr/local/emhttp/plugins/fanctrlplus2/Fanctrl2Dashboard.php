@@ -1,5 +1,6 @@
 <?php
 header('Content-Type: application/json');
+header('Cache-Control: no-store, max-age=0');
 
 $plugin = "fanctrlplus2";
 $cfg_path = "/boot/config/plugins/$plugin";
