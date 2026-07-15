@@ -6,6 +6,7 @@ calculate_disk_pwm() {
   disk_pwm_val=0
   disk_max="*"
   disk_group_name=""
+  disk_curve_readings=()
 
   if [[ "${disk_group_count:-0}" -gt 0 ]]; then
     local g dvar nvar lvar hvar g_disks g_name g_low g_high
@@ -35,6 +36,7 @@ calculate_disk_pwm() {
         g_range=$((g_high - g_low))
         g_pwm=$((pwm + g_delta * (max - pwm) / g_range))
       fi
+      disk_curve_readings+=("disk:${g}|${g_temp}|${g_pwm}")
 
       if (( disk_group_hit == 0 || g_pwm > disk_pwm_val )); then
         disk_pwm_val=$g_pwm
@@ -58,8 +60,27 @@ calculate_disk_pwm() {
         range=$((high - low))
         disk_pwm_val=$((pwm + delta * (max - pwm) / range))
       fi
+      disk_curve_readings+=("disk:0|${disk_max}|${disk_pwm_val}")
     fi
   fi
+}
+
+write_curve_readings() {
+  local cache_file="$1"
+  local tmp_file="${cache_file}.tmp.$$"
+  local reading
+
+  {
+    for reading in "${disk_curve_readings[@]}"; do
+      printf '%s\n' "$reading"
+    done
+    if [[ "${cpu_temp:-}" =~ ^[0-9]+$ && "${cpu_pwm_val:-}" =~ ^[0-9]+$ ]]; then
+      printf 'cpu|%s|%s\n' "$cpu_temp" "$cpu_pwm_val"
+    fi
+    if [[ "${aux_temp:-}" =~ ^[0-9]+$ && "${aux_pwm_val:-}" =~ ^[0-9]+$ ]]; then
+      printf 'aux|%s|%s\n' "$aux_temp" "$aux_pwm_val"
+    fi
+  } > "$tmp_file" && mv -f "$tmp_file" "$cache_file"
 }
 
 disk_temperature_origin() {

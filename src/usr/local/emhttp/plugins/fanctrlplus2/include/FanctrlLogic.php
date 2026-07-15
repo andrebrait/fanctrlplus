@@ -359,6 +359,31 @@ switch ($op) {
     echo "$temp|$rpm";  // Example: "48 (CPU)|1150"
     exit;
 
+  case 'read_curve_points':
+    $custom = basename($_GET['custom'] ?? ''); // Strip unsafe path components.
+    $curve_file = "/var/tmp/fanctrlplus2/curves_fanctrlplus2_{$custom}";
+    $points = [];
+
+    if (is_file($curve_file)) {
+      foreach (file($curve_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        $parts = explode('|', $line, 3);
+        if (count($parts) !== 3) continue;
+
+        [$source, $temp, $pwm] = $parts;
+        if (!preg_match('/^(?:cpu|aux|disk:\d+)$/', $source)) continue;
+        if (!ctype_digit($temp) || !ctype_digit($pwm)) continue;
+
+        $points[] = [
+          'source' => $source,
+          'temp' => intval($temp),
+          'pwm' => intval($pwm),
+        ];
+      }
+    }
+
+    json_response($points);
+    break;
+
   case 'fcp_airflow_toggle':
     
       $cfg_dir     = "/boot/config/plugins/fanctrlplus2";

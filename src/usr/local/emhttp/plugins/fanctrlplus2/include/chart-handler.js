@@ -8,6 +8,88 @@ async function fetchRealtimeData(custom) {
   return parseRealtimeData(raw);
 }
 
+async function fetchCurvePoints(custom) {
+  const res = await fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=read_curve_points&custom=${encodeURIComponent(custom)}`);
+  if (!res.ok) return [];
+
+  try {
+    return normalizeCurvePoints(await res.json());
+  } catch (_error) {
+    return [];
+  }
+}
+
+function normalizeCurvePoints(value) {
+  if (!Array.isArray(value)) return [];
+
+  const points = new Map();
+  value.forEach(item => {
+    const source = (item?.source ?? '').toString();
+    const temp = Number(item?.temp);
+    const pwm = Number(item?.pwm);
+    if (!/^(?:cpu|aux|disk:\d+)$/.test(source)) return;
+    if (!Number.isFinite(temp) || !Number.isFinite(pwm) || pwm < 0 || pwm > 255) return;
+    points.set(source, { source, temp, pwm });
+  });
+  return [...points.values()];
+}
+
+function buildCurrentPointDatasets(curveDatasets, readings) {
+  const bySource = new Map(readings.map(reading => [reading.source, reading]));
+
+  return curveDatasets.flatMap(curve => {
+    const reading = bySource.get(curve.sourceKey);
+    if (!reading) return [];
+
+    const percent = reading.pwm * 100 / 255;
+    const currentLabel = curve.label.replace(/\s+Temp\s+→.*$/, '');
+    return [{
+      label: `${currentLabel} current`,
+      currentLabel,
+      currentReading: true,
+      sourceKey: curve.sourceKey,
+      data: [{ x: reading.temp, y: percent, pwm: reading.pwm }],
+      borderColor: curve.borderColor,
+      backgroundColor: curve.borderColor,
+      pointBackgroundColor: curve.borderColor,
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: 7,
+      pointHoverRadius: 9,
+      showLine: false,
+      order: -1,
+    }];
+  });
+}
+
+function temperatureBounds(curveDatasets, readings = []) {
+  const visibleSources = new Set(curveDatasets.map(dataset => dataset.sourceKey));
+  const temperatures = curveDatasets
+    .flatMap(ds => (ds.data || []).map(point => point.x))
+    .concat(readings.filter(reading => visibleSources.has(reading.source)).map(reading => reading.temp))
+    .filter(value => Number.isFinite(value));
+  const minTemp = temperatures.length ? Math.min(...temperatures) : 0;
+  const maxTemp = temperatures.length ? Math.max(...temperatures) : 100;
+  const range = Math.max(1, maxTemp - minTemp);
+
+  return {
+    min: minTemp - 1,
+    max: maxTemp + 1,
+    stepSize: range <= 10 ? 1 : range <= 20 ? 2 : 5,
+  };
+}
+
+function syncCurrentPointDatasets(chart, curveDatasets, readings) {
+  const markers = buildCurrentPointDatasets(curveDatasets, readings);
+  const bounds = temperatureBounds(curveDatasets, readings);
+  chart.data.datasets = [...curveDatasets, ...markers];
+  chart.options.scales.x.min = bounds.min;
+  chart.options.scales.x.max = bounds.max;
+  chart.options.scales.x.ticks.stepSize = bounds.stepSize;
+  chart.update('none');
+  return markers;
+}
+
 function parseRealtimeData(raw) {
   // Missing, unwritten, or placeholder cache file.
   if (!raw || raw === '-' || raw.toUpperCase() === 'N/A') {
@@ -82,10 +164,12 @@ window.showFanChart = function (btn) {
   const diskGroupPalette = ['#4285f4', '#8e44ad', '#16a085', '#e67e22', '#c0392b', '#2c3e50'];
   const diskGroups = [...block.querySelectorAll('.disk-group-row')].map((row, idx) => {
     const selectEl = row.querySelector('.disk-select');
+    const groupIndex = Number(row.dataset.group);
     const lowStr = (row.querySelector('.low-temp-input')?.value ?? '').replace(/[^\d.]/g, '');
     const highStr = (row.querySelector('.high-temp-input')?.value ?? '').replace(/[^\d.]/g, '');
     return {
       name: row.querySelector('.disk-group-name-input')?.value || `Group ${idx + 1}`,
+      sourceKey: `disk:${Number.isInteger(groupIndex) ? groupIndex : idx}`,
       selected: !!(selectEl && [...selectEl.selectedOptions].some(opt => opt.value)),
       low: lowStr ? parseFloat(lowStr) : null,
       high: highStr ? parseFloat(highStr) : null,
@@ -129,6 +213,7 @@ window.showFanChart = function (btn) {
     const points = makeLinePoints(g.low, pwmMin, g.high, pwmMax);
     const ds = {
       label: `Disk: ${g.name.replace(/\)/g, ']')} Temp → PWM (%)`,
+      sourceKey: g.sourceKey,
       data: points,
       borderColor: g.color,
       backgroundColor: g.color + '1a',
@@ -147,6 +232,7 @@ window.showFanChart = function (btn) {
 
     datasets.push({
     label: 'CPU Temp → PWM (%)',
+    sourceKey: 'cpu',
     data: cpuPoints,
     borderColor: '#db4437',
     backgroundColor: 'rgba(219,68,55,0.1)',
@@ -164,6 +250,7 @@ window.showFanChart = function (btn) {
 
     datasets.push({
     label: 'Aux Temp → PWM (%)',
+    sourceKey: 'aux',
     data: auxPoints,
     borderColor: '#0f9d58',
     backgroundColor: 'rgba(15,157,88,0.1)',
@@ -249,20 +336,7 @@ window.showFanChart = function (btn) {
 
       const ctx = canvas.getContext('2d');
 
-      // Aggregate temperatures, with a fallback range for empty datasets.
-      const allTemps = datasets
-        .flatMap(ds => (ds.data || []).map(p => p.x))
-        .filter(x => typeof x === 'number');
-
-      let minTemp, maxTemp;
-      if (allTemps.length) {
-        minTemp = Math.min(...allTemps);
-        maxTemp = Math.max(...allTemps);
-      } else {
-        minTemp = 0; maxTemp = 100;
-      }
-      const range = Math.max(1, maxTemp - minTemp);
-      const stepSize = range <= 10 ? 1 : range <= 20 ? 2 : 5;
+      const initialBounds = temperatureBounds(datasets);
 
       // Read theme variables from the modal, with fallbacks.
       const popupEl   = document.querySelector('.swal2-popup.chart-swal');
@@ -280,9 +354,9 @@ window.showFanChart = function (btn) {
             x: {
               type: 'linear',
               title: { display: true, text: 'Temperature (°C)', color: tickColor },
-              min: minTemp - 1,
-              max: maxTemp + 1,
-              ticks: { stepSize, autoSkip: false, color: tickColor },
+              min: initialBounds.min,
+              max: initialBounds.max,
+              ticks: { stepSize: initialBounds.stepSize, autoSkip: false, color: tickColor },
               grid:  { color: gridColor }
             },
             y: {
@@ -296,7 +370,15 @@ window.showFanChart = function (btn) {
           plugins: {
             legend: {
               position: 'bottom',
-              labels: { usePointStyle: false, pointStyle: 'line', boxWidth: 30, boxHeight: 0 }
+              labels: {
+                usePointStyle: false,
+                pointStyle: 'line',
+                boxWidth: 30,
+                boxHeight: 0,
+                filter(item, data) {
+                  return !data.datasets[item.datasetIndex].currentReading;
+                }
+              }
             },
             tooltip: {
               usePointStyle: false,
@@ -308,8 +390,11 @@ window.showFanChart = function (btn) {
               callbacks: {
                 title(items) { return `${items[0].parsed.x}°C`; },
                 label(ctx) {
-                  const label = ctx.dataset.label.includes('Disk') ? 'Disk Temp' : ctx.dataset.label.includes('Aux') ? 'Aux Temp' : 'CPU Temp';
                   const percent = ctx.parsed.y;
+                  if (ctx.dataset.currentReading) {
+                    return `${ctx.dataset.currentLabel} current → Fan Speed = ${percent.toFixed(0)}% (PWM ${ctx.raw.pwm})`;
+                  }
+                  const label = ctx.dataset.label.includes('Disk') ? 'Disk Temp' : ctx.dataset.label.includes('Aux') ? 'Aux Temp' : 'CPU Temp';
                   const pwm = Math.round(percent * 2.55);
                   return `${label} → Fan Speed = ${percent.toFixed(0)}% (PWM ${pwm})`;
                 }
@@ -342,9 +427,13 @@ window.showFanChart = function (btn) {
       wrapper.appendChild(hLine);
       wrapper.appendChild(dot);
 
-      // Refresh the Current value and crosshair every five seconds.
+      // Refresh the current values, per-curve points, and crosshair every five seconds.
       async function updateTopNote() {
-        const data = await fetchRealtimeData(customName);
+        const [data, currentReadings] = await Promise.all([
+          fetchRealtimeData(customName),
+          fetchCurvePoints(customName),
+        ]);
+        syncCurrentPointDatasets(chart, datasets, currentReadings);
         if (!liveNote) return;
 
         // A new fan block may not have a cache entry yet.
@@ -381,9 +470,14 @@ window.showFanChart = function (btn) {
           vLine.style.display = hLine.style.display = dot.style.display = 'none';
         } else {
           const ds = findDatasetForOrigin(datasets, origin);
-          percent = pickPercentNearest(ds, temp);
+          const currentReading = ds
+            ? currentReadings.find(reading => reading.source === ds.sourceKey)
+            : null;
+          percent = currentReading
+            ? currentReading.pwm * 100 / 255
+            : pickPercentNearest(ds, temp);
           if (percent != null) {
-            const pwm = Math.round(percent * 2.55);
+            const pwm = currentReading?.pwm ?? Math.round(percent * 2.55);
             html = `Current: ${temp}°C (${origin}) → Fan Speed ${percent.toFixed(0)}% (PWM ${pwm}) → RPM ${rpm}`;
 
             // Position the crosshair within the chart area.

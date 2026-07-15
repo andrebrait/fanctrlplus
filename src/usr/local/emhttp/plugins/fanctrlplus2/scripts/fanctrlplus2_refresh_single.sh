@@ -136,6 +136,7 @@ fi
 
 # === Disk-temperature PWM ===
 calculate_disk_pwm
+write_curve_readings "/var/tmp/fanctrlplus2/curves_${plugin}_${custom}"
   
 # === Use the higher PWM and record its temperature and source ===
 if (( cpu_pwm_val > disk_pwm_val )); then
