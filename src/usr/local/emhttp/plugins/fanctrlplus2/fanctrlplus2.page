@@ -819,7 +819,30 @@ $(function() {
       console.error('Failed to load PWM list into ' + selector, textStatus, errorThrown);
     });
   };
-  
+
+  const pwmLabelInputIds = {
+    'identify-pwm-select': 'identify-label-input',
+    'identify-modal-select': 'identify-modal-label-input'
+  };
+
+  function pwmLabelForSensor(pwmList, sensor) {
+    const match = pwmList.find(pwm => pwm.sensor === sensor);
+    return match ? (match.label || '') : '';
+  }
+
+  function bindPWMLabelInput(selectId, pwmList) {
+    const inputId = pwmLabelInputIds[selectId];
+    if (!inputId) return;
+
+    const select = $('#' + selectId);
+    const input = $('#' + inputId);
+    const updateLabel = () => select.triggerHandler('change.fcpLabel');
+
+    select.off('change.fcpLabel').on('change.fcpLabel', function () {
+      input.val(pwmLabelForSensor(pwmList, select.val()));
+    });
+    updateLabel();
+  }
 
   window.loadPWMOptions = function(selectIds = ['pwm-select', 'identify-pwm-select', 'identify-modal-select'], selectedPWM = '') {
     if (!Array.isArray(selectIds)) {
@@ -847,6 +870,8 @@ $(function() {
         if (selectedPWM && !select.val()) {
           select.val(selectedPWM);
         }
+
+        bindPWMLabelInput(selectId, pwmList);
       });
     }).fail(function(jqXHR, textStatus, errorThrown) {
       console.error('Failed to load PWM list:', textStatus, errorThrown);
