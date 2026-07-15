@@ -42,6 +42,12 @@ if (!preg_match('/\.sortable-placeholder\s*\{[^}]*border:\s*1px\s+dashed\s+#bbb;
 if (!preg_match('/\.sortable-placeholder\s*\{[^}]*background-color:\s*rgba\(249,\s*249,\s*249,\s*0\.4\);/s', $css)) {
   $failures[] = 'Empty-column drop zones must use a 40% opaque background.';
 }
+if (!preg_match('/\.fcp-asset-update-notice\s*\{[^}]*flex-wrap:\s*wrap;/s', $css)) {
+  $failures[] = 'The asset update notice must wrap on narrow screens.';
+}
+if (!preg_match('/\.fcp-asset-update-notice\s+button\s*\{[^}]*flex:\s*none;[^}]*width:\s*auto;[^}]*white-space:\s*nowrap;/s', $css)) {
+  $failures[] = 'The reload button must keep its intrinsic text width.';
+}
 if (!preg_match('/\.ui-dropdownchecklist-item\s+\.ui-dropdownchecklist-text\s*\{[^}]*white-space:\s*nowrap\s*!important;/s', $css)) {
   $failures[] = 'Expanded disk selector rows must not wrap into adjacent rows.';
 }

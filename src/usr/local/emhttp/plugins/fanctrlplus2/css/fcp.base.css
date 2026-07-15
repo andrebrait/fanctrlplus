@@ -270,6 +270,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin: 8px 24px 12px;
   padding: 10px 14px;
@@ -279,7 +280,12 @@
   box-sizing: border-box;
 }
 .fcp-asset-update-notice[hidden] { display: none !important; }
-.fcp-asset-update-notice button { margin: 0; white-space: nowrap; }
+.fcp-asset-update-notice button {
+  flex: none;
+  width: auto;
+  margin: 0;
+  white-space: nowrap;
+}
 
 /* ===== Sort toggle ===== */
 .fanctrl-sort-toggle {
