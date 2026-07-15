@@ -42,7 +42,6 @@ Do not reinstall or run upstream FanCtrl Plus while FanCtrl Plus 2 is installed.
 
 Support / Issues
 - https://github.com/andrebrait/fanctrlplus/issues
-- Original plugin: https://github.com/ck9393/fanctrlplus
 
 ## License and provenance
 
@@ -55,11 +54,3 @@ The plugin is derived from FanCtrl Plus by ck9393, which is itself derived
 from Dynamix System AutoFan by Bergware International and its contributors.
 Bundled third-party components retain their own compatible licenses; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-- Support original FanCtrl Plus author ck9393:
-
-<p align="left">
-  <a href="https://www.paypal.com/paypalme/cck9393" target="_blank">
-    <img src="https://raw.githubusercontent.com/ck9393/fanctrlplus/main/.github/assets/donate.png" alt="Donate" width="90">
-  </a>
-</p>
