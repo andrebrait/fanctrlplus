@@ -11,8 +11,8 @@ const context = {
     ? {
         ok: true,
         json: async () => [
-          { source: 'disk:0', temp: 37, pwm: 132 },
-          { source: 'disk:1', temp: 45, pwm: 216 },
+          { source: 'disk:0', temp: 20, pwm: 102 },
+          { source: 'disk:1', temp: 55, pwm: 255 },
           { source: 'cpu', temp: 52, pwm: 180 },
         ],
       }
@@ -47,20 +47,31 @@ vm.runInContext(source, context);
   if (markers.length !== 2) {
     failures.push(`Expected one current marker per disk curve, got ${markers.length}.`);
   } else {
-    if (markers[0].data[0].x !== 37 || markers[0].data[0].pwm !== 132) {
-      failures.push(`Array marker did not preserve its temperature/PWM: ${JSON.stringify(markers[0])}`);
+    const lowMarker = markers[0].data[0];
+    if (lowMarker.x !== 35 || lowMarker.y !== 40 || lowMarker.measuredTemp !== 20 || lowMarker.pwm !== 102 || lowMarker.clamp !== 'min') {
+      failures.push(`The below-range marker was not clamped to its curve minimum: ${JSON.stringify(markers[0])}`);
     }
-    if (Math.abs(markers[1].data[0].y - (216 * 100 / 255)) > 0.0001) {
-      failures.push('The current marker did not convert raw PWM to chart percent.');
+    const highMarker = markers[1].data[0];
+    if (highMarker.x !== 50 || highMarker.y !== 100 || highMarker.measuredTemp !== 55 || highMarker.pwm !== 255 || highMarker.clamp !== 'max') {
+      failures.push(`The above-range marker was not clamped to its curve maximum: ${JSON.stringify(markers[1])}`);
     }
+  }
+
+  const inRangePoint = context.curvePointAtTemperature(datasets[0], 37);
+  if (inRangePoint.x !== 37 || inRangePoint.y !== 52 || inRangePoint.clamp !== null) {
+    failures.push(`The in-range point was not interpolated onto its curve: ${JSON.stringify(inRangePoint)}`);
   }
 
   const bounds = context.temperatureBounds(datasets, [
     { source: 'disk:1', temp: 55, pwm: 255 },
     { source: 'cpu', temp: 80, pwm: 255 },
   ]);
-  if (bounds.min !== 29 || bounds.max !== 56) {
-    failures.push(`Current temperatures were not included in chart bounds: ${JSON.stringify(bounds)}`);
+  if (bounds.min !== 29 || bounds.max !== 51) {
+    failures.push(`Measured temperatures must not expand the configured curve bounds: ${JSON.stringify(bounds)}`);
+  }
+
+  if ((source.match(/pointRadius:\s*0/g) || []).length !== 3 || source.includes('makePointRadiusArray')) {
+    failures.push('Curve lines must not render decorative data-point markers.');
   }
 
   if (failures.length) {

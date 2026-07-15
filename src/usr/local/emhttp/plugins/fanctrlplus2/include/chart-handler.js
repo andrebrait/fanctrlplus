@@ -38,6 +38,24 @@ function normalizeCurvePoints(value) {
   return [...points.values()];
 }
 
+function curvePointAtTemperature(curve, measuredTemp) {
+  if (!curve || !Array.isArray(curve.data) || !Number.isFinite(measuredTemp)) return null;
+  const points = curve.data.filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+  if (!points.length) return null;
+
+  const low = points.reduce((current, point) => point.x < current.x ? point : current);
+  const high = points.reduce((current, point) => point.x > current.x ? point : current);
+  const x = Math.min(Math.max(measuredTemp, low.x), high.x);
+  const ratio = high.x === low.x ? 0 : (x - low.x) / (high.x - low.x);
+  const y = low.y + (high.y - low.y) * ratio;
+
+  return {
+    x,
+    y,
+    clamp: measuredTemp < low.x ? 'min' : measuredTemp > high.x ? 'max' : null,
+  };
+}
+
 function buildCurrentPointDatasets(curveDatasets, readings) {
   const bySource = new Map(readings.map(reading => [reading.source, reading]));
 
@@ -45,14 +63,21 @@ function buildCurrentPointDatasets(curveDatasets, readings) {
     const reading = bySource.get(curve.sourceKey);
     if (!reading) return [];
 
-    const percent = reading.pwm * 100 / 255;
+    const position = curvePointAtTemperature(curve, reading.temp);
+    if (!position) return [];
     const currentLabel = curve.label.replace(/\s+Temp\s+→.*$/, '');
     return [{
       label: `${currentLabel} current`,
       currentLabel,
       currentReading: true,
       sourceKey: curve.sourceKey,
-      data: [{ x: reading.temp, y: percent, pwm: reading.pwm }],
+      data: [{
+        x: position.x,
+        y: position.y,
+        pwm: reading.pwm,
+        measuredTemp: reading.temp,
+        clamp: position.clamp,
+      }],
       borderColor: curve.borderColor,
       backgroundColor: curve.borderColor,
       pointBackgroundColor: curve.borderColor,
@@ -66,11 +91,9 @@ function buildCurrentPointDatasets(curveDatasets, readings) {
   });
 }
 
-function temperatureBounds(curveDatasets, readings = []) {
-  const visibleSources = new Set(curveDatasets.map(dataset => dataset.sourceKey));
+function temperatureBounds(curveDatasets) {
   const temperatures = curveDatasets
     .flatMap(ds => (ds.data || []).map(point => point.x))
-    .concat(readings.filter(reading => visibleSources.has(reading.source)).map(reading => reading.temp))
     .filter(value => Number.isFinite(value));
   const minTemp = temperatures.length ? Math.min(...temperatures) : 0;
   const maxTemp = temperatures.length ? Math.max(...temperatures) : 100;
@@ -85,7 +108,7 @@ function temperatureBounds(curveDatasets, readings = []) {
 
 function syncCurrentPointDatasets(chart, curveDatasets, readings) {
   const markers = buildCurrentPointDatasets(curveDatasets, readings);
-  const bounds = temperatureBounds(curveDatasets, readings);
+  const bounds = temperatureBounds(curveDatasets);
   chart.data.datasets = [...curveDatasets, ...markers];
   chart.options.scales.x.min = bounds.min;
   chart.options.scales.x.max = bounds.max;
@@ -206,10 +229,6 @@ window.showFanChart = function (btn) {
   return data;
   };
 
-  const makePointRadiusArray = (length) => {
-    return Array.from({ length }, (_, i) => (i === 0 || i === length - 1) ? 4 : 0);
-  };
-
   const datasets = [];
 
   diskGroups.forEach(g => {
@@ -222,8 +241,8 @@ window.showFanChart = function (btn) {
       borderColor: g.color,
       backgroundColor: g.color + '1a',
       borderWidth: 2,
-      pointRadius: makePointRadiusArray(points.length),
-      pointHoverRadius: 6,
+      pointRadius: 0,
+      pointHoverRadius: 0,
       fill: false,
       tension: 0.4,
     };
@@ -232,7 +251,6 @@ window.showFanChart = function (btn) {
 
   if (cpuEnabled && cpuLow !== null && cpuHigh !== null) {
     const cpuPoints = makeLinePoints(cpuLow, pwmMin, cpuHigh, pwmMax);
-    const cpuRadius = makePointRadiusArray(cpuPoints.length);
 
     datasets.push({
     label: 'CPU Temp → PWM (%)',
@@ -241,8 +259,8 @@ window.showFanChart = function (btn) {
     borderColor: '#db4437',
     backgroundColor: 'rgba(219,68,55,0.1)',
     borderWidth: 2,
-    pointRadius: cpuRadius,
-    pointHoverRadius: 6,
+    pointRadius: 0,
+    pointHoverRadius: 0,
     fill: false,
     tension: 0.4
     });
@@ -250,7 +268,6 @@ window.showFanChart = function (btn) {
 
   if (auxEnabled && auxLow !== null && auxHigh !== null) {
     const auxPoints = makeLinePoints(auxLow, pwmMin, auxHigh, pwmMax);
-    const auxRadius = makePointRadiusArray(auxPoints.length);
 
     datasets.push({
     label: 'Aux Temp → PWM (%)',
@@ -259,8 +276,8 @@ window.showFanChart = function (btn) {
     borderColor: '#0f9d58',
     backgroundColor: 'rgba(15,157,88,0.1)',
     borderWidth: 2,
-    pointRadius: auxRadius,
-    pointHoverRadius: 6,
+    pointRadius: 0,
+    pointHoverRadius: 0,
     fill: false,
     tension: 0.4
     });
@@ -315,14 +332,6 @@ window.showFanChart = function (btn) {
       for (const p of ds.data) if (Math.abs(p.x - t) < Math.abs(best.x - t)) best = p;
       return typeof best.y === 'number' ? best.y : null;
     }
-    // Return the dataset minimum for spun-down disks.
-    function pickPercentAtMin(ds) {
-      if (!ds || !ds.data || !ds.data.length) return null;
-      let minPoint = ds.data[0];
-      for (const p of ds.data) if (p.x < minPoint.x) minPoint = p;
-      return typeof minPoint.y === 'number' ? minPoint.y : null;
-    }
-
     // Draw the chart with a safe empty-data range and create its crosshair.
     setTimeout(() => {
       const canvas  = document.getElementById('fan-chart');
@@ -392,7 +401,16 @@ window.showFanChart = function (btn) {
               mode: 'nearest',
               intersect: false,
               callbacks: {
-                title(items) { return `${items[0].parsed.x}°C`; },
+                title(items) {
+                  const item = items[0];
+                  if (item.dataset.currentReading && item.raw.clamp === 'min') {
+                    return `Curve minimum ${item.parsed.x}°C (measured ${item.raw.measuredTemp}°C)`;
+                  }
+                  if (item.dataset.currentReading && item.raw.clamp === 'max') {
+                    return `Curve maximum ${item.parsed.x}°C (measured ${item.raw.measuredTemp}°C)`;
+                  }
+                  return `${item.parsed.x}°C`;
+                },
                 label(ctx) {
                   const percent = ctx.parsed.y;
                   if (ctx.dataset.currentReading) {
@@ -452,10 +470,7 @@ window.showFanChart = function (btn) {
         }  
 
         const { temp, origin, rpm, spunDown } = data;
-        const ori = (origin ?? '').toString();
         const originType = realtimeOriginType(origin);
-        const isCPU = /^cpu$/i.test(originType);
-
 
         // Calculate the current percentage.
         let percent = null, html = '';
@@ -474,12 +489,11 @@ window.showFanChart = function (btn) {
           vLine.style.display = hLine.style.display = dot.style.display = 'none';
         } else {
           const ds = findDatasetForOrigin(datasets, origin);
+          const curvePosition = curvePointAtTemperature(ds, temp);
           const currentReading = ds
             ? currentReadings.find(reading => reading.source === ds.sourceKey)
             : null;
-          percent = currentReading
-            ? currentReading.pwm * 100 / 255
-            : pickPercentNearest(ds, temp);
+          percent = curvePosition?.y ?? pickPercentNearest(ds, temp);
           if (percent != null) {
             const pwm = currentReading?.pwm ?? Math.round(percent * 2.55);
             html = `Current: ${temp}°C (${origin}) → Fan Speed ${percent.toFixed(0)}% (PWM ${pwm}) → RPM ${rpm}`;
@@ -490,7 +504,7 @@ window.showFanChart = function (btn) {
             const ca = chart.chartArea; // {left, top, right, bottom}
 
             // Convert chart coordinates to pixels.
-            let x = xScale.getPixelForValue(temp);
+            let x = xScale.getPixelForValue(curvePosition?.x ?? temp);
             let y = yScale.getPixelForValue(percent);
 
             // Calculate wrapper-relative offsets, including padding.
