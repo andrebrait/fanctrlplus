@@ -38,6 +38,30 @@ function normalizeCurvePoints(value) {
   return [...points.values()];
 }
 
+function sensorOptionTemperature(option) {
+  const match = /\((-?\d+(?:\.\d+)?)\s*°C\)\s*$/.exec((option?.textContent ?? '').trim());
+  const temperature = match ? Number(match[1]) : NaN;
+  return Number.isFinite(temperature) ? temperature : null;
+}
+
+function selectedSensorReadings(cpuEnabled, cpuOption, auxEnabled, auxOptions) {
+  const readings = [];
+  const cpuTemp = cpuEnabled ? sensorOptionTemperature(cpuOption) : null;
+  if (cpuTemp !== null) readings.push({ source: 'cpu', temp: cpuTemp });
+
+  const auxTemps = auxEnabled
+    ? Array.from(auxOptions || [], sensorOptionTemperature).filter(Number.isFinite)
+    : [];
+  if (auxTemps.length) readings.push({ source: 'aux', temp: Math.max(...auxTemps) });
+  return readings;
+}
+
+function mergeCurveReadings(runtimeReadings, previewReadings) {
+  const bySource = new Map((previewReadings || []).map(reading => [reading.source, reading]));
+  (runtimeReadings || []).forEach(reading => bySource.set(reading.source, reading));
+  return [...bySource.values()];
+}
+
 function curvePointAtTemperature(curve, measuredTemp) {
   if (!curve || !Array.isArray(curve.data) || !Number.isFinite(measuredTemp)) return null;
   const points = curve.data.filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
@@ -78,7 +102,9 @@ function buildCurrentPointDatasets(curveDatasets, readings) {
       data: [{
         x: position.x,
         y: position.y,
-        pwm: temperatureUnavailable ? Math.round(position.y * 2.55) : reading.pwm,
+        pwm: temperatureUnavailable || !Number.isFinite(reading.pwm)
+          ? Math.round(position.y * 2.55)
+          : reading.pwm,
         measuredTemp: temperatureUnavailable ? null : reading.temp,
         temperatureUnavailable,
         clamp: position.clamp,
@@ -245,6 +271,12 @@ window.showFanChart = function (btn) {
   const auxEnabled = getSelectVal('[name^="aux_enable["]') === '1';
   const auxLow = getNum('[name^="aux_min_temp["]');
   const auxHigh = getNum('[name^="aux_max_temp["]');
+  const previewReadings = selectedSensorReadings(
+    cpuEnabled,
+    block.querySelector('[name^="cpu_sensor["]')?.selectedOptions?.[0],
+    auxEnabled,
+    block.querySelector('[name^="aux_sensor["]')?.selectedOptions
+  );
 
   if ([pwmMin, pwmMax].some(v => v === null)) {
     Swal.fire('⚠️ Missing input', 'Please fill in the Fan Speed Range (Min/Max %).', 'warning');
@@ -487,10 +519,11 @@ window.showFanChart = function (btn) {
 
       // Refresh current values and per-curve points every five seconds.
       async function updateTopNote() {
-        const [data, currentReadings] = await Promise.all([
+        const [data, runtimeReadings] = await Promise.all([
           fetchRealtimeData(customName),
           fetchCurvePoints(customName),
         ]);
+        const currentReadings = mergeCurveReadings(runtimeReadings, previewReadings);
         syncCurrentPointDatasets(chart, datasets, currentReadings);
         if (!liveNote) return;
 

@@ -127,6 +127,46 @@ vm.runInContext(source, context);
     }
   }
 
+  const previewReadings = typeof context.selectedSensorReadings === 'function'
+    ? context.selectedSensorReadings(
+        true,
+        { textContent: 'coretemp - Package id 0 (34°C)' },
+        true,
+        [
+          { textContent: 'nct6798 - System 1 (38.5°C)' },
+          { textContent: 'nct6798 - System 2 (72°C)' },
+        ]
+      )
+    : [];
+  const mergedReadings = typeof context.mergeCurveReadings === 'function'
+    ? context.mergeCurveReadings([{ source: 'disk:0', temp: 37, pwm: 114 }], previewReadings)
+    : [];
+  const previewCurves = [
+    { label: 'CPU Temp → PWM (%)', sourceKey: 'cpu', borderColor: '#db4437', data: [{ x: 40, y: 40 }, { x: 70, y: 100 }] },
+    { label: 'Aux Temp → PWM (%)', sourceKey: 'aux', borderColor: '#0f9d58', data: [{ x: 30, y: 40 }, { x: 60, y: 100 }] },
+  ];
+  const previewMarkers = context.buildCurrentPointDatasets(previewCurves, mergedReadings);
+  const cpuPreviewPoint = previewMarkers.find(marker => marker.sourceKey === 'cpu')?.data[0];
+  const auxPreviewPoint = previewMarkers.find(marker => marker.sourceKey === 'aux')?.data[0];
+  if (
+    cpuPreviewPoint?.x !== 40
+    || cpuPreviewPoint?.y !== 40
+    || cpuPreviewPoint?.measuredTemp !== 34
+    || cpuPreviewPoint?.pwm !== 102
+    || cpuPreviewPoint?.clamp !== 'min'
+  ) {
+    failures.push(`The CPU preview marker must use and clamp the selected sensor temperature: ${JSON.stringify(cpuPreviewPoint)}`);
+  }
+  if (
+    auxPreviewPoint?.x !== 60
+    || auxPreviewPoint?.y !== 100
+    || auxPreviewPoint?.measuredTemp !== 72
+    || auxPreviewPoint?.pwm !== 255
+    || auxPreviewPoint?.clamp !== 'max'
+  ) {
+    failures.push(`The Aux preview marker must use the hottest selected sensor and clamp it: ${JSON.stringify(auxPreviewPoint)}`);
+  }
+
   const bounds = context.temperatureBounds(datasets, [
     { source: 'disk:1', temp: 55, pwm: 255 },
     { source: 'cpu', temp: 80, pwm: 255 },
