@@ -68,6 +68,12 @@
   flex: none;
 }
 
+.disk-group-row + .disk-group-row {
+  border-top: 1px solid rgba(127, 127, 127, 0.35);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
 .fcp-disk-option-icon {
   display: inline-block;
   width: 1.4em;

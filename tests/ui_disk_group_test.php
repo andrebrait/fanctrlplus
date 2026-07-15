@@ -15,6 +15,9 @@ if (preg_match('/class="disk-group-name-input[^\"]*fcp-w-300/', $render)) {
 if (!str_contains($css, 'grid-template-columns: minmax(0, 1fr) auto;')) {
   $failures[] = 'The disk group heading must reserve space for the remove button.';
 }
+if (!preg_match('/\.disk-group-row\s*\+\s*\.disk-group-row\s*\{[^}]*border-top:\s*1px\s+solid\s+rgba\(127,\s*127,\s*127,\s*0\.35\);[^}]*margin-top:\s*10px;[^}]*padding-top:\s*10px;/s', $css)) {
+  $failures[] = 'Adjacent disk groups must have a spaced horizontal separator.';
+}
 if (!preg_match('/if \(!sortableUnlocked\) \{\s*\$col\.find\(\'\.sortable-placeholder\'\)\.remove\(\);\s*return;/s', $page)) {
   $failures[] = 'Empty-column drop zones must stay hidden while sorting is locked.';
 }
