@@ -61,9 +61,13 @@ function buildCurrentPointDatasets(curveDatasets, readings) {
 
   return curveDatasets.flatMap(curve => {
     const reading = bySource.get(curve.sourceKey);
-    if (!reading) return [];
+    const temperatureUnavailable = !reading && /^disk:\d+$/.test(curve.sourceKey);
+    if (!reading && !temperatureUnavailable) return [];
 
-    const position = curvePointAtTemperature(curve, reading.temp);
+    const measuredTemp = temperatureUnavailable
+      ? Math.min(...curve.data.map(point => point.x).filter(value => Number.isFinite(value)))
+      : reading.temp;
+    const position = curvePointAtTemperature(curve, measuredTemp);
     if (!position) return [];
     const currentLabel = curve.label.replace(/\s+Temp\s+→.*$/, '');
     return [{
@@ -74,8 +78,9 @@ function buildCurrentPointDatasets(curveDatasets, readings) {
       data: [{
         x: position.x,
         y: position.y,
-        pwm: reading.pwm,
-        measuredTemp: reading.temp,
+        pwm: temperatureUnavailable ? Math.round(position.y * 2.55) : reading.pwm,
+        measuredTemp: temperatureUnavailable ? null : reading.temp,
+        temperatureUnavailable,
         clamp: position.clamp,
       }],
       borderColor: curve.borderColor,
@@ -89,6 +94,17 @@ function buildCurrentPointDatasets(curveDatasets, readings) {
       order: -1,
     }];
   });
+}
+
+function currentPointTooltipTitle(item) {
+  if (item.dataset.currentReading && item.raw.temperatureUnavailable) return 'Temperature: -';
+  if (item.dataset.currentReading && item.raw.clamp === 'min') {
+    return `Curve minimum ${item.parsed.x}°C (measured ${item.raw.measuredTemp}°C)`;
+  }
+  if (item.dataset.currentReading && item.raw.clamp === 'max') {
+    return `Curve maximum ${item.parsed.x}°C (measured ${item.raw.measuredTemp}°C)`;
+  }
+  return `${item.parsed.x}°C`;
 }
 
 function temperatureBounds(curveDatasets) {
@@ -402,18 +418,14 @@ window.showFanChart = function (btn) {
               intersect: false,
               callbacks: {
                 title(items) {
-                  const item = items[0];
-                  if (item.dataset.currentReading && item.raw.clamp === 'min') {
-                    return `Curve minimum ${item.parsed.x}°C (measured ${item.raw.measuredTemp}°C)`;
-                  }
-                  if (item.dataset.currentReading && item.raw.clamp === 'max') {
-                    return `Curve maximum ${item.parsed.x}°C (measured ${item.raw.measuredTemp}°C)`;
-                  }
-                  return `${item.parsed.x}°C`;
+                  return currentPointTooltipTitle(items[0]);
                 },
                 label(ctx) {
                   const percent = ctx.parsed.y;
                   if (ctx.dataset.currentReading) {
+                    if (ctx.raw.temperatureUnavailable) {
+                      return `${ctx.dataset.currentLabel} curve minimum → Fan Speed = ${percent.toFixed(0)}% (PWM ${ctx.raw.pwm})`;
+                    }
                     return `${ctx.dataset.currentLabel} current → Fan Speed = ${percent.toFixed(0)}% (PWM ${ctx.raw.pwm})`;
                   }
                   const label = ctx.dataset.label.includes('Disk') ? 'Disk Temp' : ctx.dataset.label.includes('Aux') ? 'Aux Temp' : 'CPU Temp';

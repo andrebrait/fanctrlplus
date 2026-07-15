@@ -62,6 +62,30 @@ vm.runInContext(source, context);
     failures.push(`The in-range point was not interpolated onto its curve: ${JSON.stringify(inRangePoint)}`);
   }
 
+  const missingTemperatureMarkers = context.buildCurrentPointDatasets(datasets, [
+    { source: 'disk:0', temp: 37, pwm: 114 },
+  ]);
+  const missingTemperatureMarker = missingTemperatureMarkers.find(marker => marker.sourceKey === 'disk:1');
+  const missingTemperaturePoint = missingTemperatureMarker?.data[0];
+  if (
+    missingTemperaturePoint?.x !== 30
+    || missingTemperaturePoint?.y !== 40
+    || missingTemperaturePoint?.measuredTemp !== null
+    || missingTemperaturePoint?.pwm !== 102
+    || missingTemperaturePoint?.temperatureUnavailable !== true
+  ) {
+    failures.push(`A spun-down HDD group must retain a marker at its curve minimum: ${JSON.stringify(missingTemperatureMarker)}`);
+  } else {
+    const title = context.currentPointTooltipTitle({
+      dataset: missingTemperatureMarker,
+      raw: missingTemperaturePoint,
+      parsed: missingTemperaturePoint,
+    });
+    if (title !== 'Temperature: -') {
+      failures.push(`A spun-down HDD marker must show an unavailable temperature: ${title}`);
+    }
+  }
+
   const bounds = context.temperatureBounds(datasets, [
     { source: 'disk:1', temp: 55, pwm: 255 },
     { source: 'cpu', temp: 80, pwm: 255 },
