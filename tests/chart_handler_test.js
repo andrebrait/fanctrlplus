@@ -141,6 +141,9 @@ vm.runInContext(source, context);
   if (source.includes("className = 'chart-dot'")) {
     failures.push('The redundant crosshair dot must not be rendered.');
   }
+  if (source.includes('activeSources') || source.includes('footerNote')) {
+    failures.push('The graph must not render a redundant active-source footer.');
+  }
 
   if (failures.length) {
     console.error(failures.join('\n'));

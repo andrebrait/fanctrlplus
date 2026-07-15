@@ -240,7 +240,6 @@ window.showFanChart = function (btn) {
       color: diskGroupPalette[idx % diskGroupPalette.length],
     };
   });
-  const diskSelected = diskGroups.some(g => g.selected);
 
   const cpuEnabled = getSelectVal('[name^="cpu_enable["]') === '1';
   const cpuLow = getNum('[name^="cpu_min_temp["]');
@@ -320,21 +319,6 @@ window.showFanChart = function (btn) {
     });
   }
 
-  // Controller ownership note.
-  const activeSources = [];
-  if (diskSelected) activeSources.push('Disk');
-  if (cpuEnabled) activeSources.push('CPU');
-  if (auxEnabled) activeSources.push('Aux');
-  let footerNote = '';
-
-  if (activeSources.length === 0) {
-    footerNote = '⚠️ No rules defined — fan will not be controlled';
-  } else if (activeSources.length === 1) {
-    footerNote = `💡 Only ${activeSources[0]} rule applies`;
-  } else {
-    footerNote = `💡 ${activeSources.join(' and ')} rules are active — Fan PWM = max(${activeSources.join(', ')})`;
-  }
-    
   Swal.fire({
     title: `📈 ${name}`,
     html: `
@@ -343,7 +327,6 @@ window.showFanChart = function (btn) {
       </div>
       <div id="fan-chart-wrapper" style="padding:0; position:relative;">
         <canvas id="fan-chart" style="width: 100%; height: auto;"></canvas>
-        <div style="margin-top: 8px; font-size: 13px; color: #666; text-align: center;">${footerNote}</div>
       </div>`,
 
   customClass: 'chart-swal',
