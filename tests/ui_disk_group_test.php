@@ -33,6 +33,9 @@ if (!preg_match('/function initSortableUnlocked\(\).*?\$cols\.sortable\(opts\);\
 if (!preg_match('/function destroySortableLocked\(\).*?\$cols\.find\(\'\.sortable-placeholder\'\)\.remove\(\);/s', $page)) {
   $failures[] = 'Locking sorting must remove empty-column drop zones.';
 }
+if (!preg_match('/\.remove-disk-group-btn.*?const groupName\s*=.*?const msg\s*=.*?if \(!confirm\(msg\)\) return;.*?\$row\.remove\(\);/s', $page)) {
+  $failures[] = 'Removing a disk group must require named confirmation before changing the page.';
+}
 if (str_contains($page, 'Drag Fan Configuration Here')) {
   $failures[] = 'Empty-column drop zones must not contain instructional text.';
 }

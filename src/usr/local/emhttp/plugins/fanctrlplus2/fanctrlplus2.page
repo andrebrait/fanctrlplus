@@ -1339,6 +1339,12 @@ $(function() {
       return;
     }
 
+    const groupName = $row.find('.disk-group-name-input').val().trim();
+    const msg = groupName
+      ? `Are you sure you want to delete disk group "${groupName}"?`
+      : 'Are you sure you want to delete this disk group?';
+    if (!confirm(msg)) return;
+
     $row.remove();
     setApplyAllButtonState();
   });
