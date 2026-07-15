@@ -55,7 +55,7 @@
   align-items: center;
   gap: 6px;
   width: 100%;
-  max-width: 340px;
+  max-width: 300px;
   min-width: 0;
 }
 .disk-group-heading .disk-group-name-input {
@@ -64,8 +64,13 @@
   box-sizing: border-box;
 }
 .disk-group-heading .remove-disk-group-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
   margin: 0;
   flex: none;
+  box-sizing: border-box;
 }
 
 .disk-group-row + .disk-group-row {

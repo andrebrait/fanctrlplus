@@ -15,6 +15,12 @@ if (preg_match('/class="disk-group-name-input[^\"]*fcp-w-300/', $render)) {
 if (!str_contains($css, 'grid-template-columns: minmax(0, 1fr) auto;')) {
   $failures[] = 'The disk group heading must reserve space for the remove button.';
 }
+if (!preg_match('/\.disk-group-heading\s*\{[^}]*max-width:\s*300px;/s', $css)) {
+  $failures[] = 'The disk group heading must align with neighboring 300px controls.';
+}
+if (!preg_match('/\.disk-group-heading\s+\.remove-disk-group-btn\s*\{[^}]*width:\s*32px;[^}]*height:\s*32px;[^}]*padding:\s*0;/s', $css)) {
+  $failures[] = 'The icon-only disk group remove button must stay square at every viewport width.';
+}
 if (!preg_match('/\.disk-group-row\s*\+\s*\.disk-group-row\s*\{[^}]*border-top:\s*1px\s+solid\s+rgba\(127,\s*127,\s*127,\s*0\.35\);[^}]*margin-top:\s*10px;[^}]*padding-top:\s*10px;/s', $css)) {
   $failures[] = 'Adjacent disk groups must have a spaced horizontal separator.';
 }
