@@ -166,21 +166,22 @@ $width = 300;
 $cpu_sensors = detect_cpu_sensors();
 $aux_sensors = detect_aux_sensors();
 
-// Read the FCP Airflow switch.
-function fcp_airflow_enabled(string $cfg_dir): bool {
+// Read a dashboard-tile switch (e.g. __FCP_AIRFLOW__, __FCP_HISTORY__).
+function fcp_labels_flag_enabled(string $cfg_dir, string $flag): bool {
   $labels_file = $cfg_dir.'/pwm_labels.cfg';
   if (!is_file($labels_file)) return false;
   foreach (file($labels_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $ln) {
     $ln = trim($ln);
     if ($ln === '' || $ln[0] === '#') continue;
-    if (preg_match('/^__FCP_AIRFLOW__\s*=\s*([01])\s*$/', $ln, $m)) {
+    if (preg_match('/^'.preg_quote($flag, '/').'\s*=\s*([01])\s*$/', $ln, $m)) {
       return $m[1] === '1';
     }
   }
   return false;
 }
 
-$fcp_airflow_enabled = fcp_airflow_enabled($cfg_dir);
+$fcp_airflow_enabled = fcp_labels_flag_enabled($cfg_dir, '__FCP_AIRFLOW__');
+$fcp_history_enabled = fcp_labels_flag_enabled($cfg_dir, '__FCP_HISTORY__');
 ?>
 
 <div class="fanctrl-header">
@@ -1293,11 +1294,13 @@ $(function() {
       saveSyslogSwitchState(cfgFile, checked);
     } else if ($input.hasClass('fcp-airflow-switch')) {
       saveAirflowSwitchState(checked);
+    } else if ($input.hasClass('fcp-history-switch')) {
+      saveHistorySwitchState(checked);
     }
   });
 
-  // Shared change handler for the syslog and FCP Airflow switches.
-  $(document).on('change', '.syslog-switch, .fcp-airflow-switch', function() {
+  // Shared change handler for the syslog and FCP Airflow/History switches.
+  $(document).on('change', '.syslog-switch, .fcp-airflow-switch, .fcp-history-switch', function() {
     var checked = $(this).prop('checked');
     var $area = $(this).closest('.switch-area');
 
@@ -1327,7 +1330,14 @@ $(function() {
     $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', {
       op: 'fcp_airflow_toggle',
       enabled: checked ? 1 : 0
-    });  
+    });
+  }
+
+  function saveHistorySwitchState(checked) {
+    $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', {
+      op: 'fcp_history_toggle',
+      enabled: checked ? 1 : 0
+    });
   }
   
   $(document).on('click', '.add-disk-group-btn', function () {
@@ -2037,6 +2047,25 @@ $(function() {
         </dl>
         <blockquote class="inline_help fcp-help-wide">
           Enable or disable the <strong>FCP Airflow</strong> tile in Dashboard.
+        </blockquote>
+      </div>
+
+      <div class="fcp-section">
+        <dl class="fcp-formgrid">
+          <dt class="fcp-formgrid-label"><strong>Dashboard History Tile:</strong></dt>
+          <dd style="text-align: left;">
+            <span class="switch-area">
+              <div class="switch-button-background <?= $fcp_history_enabled ? ' checked' : '' ?>" data-for="fcp-history-switch">
+                <div class="switch-button-button"></div>
+              </div>
+              <input id="fcp-history-switch" class="fcp-history-switch" type="checkbox" <?= $fcp_history_enabled ? 'checked' : '' ?>>
+              <span class="switch-button-label on">ENABLED</span>
+              <span class="switch-button-label off">DISABLED</span>
+            </span>
+          </dd>
+        </dl>
+        <blockquote class="inline_help fcp-help-wide">
+          Enable or disable the <strong>FanCtrl Plus 2 History</strong> tile in Dashboard.
         </blockquote>
       </div>
     </div>

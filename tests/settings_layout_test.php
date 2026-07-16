@@ -37,6 +37,28 @@ if (substr_count($page, 'id="fcp-airflow-switch"') !== 1) {
   $failures[] = 'The FCP Airflow switch must appear exactly once.';
 }
 
+if (substr_count($page, 'id="fcp-history-switch"') !== 1) {
+  $failures[] = 'The History tile switch must appear exactly once.';
+}
+if ($generalStart !== false && $syslogStart !== false) {
+  $generalCard = substr($page, $generalStart, $syslogStart - $generalStart);
+  if (!str_contains($generalCard, 'id="fcp-history-switch"')) {
+    $failures[] = 'General Settings must contain the History tile switch.';
+  }
+}
+if (!str_contains($page, "op: 'fcp_history_toggle'")) {
+  $failures[] = 'The History switch must persist through the fcp_history_toggle op.';
+}
+if (!str_contains($page, "hasClass('fcp-history-switch')")) {
+  $failures[] = 'The click handler must persist the History switch.';
+}
+if (!str_contains($page, ".fcp-airflow-switch, .fcp-history-switch'")) {
+  $failures[] = 'The change handler must cover the History switch.';
+}
+if (substr_count($page, 'saveHistorySwitchState') < 2) {
+  $failures[] = 'saveHistorySwitchState must be defined and called.';
+}
+
 if ($failures) {
   fwrite(STDERR, implode("\n", $failures) . "\n");
   exit(1);

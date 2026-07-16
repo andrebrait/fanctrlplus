@@ -90,8 +90,10 @@ function fcpInitHistoryWidget(fans) {
           label: fan.custom,
           data: holder.points,
           borderWidth: 2,
-          pointRadius: 2,
-          pointHitRadius: 6,
+          // No point markers: the line reads as one continuous trace; hovering
+          // still hits (pointHitRadius) and pops a colored marker + tooltip.
+          pointRadius: 0,
+          pointHitRadius: 8,
           pointHoverRadius: 5,
           fill: false,
           tension: 0,

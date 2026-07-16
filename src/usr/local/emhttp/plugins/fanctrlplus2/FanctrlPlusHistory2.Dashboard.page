@@ -1,5 +1,5 @@
 Menu="Dashboard:0"
-Cond="version_compare(parse_ini_file('/etc/unraid-version')['version'],'6.11.9','>')"
+Cond="version_compare(parse_ini_file('/etc/unraid-version')['version'],'6.11.9','>') && is_file('/boot/config/plugins/fanctrlplus2/pwm_labels.cfg') && strpos(file_get_contents('/boot/config/plugins/fanctrlplus2/pwm_labels.cfg'),'__FCP_HISTORY__=1')!==false"
 ---
 <?php
 $pluginname = "fanctrlplus2";
@@ -76,17 +76,24 @@ $mytiles["{$pluginname}_history"]['column2'] = <<<EOT
         </span>
         <span class="tile-header-right">
           <span class="tile-header-right-controls">
-            <select id="fcp-history-window" title="History window">
-              <option value="30">30 min</option>
-              <option value="60">1 h</option>
-              <option value="120">2 h</option>
-              <option value="240">4 h</option>
-            </select>
             <a href="/Settings/fanctrlplus2" title="Go to FanCtrl Plus 2 settings">
               <i class="fa fa-fw fa-cog control"></i>
             </a>
           </span>
         </span>
+      </span>
+    </td>
+  </tr>
+
+  <tr>
+    <td>
+      <span style="float:right">
+        <select id="fcp-history-window" class="auto" title="Select time frame">
+          <option value="30">30 m</option>
+          <option value="60">1 h</option>
+          <option value="120">2 h</option>
+          <option value="240">4 h</option>
+        </select>
       </span>
     </td>
   </tr>
@@ -105,11 +112,6 @@ $mytiles["{$pluginname}_history"]['column2'] = <<<EOT
   position: relative;
   height: 110px;
   width: 100%;
-}
-#fcp-history-dashboard #fcp-history-window {
-  font-size: 11px;
-  margin-right: 6px;
-  vertical-align: middle;
 }
 </style>
 <script src="$chartJsUrl"></script>

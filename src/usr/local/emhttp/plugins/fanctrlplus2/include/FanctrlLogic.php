@@ -405,9 +405,11 @@ switch ($op) {
     break;
 
   case 'fcp_airflow_toggle':
-    
+  case 'fcp_history_toggle':
+
       $cfg_dir     = "/boot/config/plugins/fanctrlplus2";
       $labels_file = $cfg_dir.'/pwm_labels.cfg';
+      $flag        = $op === 'fcp_history_toggle' ? '__FCP_HISTORY__' : '__FCP_AIRFLOW__';
 
       $enabled = (($_POST['enabled'] ?? '0') === '1');
       $lines   = is_file($labels_file) ? file($labels_file, FILE_IGNORE_NEW_LINES) : [];
@@ -416,15 +418,15 @@ switch ($op) {
       foreach ($lines as &$ln) {
           $t = trim($ln);
           if ($t === '' || $t[0] === '#') continue;
-          if (preg_match('/^__FCP_AIRFLOW__\s*=/', $t)) {
-              $ln = "__FCP_AIRFLOW__=" . ($enabled ? '1' : '0');
+          if (preg_match('/^'.preg_quote($flag, '/').'\s*=/', $t)) {
+              $ln = $flag . "=" . ($enabled ? '1' : '0');
               $found = true;
               break;
           }
       }
       unset($ln);
 
-      if (!$found) $lines[] = "__FCP_AIRFLOW__=" . ($enabled ? '1' : '0');
+      if (!$found) $lines[] = $flag . "=" . ($enabled ? '1' : '0');
 
       @mkdir($cfg_dir, 0777, true);
       file_put_contents($labels_file, implode("\n", $lines) . "\n");
