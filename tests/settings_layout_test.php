@@ -59,6 +59,11 @@ if (substr_count($page, 'saveHistorySwitchState') < 2) {
   $failures[] = 'saveHistorySwitchState must be defined and called.';
 }
 
+$css = file_get_contents($sourceRoot . '/css/fcp.base.css');
+if (!preg_match('/\.fcp-history-switch\s*\{\s*display:\s*none/', $css)) {
+  $failures[] = 'The raw History checkbox must be hidden (slider is the visible control).';
+}
+
 if ($failures) {
   fwrite(STDERR, implode("\n", $failures) . "\n");
   exit(1);

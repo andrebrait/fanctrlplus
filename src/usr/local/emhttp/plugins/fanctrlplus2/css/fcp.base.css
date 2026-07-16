@@ -571,6 +571,7 @@ dt.containerSettingsDt {
 }
 
 .fcp-airflow-switch{ display: none; }
+.fcp-history-switch{ display: none; }
 .syslog-switch{ display: none; }
 .switch-button-label{ font-size: 12px; }
 .switch-button-label.on{ display: none; }
