@@ -1,0 +1,119 @@
+Menu="Dashboard:0"
+Cond="version_compare(parse_ini_file('/etc/unraid-version')['version'],'6.11.9','>')"
+---
+<?php
+$pluginname = "fanctrlplus2";
+$docroot = $docroot ?? ($_SERVER['DOCUMENT_ROOT'] ?? '/usr/local/emhttp');
+if ($docroot === '') $docroot = '/usr/local/emhttp';
+require_once "$docroot/plugins/$pluginname/include/Common.php";
+
+$cfg_path = "/boot/config/plugins/$pluginname";
+
+// Existing configurations in saved order, then any missing from the order
+// file (same enumeration as the FanCtrl Plus 2 tile).
+$order = [];
+if (is_file("$cfg_path/order.cfg")) {
+  $order = array_values(parse_ini_file("$cfg_path/order.cfg"));
+}
+
+$all_cfg = [];
+foreach ($order as $file) {
+  $path = "$cfg_path/$file";
+  if (is_file($path)) $all_cfg[] = parse_ini_file($path);
+}
+$seen = array_flip($order);
+foreach (glob("$cfg_path/{$pluginname}_*.cfg") as $path) {
+  if (!isset($seen[basename($path)])) $all_cfg[] = parse_ini_file($path);
+}
+
+// One chart per named fan configuration.
+$fans = [];
+$fan_rows = "";
+foreach ($all_cfg as $cfg) {
+  $name = trim($cfg['custom'] ?? '');
+  if ($name === '') continue;
+
+  $canvas_id = 'fcp-history-' . count($fans);
+  $fans[] = ['custom' => $name, 'canvasId' => $canvas_id];
+
+  $name_html = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+  $fan_rows .= <<<ROW
+  <tr>
+    <td>
+      <div class="fcp-history-fan">
+        <span class="fcp-history-name">$name_html</span>
+        <div class="fcp-history-canvas-wrap">
+          <canvas id="$canvas_id"></canvas>
+        </div>
+      </div>
+    </td>
+  </tr>
+  ROW;
+}
+if (!count($fans)) return;
+
+$isResponsiveWebgui = version_compare((parse_ini_file('/etc/unraid-version')['version'] ?? '0.0.0'), '7.2.0-beta', '>=');
+$tbodyClass = $isResponsiveWebgui ? 'mixed' : 'sortable';
+
+$headerSection = $isResponsiveWebgui
+  ? "<h3 class='tile-header-main'>FanCtrl Plus 2 History</h3>"
+  : "FanCtrl Plus 2 History<br>";
+
+$chartJsUrl   = htmlspecialchars(fcp_asset_url('js/chart.min.js'), ENT_QUOTES, 'UTF-8');
+$historyJsUrl = htmlspecialchars(fcp_asset_url('include/history-chart.js'), ENT_QUOTES, 'UTF-8');
+$fansJson     = json_encode($fans, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE);
+
+$mytiles["{$pluginname}_history"]['column2'] = <<<EOT
+<tbody id="fcp-history-dashboard" class="$tbodyClass" title="FanCtrl Plus 2 History">
+  <tr>
+    <td>
+      <span class="tile-header">
+        <span class="tile-header-left">
+          <i class="icon-fanctrlplus2 f32"></i>
+          <div class="section">
+            $headerSection
+          </div>
+        </span>
+        <span class="tile-header-right">
+          <span class="tile-header-right-controls">
+            <select id="fcp-history-window" title="History window">
+              <option value="30">30 min</option>
+              <option value="60">1 h</option>
+              <option value="120">2 h</option>
+              <option value="240">4 h</option>
+            </select>
+            <a href="/Settings/fanctrlplus2" title="Go to FanCtrl Plus 2 settings">
+              <i class="fa fa-fw fa-cog control"></i>
+            </a>
+          </span>
+        </span>
+      </span>
+    </td>
+  </tr>
+
+  $fan_rows
+</tbody>
+
+<style>
+#fcp-history-dashboard .fcp-history-fan { padding: 2px 0 6px; }
+#fcp-history-dashboard .fcp-history-name {
+  display: inline-block;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+#fcp-history-dashboard .fcp-history-canvas-wrap {
+  position: relative;
+  height: 110px;
+  width: 100%;
+}
+#fcp-history-dashboard #fcp-history-window {
+  font-size: 11px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+</style>
+<script src="$chartJsUrl"></script>
+<script src="$historyJsUrl"></script>
+<script>fcpInitHistoryWidget($fansJson);</script>
+EOT;
+?>

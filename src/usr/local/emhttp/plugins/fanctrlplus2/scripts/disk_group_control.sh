@@ -6,6 +6,7 @@ calculate_disk_pwm() {
   disk_pwm_val=0
   disk_max="*"
   disk_group_name=""
+  disk_group_index=""
   disk_curve_readings=()
 
   if [[ "${disk_group_count:-0}" -gt 0 ]]; then
@@ -42,6 +43,7 @@ calculate_disk_pwm() {
         disk_pwm_val=$g_pwm
         disk_max=$g_temp
         disk_group_name=$g_name
+        disk_group_index=$g
         disk_group_hit=1
       fi
     done
@@ -61,6 +63,7 @@ calculate_disk_pwm() {
         disk_pwm_val=$((pwm + delta * (max - pwm) / range))
       fi
       disk_curve_readings+=("disk:0|${disk_max}|${disk_pwm_val}")
+      disk_group_index=0
     fi
   fi
 }
@@ -90,5 +93,74 @@ disk_temperature_origin() {
     printf '(Disk: %s)' "$group_name"
   else
     printf '(Disk)'
+  fi
+}
+
+# ===== Fan-history recording (dashboard history widget) =====
+# One line per loop tick: epoch|source|label|temp|pwm, where source is the
+# machine key (cpu / aux / idle / disk:<group index>) driving the PWM.
+
+fcp_history_max_lines=1500
+
+# Sticky tie-break: when the previous tick's driving source is tied with the
+# current winner at the same PWM, the previous source keeps the attribution
+# (a group cooling into a tie must not flip the chart color). Echoes
+# "source|temp" from the candidate readings ("src|temp|pwm" triplets).
+history_pick_source() {
+  local prev_src="$1" winner_src="$2" winner_pwm="$3" reading src temp pwm
+  shift 3
+
+  if [[ -n "$prev_src" && "$prev_src" != "$winner_src" ]]; then
+    for reading in "$@"; do
+      IFS='|' read -r src temp pwm <<< "$reading"
+      if [[ "$src" == "$prev_src" && "$pwm" == "$winner_pwm" ]]; then
+        printf '%s|%s\n' "$src" "$temp"
+        return
+      fi
+    done
+  fi
+
+  for reading in "$@"; do
+    IFS='|' read -r src temp pwm <<< "$reading"
+    if [[ "$src" == "$winner_src" ]]; then
+      printf '%s|%s\n' "$src" "$temp"
+      return
+    fi
+  done
+  printf '%s|\n' "$winner_src"
+}
+
+# Display label for a source key; ")" and "|" in group names are replaced so
+# labels stay safe inside "(...)" render contexts and the pipe-separated file.
+history_source_label() {
+  local src="$1" g nvar name
+  case "$src" in
+    cpu)  printf 'CPU' ;;
+    aux)  printf 'Aux' ;;
+    idle) printf 'Idle' ;;
+    disk:*)
+      g="${src#disk:}"
+      nvar="disk_group_${g}_name"
+      name="${!nvar:-}"
+      if [[ "${disk_group_count:-0}" -eq 0 ]]; then
+        printf 'Disk'
+      elif [[ -n "$name" ]]; then
+        name="${name//)/]}"
+        printf 'Disk: %s' "${name//|//}"
+      else
+        printf 'Disk: Group %d' "$((g + 1))"
+      fi
+      ;;
+    *) printf '%s' "$src" ;;
+  esac
+}
+
+history_append() {
+  local file="$1" epoch="$2" src="$3" label="$4" temp="$5" pwm="$6"
+  local tmp_file="${file}.tmp.$$"
+
+  printf '%s|%s|%s|%s|%s\n' "$epoch" "$src" "$label" "$temp" "$pwm" >> "$file"
+  if (( $(wc -l < "$file") > fcp_history_max_lines )); then
+    tail -n "$fcp_history_max_lines" "$file" > "$tmp_file" && mv -f "$tmp_file" "$file"
   fi
 }

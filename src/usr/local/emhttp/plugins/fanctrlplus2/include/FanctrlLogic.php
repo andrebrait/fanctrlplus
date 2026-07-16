@@ -364,6 +364,21 @@ switch ($op) {
     echo "$temp|$rpm";  // Example: "48 (CPU)|1150"
     exit;
 
+  case 'read_history':
+    $custom = basename($_GET['custom'] ?? ''); // Strip unsafe path components.
+    $history_file = "/var/tmp/fanctrlplus2/history_fanctrlplus2_{$custom}";
+    $points = [];
+
+    if (is_file($history_file)) {
+      foreach (file($history_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        $point = fcp_parse_history_line($line);
+        if ($point !== null) $points[] = $point;
+      }
+    }
+
+    json_response($points);
+    break;
+
   case 'read_curve_points':
     $custom = basename($_GET['custom'] ?? ''); // Strip unsafe path components.
     $curve_file = "/var/tmp/fanctrlplus2/curves_fanctrlplus2_{$custom}";

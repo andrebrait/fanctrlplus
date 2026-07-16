@@ -38,6 +38,28 @@ function fcp_ui_asset_version(): string {
     return substr(hash_final($context), 0, 16);
 }
 
+// Parse one fan-history line ("epoch|src|label|temp|pwm", written by
+// history_append in disk_group_control.sh). Returns null for a malformed
+// line; temp is null while idling (no valid temperature source).
+function fcp_parse_history_line(string $line): ?array {
+    $parts = explode('|', $line);
+    if (count($parts) !== 5) return null;
+
+    [$epoch, $src, $label, $temp, $pwm] = $parts;
+    if (!ctype_digit($epoch)) return null;
+    if (!preg_match('/^(?:cpu|aux|idle|disk:\d+)$/', $src)) return null;
+    if ($temp !== '' && !ctype_digit($temp)) return null;
+    if (!ctype_digit($pwm) || intval($pwm) > 255) return null;
+
+    return [
+        't'     => intval($epoch),
+        'src'   => $src,
+        'label' => $label,
+        'temp'  => $temp === '' ? null : intval($temp),
+        'pwm'   => intval($pwm),
+    ];
+}
+
 // =============================
 // Migrate hwmonX configuration and label paths.
 // =============================

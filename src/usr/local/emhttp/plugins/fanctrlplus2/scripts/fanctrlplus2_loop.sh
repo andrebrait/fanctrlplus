@@ -96,6 +96,11 @@ else
 fi
 
 prev_pwm=-1
+hist_file="/var/tmp/${plugin}/history_${plugin}_${custom}"
+
+# Seed the sticky-source memory from the last recorded tick, so a loop restart
+# does not flip the attribution of an ongoing PWM tie (see history_pick_source).
+prev_hist_src=$(tail -n 1 "$hist_file" 2>/dev/null | cut -d'|' -f2)
 
 while true; do
   # === CPU temperature ===
@@ -172,36 +177,52 @@ while true; do
   write_curve_readings "/var/tmp/fanctrlplus2/curves_${plugin}_${custom}"
 
   # === Use the higher PWM and record its temperature and source ===
+  # Candidate "src|temp|pwm" readings for the history attribution.
+  hist_candidates=("${disk_curve_readings[@]}")
+  if [[ "${cpu_temp:-}" =~ ^[0-9]+$ ]]; then
+    hist_candidates+=("cpu|${cpu_temp}|${cpu_pwm_val}")
+  fi
+  if [[ "${aux_temp:-}" =~ ^[0-9]+$ ]]; then
+    hist_candidates+=("aux|${aux_temp}|${aux_pwm_val}")
+  fi
+
   if (( cpu_pwm_val > disk_pwm_val )); then
     pwm_val=$cpu_pwm_val
-    max_temp=$cpu_temp
-    temp_origin="(CPU)"
+    winner_src="cpu"
   else
     pwm_val=$disk_pwm_val
-    max_temp=$disk_max
-    temp_origin=$([ -n "${disks:-}" ] && disk_temperature_origin "$disk_group_name" || echo "(CPU)")
+    winner_src=$([ -n "${disks:-}" ] && echo "disk:${disk_group_index:-0}" || echo "cpu")
   fi
 
   if (( aux_pwm_val > pwm_val )); then
     pwm_val=$aux_pwm_val
-    max_temp=$aux_temp
-    temp_origin="(Aux)"
+    winner_src="aux"
   fi
 
-  # Do not write an empty value.
-  if [[ ! "$max_temp" =~ ^[0-9]+$ ]]; then
+  # On a PWM tie the previous tick's source keeps the attribution
+  # (history_pick_source); temperature and origin follow the picked source.
+  IFS='|' read -r hist_src hist_temp \
+    <<< "$(history_pick_source "$prev_hist_src" "$winner_src" "$pwm_val" "${hist_candidates[@]}")"
+
+  if [[ "$hist_temp" =~ ^[0-9]+$ ]]; then
+    max_temp=$hist_temp
+    temp_origin="($(history_source_label "$hist_src"))"
+  else
+    # If no temperature source is valid, use Idle Speed and label the source.
+    hist_src="idle"
+    hist_temp=""
     max_temp="*"
-    temp_origin=""
-  fi
-
-  # If no temperature source is valid, use Idle Speed and label the source.
-  if [[ "$max_temp" == "*" ]]; then
     pwm_val="$idle_pwm_abs"
     temp_origin="(Idle)"
   fi
 
   # Refresh the dashboard cache on every iteration.
   echo "${max_temp} ${temp_origin}" > "/var/tmp/fanctrlplus2/temp_${plugin}_${custom}"
+
+  # Append the tick to the fan-speed history (dashboard history widget).
+  history_append "$hist_file" "$(date +%s)" \
+    "$hist_src" "$(history_source_label "$hist_src")" "$hist_temp" "$pwm_val"
+  prev_hist_src="$hist_src"
 
   # === Write when PWM changes materially or on the first iteration ===
   if [[ "$prev_pwm" == -1 ]]; then
