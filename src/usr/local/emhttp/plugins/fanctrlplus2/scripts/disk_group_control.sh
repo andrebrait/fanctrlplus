@@ -101,6 +101,13 @@ disk_temperature_origin() {
 # machine key (cpu / aux / idle / disk:<group index>) driving the PWM.
 
 fcp_history_max_lines=1500
+fcp_labels_file="${fcp_labels_file:-/boot/config/plugins/fanctrlplus2/pwm_labels.cfg}"
+
+# Collection follows the dashboard tile switch (__FCP_HISTORY__ in the labels
+# file), re-read every tick so toggling needs no loop restart.
+history_enabled() {
+  grep -q '^__FCP_HISTORY__[[:space:]]*=[[:space:]]*1[[:space:]]*$' "$fcp_labels_file" 2>/dev/null
+}
 
 # Sticky tie-break: when the previous tick's driving source is tied with the
 # current winner at the same PWM, the previous source keeps the attribution

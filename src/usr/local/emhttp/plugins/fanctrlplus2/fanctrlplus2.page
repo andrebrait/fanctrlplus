@@ -2052,7 +2052,7 @@ $(function() {
 
       <div class="fcp-section">
         <dl class="fcp-formgrid">
-          <dt class="fcp-formgrid-label"><strong>Dashboard History Tile:</strong></dt>
+          <dt class="fcp-formgrid-label"><strong>Dashboard FCP Fan Speed History Tile:</strong></dt>
           <dd style="text-align: left;">
             <span class="switch-area">
               <div class="switch-button-background <?= $fcp_history_enabled ? ' checked' : '' ?>" data-for="fcp-history-switch">
@@ -2065,7 +2065,8 @@ $(function() {
           </dd>
         </dl>
         <blockquote class="inline_help fcp-help-wide">
-          Enable or disable the <strong>FanCtrl Plus 2 History</strong> tile in Dashboard.
+          Enable or disable the <strong>FCP Fan Speed History</strong> tile in Dashboard.
+          While disabled, no fan-speed history is collected.
         </blockquote>
       </div>
     </div>

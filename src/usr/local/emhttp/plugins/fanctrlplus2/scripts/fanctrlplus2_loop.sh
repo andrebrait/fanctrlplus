@@ -219,9 +219,12 @@ while true; do
   # Refresh the dashboard cache on every iteration.
   echo "${max_temp} ${temp_origin}" > "/var/tmp/fanctrlplus2/temp_${plugin}_${custom}"
 
-  # Append the tick to the fan-speed history (dashboard history widget).
-  history_append "$hist_file" "$(date +%s)" \
-    "$hist_src" "$(history_source_label "$hist_src")" "$hist_temp" "$pwm_val"
+  # Append the tick to the fan-speed history (dashboard history widget),
+  # unless the tile is switched off.
+  if history_enabled; then
+    history_append "$hist_file" "$(date +%s)" \
+      "$hist_src" "$(history_source_label "$hist_src")" "$hist_temp" "$pwm_val"
+  fi
   prev_hist_src="$hist_src"
 
   # === Write when PWM changes materially or on the first iteration ===

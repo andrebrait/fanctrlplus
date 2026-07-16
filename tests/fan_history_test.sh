@@ -61,6 +61,31 @@ disk_group_count=1
 disk_group_0_name="$pipe_name"
 expect_equal "Disk: A/B" "$(history_source_label disk:0)" "Group label must not contain the field separator."
 
+# ===== history_enabled =====
+
+labels_file=$(mktemp)
+fcp_labels_file="$labels_file"
+
+printf '__FCP_AIRFLOW__=1\n__FCP_HISTORY__=1\n' > "$labels_file"
+history_enabled && enabled=on || enabled=off
+expect_equal on "$enabled" "Flag=1 must enable collection."
+
+printf '__FCP_HISTORY__ = 1\n' > "$labels_file"
+history_enabled && enabled=on || enabled=off
+expect_equal on "$enabled" "Whitespace around the flag assignment must be tolerated."
+
+printf '__FCP_HISTORY__=0\n' > "$labels_file"
+history_enabled && enabled=on || enabled=off
+expect_equal off "$enabled" "Flag=0 must disable collection."
+
+printf '__FCP_AIRFLOW__=1\n' > "$labels_file"
+history_enabled && enabled=on || enabled=off
+expect_equal off "$enabled" "A missing flag must disable collection."
+
+rm -f "$labels_file"
+history_enabled && enabled=on || enabled=off
+expect_equal off "$enabled" "A missing labels file must disable collection."
+
 # ===== history_append =====
 
 hist_file=$(mktemp)
