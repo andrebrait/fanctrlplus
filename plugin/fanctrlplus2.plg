@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.4.5"
+  version="1.5.0"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,21 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.5.0
+
+## What's changed
+
+- Add an **FCP Fan Speed History** Dashboard tile: one graph per fan configuration, showing the fan speed over time as a single line color-coded by the temperature source driving the PWM (same colors as the fan-curve chart).
+- Show the driving source, its temperature, and the resulting fan speed and PWM in a tooltip when hovering over the graph.
+- Keep the previous driving source's attribution when two sources tie at the same PWM, so a source cooling into a tie does not flip the graph color or the reported source.
+- Record fan-speed history once per control-loop measurement to RAM, capped per fan; collection stops entirely while the tile is disabled.
+- Add a General Settings switch to enable or disable the tile (disabled by default).
+- Offer 30-minute to 4-hour time windows via a header selector styled like the built-in Network tile; the graph refreshes and scrolls once per minute.
+
+## Upgrade compatibility
+
+The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration. The new tile is disabled by default; enable it in Settings → FanCtrl Plus 2 → General Settings.
 
 ### 1.4.5
 
@@ -47,18 +62,6 @@ The configuration format is unchanged. Existing FanCtrl Plus 2 configurations co
 - Restore source copyright and SPDX headers, with attribution spanning Dynamix AutoFan, Fan Control Plus, and FanCtrl Plus 2.
 - Add the complete license, provenance notice, and third-party notices for the bundled Chart.js and SweetAlert2 libraries.
 - Include the README, license, attribution, and third-party notices in the installed plugin package.
-
-## Upgrade compatibility
-
-The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
-
-### 1.4.3
-
-## What's changed
-
-- Hide the empty-column fan drop zone while sorting is locked.
-- Show a clean, unlabeled drop zone when sorting is unlocked.
-- Use a dashed border and a 40% opaque background for the drop zone.
 
 ## Upgrade compatibility
 
@@ -116,16 +119,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.5-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.4.5/fanctrlplus2-1.4.5-noarch-1.txz</URL>
-<SHA256>e65a606096f135946cb702bd5cb37d24bd64acb688fc577959a8e40d3c956533</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.5.0-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.5.0/fanctrlplus2-1.5.0-noarch-1.txz</URL>
+<SHA256>ef4c11271f934ee520f4a300cbeb80e1d9b72e4e5b8863d048c3c2c259ceb068</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.4.5-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.5.0-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -150,7 +153,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.4.5"
+echo " Version: 1.5.0"
 echo "------------------------------------------------"
 echo ""
 exit 0
