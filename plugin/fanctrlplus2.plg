@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.5.1"
+  version="1.5.2"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,16 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.5.2
+
+## What's changed
+
+- Shorten the history tile title to **FCP History** in the Dashboard tile and the General Settings switch.
+
+## Upgrade compatibility
+
+The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
 
 ### 1.5.1
 
@@ -44,25 +54,6 @@ The configuration format is unchanged. Existing FanCtrl Plus 2 configurations co
 ## Upgrade compatibility
 
 The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration. The new tile is disabled by default; enable it in Settings → FanCtrl Plus 2 → General Settings.
-
-### 1.4.5
-
-## What's changed
-
-- Plot a live current-temperature marker on every configured disk, CPU, and auxiliary-sensor curve.
-- Clamp live markers to each curve's configured minimum and maximum while preserving the measured temperature in tooltips.
-- Keep markers for spun-down disk groups, with unavailable temperatures shown as `-`.
-- Remove decorative curve points, marker borders, and the redundant chart footer; keep chart reference lines and tooltips legible.
-- Detect stale first-party UI assets and prompt for a cache-busting reload when CSS or JavaScript changes.
-- Separate disk groups visually, align their compact remove buttons on desktop and mobile, and confirm group removal.
-- Keep the mobile reload button contained within its notice.
-- Load saved PWM labels into the Identify controls so saving without edits cannot clear them accidentally.
-- Move the FCP Airflow Dashboard tile and its help into a dedicated General Settings section.
-- Use selected CPU and auxiliary-sensor temperatures for preview markers before settings are applied; auxiliary previews use the hottest selected sensor.
-
-## Upgrade compatibility
-
-The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -116,16 +107,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.5.1-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.5.1/fanctrlplus2-1.5.1-noarch-1.txz</URL>
-<SHA256>d8a2d4e864b0f3d28c4f515de87f38b8d53d4c1f0946feb3713e848e187e8e3c</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.5.2-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.5.2/fanctrlplus2-1.5.2-noarch-1.txz</URL>
+<SHA256>9265f72944756456b5d9270d892aa4403410db6f535d84aa1a56983f78a6d445</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.5.1-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.5.2-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -150,7 +141,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.5.1"
+echo " Version: 1.5.2"
 echo "------------------------------------------------"
 echo ""
 exit 0
