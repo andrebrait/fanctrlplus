@@ -40,10 +40,26 @@ function historyChartPoints(points, windowMinutes, nowMs) {
     .sort((a, b) => a.x - b.x);
 }
 
+// The fan holds the PWM set by the last measurement until the next one, so the
+// trace is drawn up to the current time rather than stopping at that reading
+// and leaving a gap that grows until the interval elapses. Returns the point to
+// append, or null when there is nothing to hold.
+function historyHoldPoint(points, nowMs) {
+  const last = points[points.length - 1];
+  if (!last || last.x >= nowMs) return null;
+  return { ...last, x: nowMs, held: last.x };
+}
+
 // Same style as the fan-curve chart tooltips:
 // "Disk: SSDs at 43°C → Fan Speed = 50% (PWM 127)".
 function historyTooltipLabel(point) {
   const speed = `Fan Speed = ${Math.round(point.y)}% (PWM ${point.pwm})`;
+  // A held point is not a measurement: it reports the speed the fan is still
+  // running at, and when that was last measured. Its temperature is stale, so
+  // it is left out rather than presented as current.
+  if (point.held) {
+    return `${point.label || 'Idle'} → ${speed}, holding since ${historyTooltipTitle(point.held)}`;
+  }
   if (point.src === 'idle' || point.temp === null) {
     return `${point.label || 'Idle'} → ${speed}`;
   }
@@ -129,7 +145,9 @@ function fcpInitHistoryWidget(fans) {
           borderWidth: 2,
           // Markers as thick as the line (2px diameter, no border): they melt
           // into the trace but keep isolated points (sparse history) visible.
-          pointRadius: 1,
+          // The tip is a continuation of the line rather than a sample, so it
+          // carries no marker of its own.
+          pointRadius: ctx => ctx.raw?.held ? 0 : 1,
           pointBorderWidth: 0,
           pointHitRadius: 8,
           pointHoverRadius: 5,
@@ -190,6 +208,8 @@ function fcpInitHistoryWidget(fans) {
 
       const nowMs = Date.now();
       const pts = historyChartPoints(raw, windowMinutes, nowMs);
+      const tip = historyHoldPoint(pts, nowMs);
+      if (tip) pts.push(tip);
       holder.points = pts;
       chart.data.datasets[0].data = pts;
       chart.options.scales.x.min = nowMs - windowMinutes * 60000;
@@ -214,5 +234,6 @@ if (typeof module !== 'undefined' && module.exports) {
     historyTickLabel,
     historyWindowMinutes,
     historyRefreshSeconds,
+    historyHoldPoint,
   };
 }

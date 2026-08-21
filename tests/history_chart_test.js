@@ -6,6 +6,7 @@ const {
   historyTickLabel,
   historyWindowMinutes,
   historyRefreshSeconds,
+  historyHoldPoint,
 } = require(`${__dirname}/../src/usr/local/emhttp/plugins/fanctrlplus2/include/history-chart.js`);
 
 const failures = [];
@@ -45,6 +46,22 @@ expectEqual(null, pts[2].temp, 'Idle points keep a null temperature.');
 const all = historyChartPoints(raw, 240, nowMs);
 expectEqual(4, all.length, 'A wider window keeps older points.');
 
+// ===== Holding the line at the tip =====
+// The fan keeps running at the last PWM it was given until the next
+// measurement, so the trace is drawn up to the current time instead of
+// stopping where the last reading landed and leaving a growing gap.
+const held = historyHoldPoint(pts, nowMs);
+expectEqual(nowMs, held.x, 'The held point sits at the current time.');
+expectEqual(51, held.pwm, 'The held point carries the last PWM, which the fan is still running at.');
+expectEqual('idle', held.src, 'The held point keeps the source that set that PWM.');
+expectEqual((1730000000 - 60) * 1000, held.held, 'The held point remembers when it was actually measured.');
+
+expectEqual(null, historyHoldPoint([], nowMs), 'With no readings there is nothing to hold.');
+expectEqual(null, historyHoldPoint(pts, (1730000000 - 60) * 1000),
+  'A reading that just landed needs no holding.');
+expectEqual(null, historyHoldPoint(pts, (1730000000 - 900) * 1000),
+  'A clock that went backwards must not produce a point before the last reading.');
+
 // ===== Tooltip text (same style as the fan-curve chart) =====
 expectEqual(
   'Disk: SSDs at 43°C → Fan Speed = 50% (PWM 127)',
@@ -55,6 +72,21 @@ expectEqual(
   'Idle → Fan Speed = 20% (PWM 51)',
   historyTooltipLabel(pts[2]),
   'Idle points show no temperature.'
+);
+
+// A held point is not a measurement, and must not claim to be one: it reports
+// the speed the fan is still running at, and when that was last measured.
+// The measurement time is rendered in local time, so it is derived rather than
+// written out: this asserts how the label is composed, not the clock.
+expectEqual(
+  `Idle → Fan Speed = 20% (PWM 51), holding since ${historyTooltipTitle((1730000000 - 60) * 1000)}`,
+  historyTooltipLabel(historyHoldPoint(pts, nowMs)),
+  'A held point reports the speed being held and when it was measured.'
+);
+expectEqual(
+  `Disk: SSDs → Fan Speed = 50% (PWM 127), holding since ${historyTooltipTitle((1730000000 - 120) * 1000)}`,
+  historyTooltipLabel(historyHoldPoint([pts[1]], nowMs)),
+  'A held point drops the temperature, which is no longer current.'
 );
 
 // ===== Time labels =====
@@ -110,6 +142,12 @@ expectEqual(false, /callback: historyTickLabel\b/.test(historyJs),
   'The tick callback must not take Chart.js\' index as the window.');
 expectEqual(true, /historyTickLabel\(\w+, windowMinutes\)/.test(historyJs),
   'The tick callback must pass the selected window.');
+
+// The tip is a continuation of the line, not a sample: no marker on it.
+expectEqual(true, /pointRadius: ctx => ctx\.raw\?\.held \? 0 : 1/.test(historyJs),
+  'The held point must be drawn without a marker.');
+expectEqual(true, /historyHoldPoint\(/.test(historyJs),
+  'The chart must extend its trace to the current time on every refresh.');
 [5, 10, 15, 30, 60].forEach(seconds => {
   expectEqual(true, new RegExp(`<option value="${seconds}"`).test(historyPage),
     `The refresh selector must offer ${seconds}s.`);
