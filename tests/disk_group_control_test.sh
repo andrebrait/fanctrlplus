@@ -52,9 +52,16 @@ expect_equal "" "$(disk_temp_from_smart '' 1)" \
   "Empty output yields no reading."
 
 hot_output='ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_FAILED RAW_VALUE
-194 Temperature_Celsius     0x0022   118   100   000    Old_age   Always       -       900'
+194 Temperature_Celsius     0x0022   118   100   000    Old_age   Always       -       250'
 expect_equal "200" "$(disk_temp_from_smart "$hot_output" 0)" \
-  "A disk reading is clamped like every other source."
+  "A disk reading above the ceiling is clamped like every other source."
+
+# A raw attribute field carrying something that is not a temperature must not be
+# clamped into one: the disk sits the round out, as a spun-down one does.
+garbage_output='ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_FAILED RAW_VALUE
+194 Temperature_Celsius     0x0022   118   100   000    Old_age   Always       -       65535'
+expect_equal "" "$(disk_temp_from_smart "$garbage_output" 0)" \
+  "A raw value no disk could report yields no reading."
 
 disk_group_max_temp() {
   case "$1" in
