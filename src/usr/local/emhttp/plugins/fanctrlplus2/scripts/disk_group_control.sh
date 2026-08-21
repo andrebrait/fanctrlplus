@@ -231,8 +231,11 @@ history_append() {
 # Configs written before the interval became a seconds value stored minutes in
 # "interval"; those are grandfathered by converting them, so an existing fan
 # keeps the cadence it was set to. The floor matters because each tick that
-# changes the PWM already sleeps 4s to read the resulting RPM back.
+# changes the PWM already sleeps 4s to read the resulting RPM back; the ceiling
+# is the one the settings page enforces, so a hand-edited config cannot put the
+# loop outside the supported range.
 fcp_interval_min_seconds=5
+fcp_interval_max_seconds=3600
 fcp_interval_default_seconds=120
 
 interval_seconds() {
@@ -247,5 +250,6 @@ interval_seconds() {
   fi
 
   (( secs < fcp_interval_min_seconds )) && secs=$fcp_interval_min_seconds
+  (( secs > fcp_interval_max_seconds )) && secs=$fcp_interval_max_seconds
   printf '%s' "$secs"
 }

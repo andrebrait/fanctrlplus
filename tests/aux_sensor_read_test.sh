@@ -48,6 +48,8 @@ expect_equal "45" "$(fcp_clamp_temp 45)" "An in-range reading passes through."
 expect_equal "200" "$(fcp_clamp_temp 900)" "A reading above the ceiling is clamped, not dropped."
 expect_equal "0" "$(fcp_clamp_temp -5)" "A reading below the floor is clamped, not dropped."
 expect_equal "0" "$(fcp_clamp_temp 0)" "Zero is a reading like any other."
+expect_equal "200" "$(fcp_clamp_temp 0900)" "A padded reading is read in base 10, never as octal."
+expect_equal "7" "$(fcp_clamp_temp 007)" "Leading zeros do not change the reading."
 expect_equal "" "$(fcp_clamp_temp abc)" "A non-numeric value is not a reading at all."
 expect_equal "" "$(fcp_clamp_temp "")" "An empty value is not a reading at all."
 
@@ -150,6 +152,17 @@ STUB
 chmod +x "$tmp/mget_temp"
 expect_equal "" "$(aux_read_sensor "mlx:0000:77:00.0")" \
   "A failed mget_temp call must yield no reading."
+
+# The tools print their errors on stdout too, and those carry digits: the exit
+# status decides whether there is a reading, never the presence of a number.
+cat > "$tmp/mget_temp" <<'STUB'
+#!/bin/bash
+printf -- '-E- Failed to open device 0000:77:00.0\n'
+exit 1
+STUB
+chmod +x "$tmp/mget_temp"
+expect_equal "" "$(aux_read_sensor "mlx:0000:77:00.0")" \
+  "A failed call that printed digits must still yield no reading."
 
 # ===== Custom sensor scripts (issue #1) =====
 # A custom script prints the temperature in Celsius and nothing else; on error
