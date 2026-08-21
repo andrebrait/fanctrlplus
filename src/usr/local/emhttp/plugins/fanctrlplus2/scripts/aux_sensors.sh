@@ -12,6 +12,24 @@
 fcp_custom_sensor_dir="${fcp_custom_sensor_dir:-/boot/config/plugins/fanctrlplus2/sensors.d}"
 fcp_custom_sensor_timeout="${fcp_custom_sensor_timeout:-5}"
 
+# ===== Temperature readings =====
+# Every reading the plugin evaluates, whatever produced it, is pulled into the
+# range the fan curve can act on. Clamping rather than discarding keeps a
+# source that reports an odd value in play: the curve saturates at its own high
+# point anyway, so the ceiling and a wild reading drive the fan identically,
+# and a source with nothing to report says so by producing no reading at all.
+fcp_temp_floor=0
+fcp_temp_ceiling=200
+
+fcp_clamp_temp() {
+  local value="${1:-}"
+
+  [[ "$value" =~ ^-?[0-9]+$ ]] || return 0
+  (( value < fcp_temp_floor )) && value=$fcp_temp_floor
+  (( value > fcp_temp_ceiling )) && value=$fcp_temp_ceiling
+  printf '%s' "$value"
+}
+
 # Echo the first usable binary. Absolute candidates must be executable; bare
 # names are looked up in PATH. Returns 1 when none of them is installed.
 aux_find_bin() {
@@ -88,7 +106,7 @@ aux_read_sensor() {
       [[ -n "$aux_mget_temp_bin" ]] || return 0
       [[ "$sensor" =~ ^mlx:([0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F])$ ]] || return 0
       temp=$("$aux_mget_temp_bin" -d "${BASH_REMATCH[1]}" 2>/dev/null \
-        | grep -oE '[0-9]+' | head -n 1)
+        | grep -oE '\-?[0-9]+' | head -n 1)
       ;;
     custom:*)
       # The name addresses a file inside the drop-in directory: it is never
@@ -98,25 +116,30 @@ aux_read_sensor() {
       script="$fcp_custom_sensor_dir/${BASH_REMATCH[1]}"
       [[ "${BASH_REMATCH[1]}" == .* || ! -x "$script" ]] && return 0
       temp=$(timeout "$fcp_custom_sensor_timeout" "$script" 2>/dev/null) || return 0
-      # The contract is the temperature and nothing else, so anything that is
-      # not a plausible number is a broken script rather than a reading.
+      # The contract is the temperature and nothing else, so output that is not
+      # a number comes from a broken script rather than a sensor. A fractional
+      # reading is truncated to whole degrees.
+      [[ "$temp" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || return 0
       temp="${temp%%.*}"
-      [[ "$temp" =~ ^[0-9]+$ ]] && (( temp < 200 )) || temp=""
       ;;
     *)
+      # An hwmon input reading exactly 0 is the long-standing marker for a
+      # sensor that is present but not populated, not a reading of 0 °C.
       [[ -f "$sensor" ]] || return 0
       raw=$(cat "$sensor" 2>/dev/null)
-      [[ "$raw" =~ ^[0-9]+$ ]] && temp=$((raw / 1000))
+      [[ "$raw" =~ ^-?[0-9]+$ ]] || return 0
+      (( raw == 0 )) && return 0
+      temp=$((raw / 1000))
       ;;
   esac
 
-  [[ "$temp" =~ ^[0-9]+$ ]] && printf '%s' "$temp"
+  fcp_clamp_temp "$temp"
   return 0
 }
 
 # Echo the hottest reading across the comma-separated sensor list, or nothing
-# when none of them could be read. A sensor that reads 0 counts as unavailable,
-# the same way a spun-down disk does.
+# when none of them could be read. A sensor that reported nothing sits the round
+# out; a sensor that reported a cold value still counts.
 aux_max_temp_reading() {
   local sensors="$1" sensor temp best=""
   local -a sensor_list
@@ -126,7 +149,6 @@ aux_max_temp_reading() {
     [[ -z "$sensor" ]] && continue
     temp=$(aux_read_sensor "$sensor")
     [[ "$temp" =~ ^[0-9]+$ ]] || continue
-    (( temp > 0 )) || continue
     if [[ -z "$best" ]] || (( temp > best )); then
       best=$temp
     fi

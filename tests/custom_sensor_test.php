@@ -22,10 +22,10 @@ expect_equal(null, parse_custom_sensor_output("Temperature is 55 degrees\n"),
   'The contract is the temperature and nothing else.');
 expect_equal(null, parse_custom_sensor_output(''),
   'No output means nothing to report.');
-expect_equal(null, parse_custom_sensor_output("900\n"),
-  'An implausible reading must be rejected.');
-expect_equal(null, parse_custom_sensor_output("-5\n"),
-  'A negative reading cannot drive a fan curve and must be rejected.');
+expect_equal(200, parse_custom_sensor_output("900\n"),
+  'A reading above the ceiling is clamped, not discarded.');
+expect_equal(0, parse_custom_sensor_output("-5\n"),
+  'A below-zero reading is clamped; errors are reported by the exit status.');
 
 // ===== detect_custom_temps =====
 $dir = sys_get_temp_dir() . '/fcp_sensors_' . getmypid();
@@ -44,6 +44,8 @@ $write('broken', 'exit 1');
 $write('chatty', 'echo "about 40 C"');
 // A file that was never made executable is not a sensor at all.
 $write('readme', 'echo 50', 0644);
+// A sensor sitting at zero is a dead sensor, and is not worth offering.
+$write('unpopulated', 'echo 0');
 
 $found = detect_custom_temps($dir);
 

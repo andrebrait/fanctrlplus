@@ -40,6 +40,17 @@ chmod +x "$tmp/mget_temp" "$tmp/storcli64" "$tmp/nvidia-smi"
 export MGET_ARGS_FILE="$tmp/mget.args"
 export STORCLI_ARGS_FILE="$tmp/storcli.args"
 
+# ===== fcp_clamp_temp =====
+# Every reading, whatever produced it, is pulled into the range the fan curve
+# can act on rather than thrown away: the curve saturates at its high point
+# anyway, so a wild reading and the ceiling drive the fan identically.
+expect_equal "45" "$(fcp_clamp_temp 45)" "An in-range reading passes through."
+expect_equal "200" "$(fcp_clamp_temp 900)" "A reading above the ceiling is clamped, not dropped."
+expect_equal "0" "$(fcp_clamp_temp -5)" "A reading below the floor is clamped, not dropped."
+expect_equal "0" "$(fcp_clamp_temp 0)" "Zero is a reading like any other."
+expect_equal "" "$(fcp_clamp_temp abc)" "A non-numeric value is not a reading at all."
+expect_equal "" "$(fcp_clamp_temp "")" "An empty value is not a reading at all."
+
 # ===== aux_find_bin =====
 expect_equal "$tmp/mget_temp" "$(aux_find_bin "$tmp/missing" "$tmp/mget_temp")" \
   "An absolute candidate must be picked once it is executable."
@@ -55,6 +66,14 @@ expect_equal "1" "$?" "aux_find_bin must report failure when nothing is found."
 printf '42000\n' > "$tmp/temp1_input"
 expect_equal "42" "$(aux_read_sensor "$tmp/temp1_input")" \
   "An hwmon input must be reported in whole degrees."
+
+printf '0\n' > "$tmp/temp1_zero_input"
+expect_equal "" "$(aux_read_sensor "$tmp/temp1_zero_input")" \
+  "An hwmon input reading 0 means the sensor is not populated."
+
+printf '250000\n' > "$tmp/temp1_hot_input"
+expect_equal "200" "$(aux_read_sensor "$tmp/temp1_hot_input")" \
+  "An hwmon reading above the ceiling is clamped."
 
 printf 'nonsense\n' > "$tmp/temp2_input"
 expect_equal "" "$(aux_read_sensor "$tmp/temp2_input")" \
@@ -92,6 +111,20 @@ expect_equal "" "$(aux_read_sensor "mlx:; rm -rf /")" \
   "A sensor token that is not a PCI address must never reach mget_temp."
 expect_equal "" "$(aux_read_sensor "mlx:77:00.0")" \
   "A PCI address without a domain must be rejected."
+
+cat > "$tmp/mget_temp" <<'STUB'
+#!/bin/bash
+printf '900\n'
+STUB
+chmod +x "$tmp/mget_temp"
+expect_equal "200" "$(aux_read_sensor "mlx:0000:77:00.0")" \
+  "An out-of-range NIC reading is clamped rather than discarded."
+cat > "$tmp/mget_temp" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$*" > "$MGET_ARGS_FILE"
+printf '71\n'
+STUB
+chmod +x "$tmp/mget_temp"
 
 aux_mget_temp_bin=""
 expect_equal "" "$(aux_read_sensor "mlx:0000:77:00.0")" \
@@ -171,8 +204,22 @@ write_sensor implausible <<'STUB'
 #!/bin/bash
 echo 900
 STUB
-expect_equal "" "$(aux_read_sensor "custom:implausible")" \
-  "An implausible reading must not pin the fan to maximum."
+expect_equal "200" "$(aux_read_sensor "custom:implausible")" \
+  "A reading above the ceiling is clamped; the script said it was hot."
+
+write_sensor freezing <<'STUB'
+#!/bin/bash
+printf '%s\n' -5
+STUB
+expect_equal "0" "$(aux_read_sensor "custom:freezing")" \
+  "A below-zero reading is clamped, not treated as an error."
+
+write_sensor zero <<'STUB'
+#!/bin/bash
+echo 0
+STUB
+expect_equal "0" "$(aux_read_sensor "custom:zero")" \
+  "A script reporting 0 reported a temperature; errors go through the exit status."
 
 write_sensor slow <<'STUB'
 #!/bin/bash
@@ -226,6 +273,9 @@ expect_equal "71" "$(aux_max_temp_reading "custom:ambient,mlx:0000:77:00.0")" \
   "A custom sensor competes for the maximum like any other source."
 expect_equal "24" "$(aux_max_temp_reading "custom:broken,custom:ambient")" \
   "A failing custom sensor must not hold back the ones that work."
+
+expect_equal "0" "$(aux_max_temp_reading "custom:zero,custom:broken")" \
+  "A cold reading is still a reading; only an error removes a sensor."
 
 if (( failures > 0 )); then
   printf '%d aux sensor assertion(s) failed.\n' "$failures" >&2

@@ -2,6 +2,59 @@
 
 # shellcheck disable=SC2034,SC2154
 
+# Sourced alongside aux_sensors.sh, whose fcp_clamp_temp is used below.
+
+# Whole degrees Celsius from one drive's smartctl -A output, or nothing when
+# the output carries no temperature. Shared by the fan-control loop and the
+# manual run; the reading is clamped like every other source.
+disk_temp_from_smart() {
+  local output="$1" is_nvme="${2:-0}" temp
+
+  if [[ "$is_nvme" == "1" ]]; then
+    temp=$(awk '/Temperature:/ {print $2; exit}' <<< "$output")
+  else
+    temp=$(awk '
+      $1 == 190 || $1 == 194                  { print $10; exit }
+      $1 == "Temperature_Celsius"             { print $10; exit }
+      $1 == "Airflow_Temperature_Cel"         { print $10; exit }
+      $1 == "Current" && $3 == "Temperature:" { print $4; exit }
+    ' <<< "$output")
+  fi
+
+  fcp_clamp_temp "$temp"
+}
+
+# Reads smartctl temp for a comma-separated disk-by-id list; echoes the max
+# valid temp found (spun-down/unreadable disks skipped), or nothing if no
+# disk in the list had a valid temp. Shared by the legacy single-range path
+# and each disk group's own range.
+disk_group_max_temp() {
+  local disks_csv="$1" disk disk_path real_path temp max_valid found=0
+  local -a disks_list
+
+  IFS=',' read -ra disks_list <<< "$disks_csv"
+  for disk in "${disks_list[@]}"; do
+    [[ -z "$disk" ]] && continue
+    disk_path="/dev/disk/by-id/$disk"
+    real_path=$(realpath "$disk_path" 2>/dev/null)
+    [[ ! -b "$real_path" ]] && continue
+
+    smartctl -n standby -A "$real_path" | grep -q "Device is in STANDBY" && continue
+
+    if [[ "$real_path" == /dev/nvme* ]]; then
+      temp=$(disk_temp_from_smart "$(smartctl -A "$real_path")" 1)
+    else
+      temp=$(disk_temp_from_smart "$(smartctl -A "$real_path")" 0)
+    fi
+
+    if [[ "$temp" =~ ^[0-9]+$ ]]; then
+      (( found == 0 || temp > max_valid )) && max_valid=$temp
+      found=1
+    fi
+  done
+  (( found == 1 )) && echo "$max_valid"
+}
+
 calculate_disk_pwm() {
   disk_pwm_val=0
   disk_max="*"

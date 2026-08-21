@@ -58,8 +58,14 @@ file, selectable per fan alongside the built-in sources. The contract is:
 
 A sensor that errors, prints anything other than a temperature, or takes longer
 than 5 seconds is skipped for that round of checks only; the fan keeps being
-driven by its other sources, and the script is tried again on the next round. A
-reading of 0 °C counts as unavailable, the same as for every other sensor.
+driven by its other sources, and the script is tried again on the next round.
+Errors are reported by the exit status, never by a sentinel reading: a script
+that prints `0` has reported 0 °C.
+
+Readings are clamped to 0–200 °C, as they are for every other source, so a
+value outside that range drives the fan at the corresponding end of its curve
+rather than being discarded. A script that reads 0 °C when the settings page
+is opened is taken for a dead sensor and is not offered in the list.
 
 ```sh
 #!/bin/bash
