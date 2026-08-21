@@ -30,40 +30,6 @@ fi
 source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/aux_sensors.sh"
 aux_locate_bins "${aux_sensor:-}"
 
-# Reads smartctl temp for a comma-separated disk-by-id list; echoes the max
-# valid temp found (spun-down/unreadable disks skipped), or nothing if no
-# disk in the list had a valid temp. Shared by the legacy single-range path
-# and each disk group's own range.
-disk_group_max_temp() {
-  local disks_csv="$1" disk disk_path real_path temp max_valid found=0
-  IFS=',' read -ra disks_list <<< "$disks_csv"
-  for disk in "${disks_list[@]}"; do
-    [[ -z "$disk" ]] && continue
-    disk_path="/dev/disk/by-id/$disk"
-    real_path=$(realpath "$disk_path" 2>/dev/null)
-    [[ ! -b "$real_path" ]] && continue
-
-    smartctl -n standby -A "$real_path" | grep -q "Device is in STANDBY" && continue
-
-    if [[ "$real_path" == /dev/nvme* ]]; then
-      temp=$(smartctl -A "$real_path" | awk '/Temperature:/ {print $2; exit}')
-    else
-      temp=$(smartctl -A "$real_path" | awk '
-        $1 == 190 || $1 == 194                   { print $10; exit }
-        $1 == "Temperature_Celsius"             { print $10; exit }
-        $1 == "Airflow_Temperature_Cel"         { print $10; exit }
-        $1 == "Current" && $3 == "Temperature:" { print $4; exit }
-      ')
-    fi
-
-    if [[ "$temp" =~ ^[0-9]+$ ]]; then
-      (( found == 0 || temp > max_valid )) && max_valid=$temp
-      found=1
-    fi
-  done
-  (( found == 1 )) && echo "$max_valid"
-}
-
 source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/disk_group_control.sh"
 
 plugin="fanctrlplus2"
@@ -90,7 +56,7 @@ while true; do
   cpu_pwm_val=0
   if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
     raw=$(cat "$cpu_sensor")
-    [[ "$raw" =~ ^[0-9]+$ ]] && cpu_temp=$((raw / 1000))
+    [[ "$raw" =~ ^-?[0-9]+$ ]] && cpu_temp=$(fcp_clamp_temp $((raw / 1000)))
     cpu_temp=${cpu_temp:-0}
 
     if (( cpu_temp <= cpu_min_temp )); then

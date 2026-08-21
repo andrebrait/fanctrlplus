@@ -22,10 +22,10 @@ expect_equal(null, parse_mget_temp("Failed to open device\n"),
   'An error message without a number must not become a temperature.');
 expect_equal(null, parse_mget_temp(''),
   'Empty output must not become a temperature.');
-expect_equal(null, parse_mget_temp("0\n"),
-  'A zero reading means "not available", like the other aux sources.');
-expect_equal(null, parse_mget_temp("900\n"),
-  'An implausible reading must be rejected rather than pinned to maximum fan.');
+expect_equal(0, parse_mget_temp("0\n"),
+  'A zero reading is a reading; an unreadable card fails the call instead.');
+expect_equal(200, parse_mget_temp("900\n"),
+  'A reading above the ceiling is clamped, not discarded.');
 
 // ===== list_mellanox_pci =====
 $root = sys_get_temp_dir() . '/fcp_mlx_' . getmypid();

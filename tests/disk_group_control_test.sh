@@ -3,6 +3,8 @@
 set -u
 
 root=$(cd "$(dirname "$0")/.." && pwd)
+# Both libraries, in the order the loop and the manual run source them.
+source "$root/src/usr/local/emhttp/plugins/fanctrlplus2/scripts/aux_sensors.sh"
 source "$root/src/usr/local/emhttp/plugins/fanctrlplus2/scripts/disk_group_control.sh"
 
 failures=0
@@ -14,6 +16,45 @@ expect_equal() {
   printf '%s\nExpected: %s\nActual: %s\n' "$message" "$expected" "$actual" >&2
   failures=$((failures + 1))
 }
+
+# ===== disk_temp_from_smart =====
+# The temperature rules that read smartctl output, exercised on the shapes the
+# three device families actually print.
+sata_output='SMART Attributes Data Structure revision number: 16
+Vendor Specific SMART Attributes with Thresholds:
+ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_FAILED RAW_VALUE
+  9 Power_On_Hours          0x0032   089   089   000    Old_age   Always       -       8123
+194 Temperature_Celsius     0x0022   118   100   000    Old_age   Always       -       32'
+expect_equal "32" "$(disk_temp_from_smart "$sata_output" 0)" \
+  "A SATA attribute table reports its raw temperature value."
+
+airflow_output='ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_FAILED RAW_VALUE
+190 Airflow_Temperature_Cel 0x0022   062   045   000    Old_age   Always       -       38'
+expect_equal "38" "$(disk_temp_from_smart "$airflow_output" 0)" \
+  "An airflow temperature attribute is read the same way."
+
+scsi_output='Elements in grown defect list: 0
+Current Drive Temperature:     34 C
+Drive Trip Temperature:        65 C'
+expect_equal "34" "$(disk_temp_from_smart "$scsi_output" 0)" \
+  "A SCSI drive reports its current temperature line."
+
+nvme_output='SMART/Health Information (NVMe Log 0x02)
+Critical Warning:                   0x00
+Temperature:                        38 Celsius
+Available Spare:                    100%'
+expect_equal "38" "$(disk_temp_from_smart "$nvme_output" 1)" \
+  "An NVMe health log reports its temperature line."
+
+expect_equal "" "$(disk_temp_from_smart 'Device is in STANDBY mode' 0)" \
+  "Output with no temperature in it yields no reading."
+expect_equal "" "$(disk_temp_from_smart '' 1)" \
+  "Empty output yields no reading."
+
+hot_output='ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_FAILED RAW_VALUE
+194 Temperature_Celsius     0x0022   118   100   000    Old_age   Always       -       900'
+expect_equal "200" "$(disk_temp_from_smart "$hot_output" 0)" \
+  "A disk reading is clamped like every other source."
 
 disk_group_max_temp() {
   case "$1" in

@@ -314,6 +314,19 @@ function detect_storcli_temps(string $storcli_bin): array {
   return $result;
 }
 
+// ===== Temperature readings =====
+// Every reading the plugin evaluates is pulled into the range the fan curve
+// can act on rather than discarded: the curve saturates at its own high point,
+// so the ceiling and a wild reading drive the fan identically. A source with
+// nothing to report says so by producing no reading at all, never by a
+// sentinel value.
+const FCP_TEMP_FLOOR = 0;
+const FCP_TEMP_CEILING = 200;
+
+function fcp_clamp_temp(int $temp): int {
+  return max(FCP_TEMP_FLOOR, min(FCP_TEMP_CEILING, $temp));
+}
+
 // ===== User-supplied sensor scripts =====
 // Any executable dropped in the sensors.d directory is a sensor. The contract
 // is deliberately small: print the temperature in Celsius and nothing else, or
@@ -322,13 +335,13 @@ const FCP_CUSTOM_SENSOR_DIR = '/boot/config/plugins/fanctrlplus2/sensors.d';
 const FCP_CUSTOM_SENSOR_TIMEOUT = 5;
 
 // Whole degrees Celsius from a script's output, or null when the script did
-// not honour the contract. A fractional reading is truncated.
+// not honour the contract. A fractional reading is truncated, and the result
+// is clamped like every other reading.
 function parse_custom_sensor_output(string $output): ?int {
   $reading = trim($output);
-  if (!preg_match('/^\d+(?:\.\d+)?$/', $reading)) return null;
+  if (!preg_match('/^-?\d+(?:\.\d+)?$/', $reading)) return null;
 
-  $temp = (int)$reading;
-  return $temp < 200 ? $temp : null;
+  return fcp_clamp_temp((int)$reading);
 }
 
 // Run every custom sensor script and offer the ones that reported a reading.
@@ -353,7 +366,7 @@ function detect_custom_temps(string $dir = FCP_CUSTOM_SENSOR_DIR): array {
     if ($status !== 0) continue;
 
     $temp = parse_custom_sensor_output(implode("\n", $output));
-    if ($temp === null) continue;
+    if ($temp === null || $temp <= 0) continue;
 
     $result[] = [
       'path'  => "custom:{$name}",
@@ -383,12 +396,11 @@ function find_mget_temp(): ?string {
 
 // Parse one mget_temp reading. The tool prints the network chip temperature in
 // whole degrees Celsius, bare on most builds and labelled on some, so the first
-// number in the output is the reading. Returns null when there is no plausible
-// temperature to report (unreadable device, driver not loaded).
+// number in the output is the reading. Returns null when the output holds no
+// number at all (unreadable device, driver not loaded).
 function parse_mget_temp(string $output): ?int {
-  if (!preg_match('/\d+/', $output, $m)) return null;
-  $temp = (int)$m[0];
-  return ($temp > 0 && $temp < 200) ? $temp : null;
+  if (!preg_match('/-?\d+/', $output, $m)) return null;
+  return fcp_clamp_temp((int)$m[0]);
 }
 
 // Mellanox (vendor 0x15b3) PCI functions, keyed by PCI address with the bound
@@ -423,7 +435,7 @@ function detect_mlx_temps(string $mget_temp): array {
 
   foreach (list_mellanox_pci() as $bdf => $iface) {
     $temp = parse_mget_temp((string)shell_exec("$mget_temp -d " . escapeshellarg($bdf) . " 2>/dev/null"));
-    if ($temp === null) continue;
+    if ($temp === null || $temp <= 0) continue;
 
     $name = $iface !== '' ? $iface : $bdf;
     $result[] = [
