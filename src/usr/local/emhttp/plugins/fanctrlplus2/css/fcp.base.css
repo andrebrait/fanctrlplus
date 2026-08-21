@@ -344,20 +344,8 @@
 .fan-block.draggable .drag-handle { color: var(--orange-300); }
 .drag-handle:hover { transform: scale(1.2); }
 
-/* Placeholder while sorting */
-.sortable-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed #bbb;
-  margin: 10px;
-  border-radius: 6px;
-  text-align: center;
-  color: #999;
-  font-size: 16px;
-  background-color: rgba(249, 249, 249, 0.4);
-}
-/* Ghost while dragging */
+/* Ghost while dragging: the only placeholder, showing where the block would
+   land if it were dropped now. */
 .fan-placeholder {
   border: 1px solid #bbb;
   border-radius: 6px;
@@ -377,17 +365,17 @@ dt.containerSettingsDt {
 }
 
 /* ===== Columns / blocks ===== */
+/* The blocks are one list laid side by side, wrapping to the next row when the
+   width runs out. auto-fill rather than auto-fit, so a single block keeps a
+   column's width instead of stretching across the whole page. The floor is what
+   one block needs: its label column plus a 300px control. */
 #fan-area {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(510px, 1fr));
   gap: 16px;
   padding: 8px;
   align-items: start;
 }
-.fan-column {
-  display: grid;
-  gap: 16px;
-}  
 .fan-block {
   position: relative;
   width: 100%;
@@ -402,7 +390,11 @@ dt.containerSettingsDt {
   position: relative;
 }
 .fan-block.draggable { cursor: move !important; }
-.fan-block.ui-sortable-helper { cursor: grabbing !important; }
+.fan-block.ui-sortable-helper {
+  cursor: grabbing !important;
+  /* Lifted rather than faded: fading took the borders with it. */
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
 
 .cpu-label.disabled { opacity: 0.5; }
 
@@ -590,13 +582,6 @@ dt.containerSettingsDt {
 
 /* Additional fan-block adjustments for narrow screens. */
 /* ===== Mobile overrides for FanCtrl Plus 2 ===== */
-@media (min-width: 768px) {
-  #fan-area {
-    grid-template-columns: 1fr 1fr;  /* Two columns in landscape or on tablets. */
-    align-items: start;
-  }
-}
-
 /* Disk groups render in their own nested table, so its label column is sized
    by its own labels and drifts out of line with the fan block's column beside
    it. Rather than pick a pixel width that would need re-tuning whenever a font

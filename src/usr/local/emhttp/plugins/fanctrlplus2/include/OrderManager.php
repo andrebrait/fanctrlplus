@@ -1,75 +1,91 @@
 <?php
+// Fan blocks are one ordered list. The page lays them out side by side and
+// wraps to the next row when it runs out of width, so an arrangement is just
+// the order, stored as order<n>="file.cfg".
+//
+// Two older shapes are still read: col<column>_<position> from when blocks were
+// arranged in columns, and left<n>/right<n> from when there were exactly two.
+// Both are flattened the way they were read on screen -- along each row, then
+// down -- and are migrated the next time an order is saved.
 class OrderManager {
-  private static string $cfg_dir  = "/boot/config/plugins/fanctrlplus2";
   private static string $order_file = "/boot/config/plugins/fanctrlplus2/order.cfg";
+  private static ?string $order_file_override = null;
+
+  // Test seam: point the manager at another order file.
+  public static function useOrderFile(?string $path): void {
+    self::$order_file_override = $path;
+  }
+
+  private static function orderFile(): string {
+    return self::$order_file_override ?? self::$order_file;
+  }
 
   public static function readOrder(): array {
-    $left = [];
-    $right = [];
+    $file = self::orderFile();
+    if (!is_file($file)) return [];
 
-    
-    if (!is_file(self::$order_file)) return ['left' => [], 'right' => []];
+    $list = [];
+    $columns = [];
 
-    $lines = file(self::$order_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-      if (preg_match('/^(left|right)(\d+)\s*=\s*"?(.*?)"?$/', $line, $m)) {
-        $side = $m[1];
-        $idx  = (int)$m[2];
-        $cfg  = $m[3];
-        if ($side === 'left')  $left[$idx]  = $cfg;
-        if ($side === 'right') $right[$idx] = $cfg;
+    foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+      if (preg_match('/^order(\d+)\s*=\s*"?(.*?)"?$/', $line, $m)) {
+        $list[(int)$m[1]] = $m[2];
+      } elseif (preg_match('/^col(\d+)_(\d+)\s*=\s*"?(.*?)"?$/', $line, $m)) {
+        $columns[(int)$m[2]][(int)$m[1]] = $m[3];
+      } elseif (preg_match('/^(left|right)(\d+)\s*=\s*"?(.*?)"?$/', $line, $m)) {
+        $columns[(int)$m[2]][$m[1] === 'left' ? 0 : 1] = $m[3];
       }
     }
 
-    ksort($left);
-    ksort($right);
+    if ($list) {
+      ksort($list);
+      return array_values($list);
+    }
 
-    return ['left' => array_values($left), 'right' => array_values($right)];
+    // Keyed by row then column above, so reading row by row gives the order the
+    // blocks appeared in. A column that ran out early simply contributes
+    // nothing to the later rows.
+    ksort($columns);
+    $flattened = [];
+    foreach ($columns as $row) {
+      ksort($row);
+      foreach ($row as $cfg) $flattened[] = $cfg;
+    }
+    return $flattened;
   }
 
-  public static function writeOrder(array $left, array $right): bool {
+  public static function writeOrder(array $files): bool {
     $lines = [];
-
-    foreach ($left as $i => $cfg) {
-      $lines[] = 'left' . $i . '="' . $cfg . '"';
-    }
-    foreach ($right as $i => $cfg) {
-      $lines[] = 'right' . $i . '="' . $cfg . '"';
+    foreach (array_values($files) as $i => $cfg) {
+      $lines[] = 'order' . $i . '="' . $cfg . '"';
     }
 
-    $content = implode("\n", $lines) . "\n";
-    return file_put_contents(self::$order_file, $content) !== false;
+    $content = $lines ? implode("\n", $lines) . "\n" : "";
+    return file_put_contents(self::orderFile(), $content) !== false;
   }
 
   public static function remove(string $filename): bool {
-    $order = self::readOrder();
-    $left = array_filter($order['left'], fn($f) => $f !== $filename);
-    $right = array_filter($order['right'], fn($f) => $f !== $filename);
-
-    return self::writeOrder(array_values($left), array_values($right));
+    return self::writeOrder(array_values(array_filter(
+      self::readOrder(),
+      fn($f) => $f !== $filename
+    )));
   }
 
+  // Renames in place, without reordering or migrating: a config can be renamed
+  // by the save handler before the order itself is rewritten.
   public static function replaceFileName($old_file, $new_file) {
-        $cfg_dir = "/boot/config/plugins/fanctrlplus2"; // Adjust the path here if needed.
-        $order_file = "$cfg_dir/order.cfg";
+    $file = self::orderFile();
+    if (!is_file($file)) return;
 
-        if (!file_exists($order_file)) return;
-
-        $lines = file($order_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        $out = [];
-        foreach ($lines as $line) {
-            // Replace values only.
-            if (preg_match('/^(left\d+|right\d+)="([^"]+)"/', $line, $m)) {
-                $key = $m[1];
-                $val = $m[2];
-                if ($val === $old_file) {
-                    $val = $new_file;
-                }
-                $out[] = "{$key}=\"{$val}\"";
-            } else {
-                $out[] = $line;
-            }
-        }
-        file_put_contents($order_file, implode("\n", $out) . "\n");
+    $out = [];
+    foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+      if (preg_match('/^(order\d+|col\d+_\d+|left\d+|right\d+)="([^"]*)"/', $line, $m)) {
+        $value = $m[2] === $old_file ? $new_file : $m[2];
+        $out[] = "{$m[1]}=\"{$value}\"";
+      } else {
+        $out[] = $line;
+      }
     }
+    file_put_contents($file, implode("\n", $out) . "\n");
+  }
 }

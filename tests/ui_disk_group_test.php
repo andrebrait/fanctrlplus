@@ -20,9 +20,16 @@ if (!preg_match('/\.fcp-groups-cell\s*\{[^}]*padding-left:\s*0;[^}]*padding-righ
 // Disk groups render in their own nested table, so its label column sizes
 // itself independently of the fan block's and the two drift apart. The widest
 // label in the outer table is the reference both are calibrated to.
-$referenceLabel = 'Fan Speed on Idle:';
-if (!preg_match('/>\s*' . preg_quote($referenceLabel, '/') . '\s*<\/td>/', $render)) {
-  $failures[] = "The label column is calibrated to \"$referenceLabel\", which no longer exists.";
+// The reference is derived rather than written down, so renaming a label
+// cannot silently leave the calibration pointing at the wrong string. Length in
+// characters stands in for width in pixels: a rough proxy, but enough to catch
+// the calibration drifting off the widest label entirely.
+preg_match_all('/>\s*([A-Za-z0-9 ()\/]+:)\s*<\/td>/s', $render, $labelMatches);
+$rowLabels = $labelMatches[1] ?? [];
+usort($rowLabels, fn($a, $b) => strlen($b) <=> strlen($a));
+$referenceLabel = $rowLabels[0] ?? '';
+if ($referenceLabel === '') {
+  $failures[] = 'No row labels were found in the fan block markup.';
 }
 if (!preg_match('/\.disk-group-row table td:first-child::before\s*\{[^}]*content:\s*"' . preg_quote($referenceLabel, '/') . '"/s', $css)) {
   $failures[] = "The disk group label column must be calibrated to \"$referenceLabel\".";
@@ -61,15 +68,21 @@ foreach ([
   'Aux Temperature Range:',
   'Include Sensor(s):',
   'Include Disk(s):',
+  'Fan Speed Range:',
+  'Fan Speed on Idle:',
 ] as $retired) {
-  if (str_contains($render, ">$retired<")) {
+  // Whitespace tolerant: some labels sit on their own line in the markup.
+  if (preg_match('/>\s*' . preg_quote($retired, '/') . '\s*<\/td>/s', $render)) {
     $failures[] = "The long row label \"$retired\" must be shortened for narrow screens.";
   }
 }
-foreach (['>Range:</td>' => 3, '>Monitor:</td>' => 2, '>Sensor(s):</td>' => 1, '>Disk(s):</td>' => 1] as $label => $expected) {
-  $actual = substr_count($render, $label);
+foreach ([
+  'Range:' => 3, 'Monitor:' => 2, 'Sensor(s):' => 1,
+  'Disk(s):' => 1, 'Speed Range:' => 1, 'Speed on Idle:' => 1,
+] as $label => $expected) {
+  $actual = preg_match_all('/>\s*' . preg_quote($label, '/') . '\s*<\/td>/s', $render);
   if ($actual !== $expected) {
-    $failures[] = "Expected $expected occurrences of $label in the fan block, found $actual.";
+    $failures[] = "Expected $expected occurrences of the label \"$label\" in the fan block, found $actual.";
   }
 }
 
@@ -139,26 +152,14 @@ if (!preg_match('/\.disk-group-heading\s+\.remove-disk-group-btn\s*\{[^}]*width:
 if (!preg_match('/\.disk-group-row\s*\+\s*\.disk-group-row\s*\{[^}]*border-top:\s*1px\s+solid\s+rgba\(127,\s*127,\s*127,\s*0\.35\);[^}]*margin-top:\s*10px;[^}]*padding-top:\s*10px;/s', $css)) {
   $failures[] = 'Adjacent disk groups must have a spaced horizontal separator.';
 }
-if (!preg_match('/if \(!sortableUnlocked\) \{\s*\$col\.find\(\'\.sortable-placeholder\'\)\.remove\(\);\s*return;/s', $page)) {
-  $failures[] = 'Empty-column drop zones must stay hidden while sorting is locked.';
-}
-if (!preg_match('/function initSortableUnlocked\(\).*?\$cols\.sortable\(opts\);\s*ensureColumnDroppable\(\);/s', $page)) {
-  $failures[] = 'Unlocking sorting must add a drop target to each empty column.';
-}
-if (!preg_match('/function destroySortableLocked\(\).*?\$cols\.find\(\'\.sortable-placeholder\'\)\.remove\(\);/s', $page)) {
-  $failures[] = 'Locking sorting must remove empty-column drop zones.';
-}
+// The empty-column drop zones these used to pin are gone: blocks are one list
+// that wraps, so there are no empty columns to stand in for. That they stay
+// gone is asserted in tests/fan_layout_test.php.
 if (!preg_match('/\.remove-disk-group-btn.*?const groupName\s*=.*?const msg\s*=.*?if \(!confirm\(msg\)\) return;.*?\$row\.remove\(\);/s', $page)) {
   $failures[] = 'Removing a disk group must require named confirmation before changing the page.';
 }
 if (str_contains($page, 'Drag Fan Configuration Here')) {
-  $failures[] = 'Empty-column drop zones must not contain instructional text.';
-}
-if (!preg_match('/\.sortable-placeholder\s*\{[^}]*border:\s*1px\s+dashed\s+#bbb;/s', $css)) {
-  $failures[] = 'Empty-column drop zones must use a dashed border.';
-}
-if (!preg_match('/\.sortable-placeholder\s*\{[^}]*background-color:\s*rgba\(249,\s*249,\s*249,\s*0\.4\);/s', $css)) {
-  $failures[] = 'Empty-column drop zones must use a 40% opaque background.';
+  $failures[] = 'The layout must not carry instructional text for empty drop zones.';
 }
 if (!preg_match('/\.fcp-asset-update-notice\s*\{[^}]*flex-wrap:\s*wrap;/s', $css)) {
   $failures[] = 'The asset update notice must wrap on narrow screens.';
