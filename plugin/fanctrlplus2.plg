@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.5.2"
+  version="1.6.0"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,26 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.6.0
+
+## What's changed
+
+- Set the fan control **interval in seconds** instead of whole minutes, from 5 seconds to 1 hour. Sub-minute intervals make it practical to drive a CPU cooler whose BIOS curve is too coarse.
+- Read **Mellanox NIC temperatures** through `mget_temp` (Mellanox Firmware Tools). Those chips publish no hwmon sensor, so this is the only way to steer a fan by them. Cards are found automatically; a card with SR-IOV enabled is listed once, not once per virtual function.
+- Add **custom temperature sensors**: any executable placed in `/boot/config/plugins/fanctrlplus2/sensors.d/` becomes an auxiliary sensor named after the file, selectable per fan next to the built-in sources. The script prints the temperature in Celsius and nothing else, or prints nothing and exits non-zero. A script that fails, prints something else, or takes longer than 5 seconds sits out that round of checks only and is tried again on the next one.
+- Let the **FCP History tile refresh** every 5, 10, 15 or 30 seconds instead of only once a minute, chosen in the tile header next to the time frame and remembered per browser. One minute remains the default.
+- Keep 3000 measurements per fan instead of 1500, so the tile's 4-hour window is still filled at the shortest interval.
+- Clamp every temperature reading to 0–200 °C rather than discarding an out-of-range one, for all sources: disks, CPU, hwmon, storcli, NVIDIA, Mellanox and custom scripts.
+- An auxiliary sensor that cannot be read is now skipped for that round instead of counting as 0 °C, the same way a spun-down disk already was.
+
+## Upgrade compatibility
+
+Existing FanCtrl Plus 2 configurations continue to work and need no migration. An interval saved in minutes keeps exactly the cadence it had: a fan set to 5 minutes runs every 300 seconds, and the setting is rewritten in the new form the first time you save that fan. A rounded minutes value is still written alongside it, so downgrading to 1.5.x keeps working.
+
+The FCP History tile stays disabled by default, and its refresh rate defaults to once a minute, so nothing changes until you ask for it.
+
+Custom sensor scripts are opt-in: the `sensors.d` directory is created on install and is empty. See the README for the contract and an example.
 
 ### 1.5.2
 
@@ -39,21 +59,6 @@ The configuration format is unchanged. Existing FanCtrl Plus 2 configurations co
 ## Upgrade compatibility
 
 The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
-
-### 1.5.0
-
-## What's changed
-
-- Add an **FCP Fan Speed History** Dashboard tile: one graph per fan configuration, showing the fan speed over time as a single line color-coded by the temperature source driving the PWM (same colors as the fan-curve chart).
-- Show the driving source, its temperature, and the resulting fan speed and PWM in a tooltip when hovering over the graph.
-- Keep the previous driving source's attribution when two sources tie at the same PWM, so a source cooling into a tie does not flip the graph color or the reported source.
-- Record fan-speed history once per control-loop measurement to RAM, capped per fan; collection stops entirely while the tile is disabled.
-- Add a General Settings switch to enable or disable the tile (disabled by default).
-- Offer 30-minute to 4-hour time windows via a header selector styled like the built-in Network tile; the graph refreshes and scrolls once per minute.
-
-## Upgrade compatibility
-
-The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration. The new tile is disabled by default; enable it in Settings → FanCtrl Plus 2 → General Settings.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -107,16 +112,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.5.2-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.5.2/fanctrlplus2-1.5.2-noarch-1.txz</URL>
-<SHA256>9265f72944756456b5d9270d892aa4403410db6f535d84aa1a56983f78a6d445</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.6.0-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.6.0/fanctrlplus2-1.6.0-noarch-1.txz</URL>
+<SHA256>037c3554572614ebd63f6a02bc5fcd6c98e047a6f25081cd1f3c5291688f9b0d</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.5.2-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.6.0-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -141,7 +146,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.5.2"
+echo " Version: 1.6.0"
 echo "------------------------------------------------"
 echo ""
 exit 0
