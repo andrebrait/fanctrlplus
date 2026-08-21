@@ -9,25 +9,8 @@ source "$cfg_file"
 max="${max:-255}"
 controller_enable="${controller}_enable"
 
-# Locate external tool binaries for aux sensor reading
-storcli_bin=""
-nvidia_smi_bin=""
-if [[ "${aux_sensor:-}" == *storcli:* ]]; then
-  for candidate in /opt/MegaRAID/storcli/storcli64 /opt/MegaRAID/storcli/storcli \
-                   /usr/local/sbin/storcli64 /usr/local/sbin/storcli \
-                   /usr/local/bin/storcli64 /usr/local/bin/storcli \
-                   /usr/sbin/storcli64 /usr/sbin/storcli \
-                   /usr/bin/storcli64 /usr/bin/storcli; do
-    if [[ -x "$candidate" ]]; then storcli_bin="$candidate"; break; fi
-  done
-  [[ -z "$storcli_bin" ]] && storcli_bin=$(command -v storcli64 2>/dev/null || command -v storcli 2>/dev/null || true)
-fi
-if [[ "${aux_sensor:-}" == *nvidia:* ]]; then
-  for candidate in /usr/bin/nvidia-smi /usr/local/bin/nvidia-smi /usr/lib/nvidia/bin/nvidia-smi; do
-    if [[ -x "$candidate" ]]; then nvidia_smi_bin="$candidate"; break; fi
-  done
-  [[ -z "$nvidia_smi_bin" ]] && nvidia_smi_bin=$(command -v nvidia-smi 2>/dev/null || true)
-fi
+source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/aux_sensors.sh"
+aux_locate_bins "${aux_sensor:-}"
 
 # Reads smartctl temp for a comma-separated disk-by-id list; echoes the max
 # valid temp found (spun-down/unreadable disks skipped), or nothing if no
@@ -89,37 +72,9 @@ fi
 aux_pwm_val=0
 aux_temp="-"
 if [[ "${aux_enable:-0}" == "1" && -n "$aux_sensor" ]]; then
-  aux_max_valid=0
+  aux_max_valid=$(aux_max_temp_reading "$aux_sensor")
 
-  IFS=',' read -ra aux_list <<< "$aux_sensor"
-  for sensor in "${aux_list[@]}"; do
-    cur_temp=0
-
-    if [[ "$sensor" == storcli:* ]]; then
-      if [[ -n "$storcli_bin" && "$sensor" =~ ^storcli:c([0-9]+):roc$ ]]; then
-        sc_ctrl="${BASH_REMATCH[1]}"
-        cur_temp=$("$storcli_bin" "/c${sc_ctrl}" show temperature 2>/dev/null \
-          | awk '/ROC temperature/{print $NF; exit}')
-        cur_temp=${cur_temp:-0}
-      fi
-    elif [[ "$sensor" == nvidia:* ]]; then
-      if [[ -n "$nvidia_smi_bin" && "$sensor" =~ ^nvidia:gpu([0-9]+)$ ]]; then
-        gpu_idx="${BASH_REMATCH[1]}"
-        cur_temp=$("$nvidia_smi_bin" --query-gpu=temperature.gpu --format=csv,noheader,nounits -i "$gpu_idx" 2>/dev/null)
-        cur_temp=${cur_temp:-0}
-      fi
-    elif [[ -f "$sensor" ]]; then
-      raw=$(cat "$sensor")
-      [[ "$raw" =~ ^[0-9]+$ ]] && cur_temp=$((raw / 1000))
-      cur_temp=${cur_temp:-0}
-    fi
-
-    if [[ "$cur_temp" =~ ^[0-9]+$ ]] && (( cur_temp > aux_max_valid )); then
-      aux_max_valid=$cur_temp
-    fi
-  done
-
-  if (( aux_max_valid > 0 )); then
+  if [[ -n "$aux_max_valid" ]]; then
     aux_temp=$aux_max_valid
 
     if (( aux_temp <= aux_min_temp )); then

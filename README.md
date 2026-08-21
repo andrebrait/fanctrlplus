@@ -12,7 +12,7 @@ Configuration is done through a user-friendly interface, with custom thresholds,
 - Set custom thresholds and intervals per fan
 - Control multiple PWM fans independently
 - Monitor temps from array disks, NVMe, unassigned devices, and optionally the CPU
-- Monitor auxiliary hwmon, storcli, and NVIDIA GPU temperature sensors
+- Monitor auxiliary hwmon, storcli, NVIDIA GPU, and Mellanox NIC (`mget_temp`) temperature sensors
 - Use independent temperature ranges for multiple disk groups on one fan
 - Uses a linear control algorithm to smoothly adjust fan speed (PWM) based on the current temperature (disk or CPU) between your defined low/high values
 - Identify and label PWM controllers to match physical fans easily
