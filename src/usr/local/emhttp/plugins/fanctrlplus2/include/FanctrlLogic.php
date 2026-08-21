@@ -163,7 +163,7 @@ switch ($op) {
     idle="0"
     low="40"
     high="60"
-    interval="2"
+    interval_sec="120"
     disks=""
     syslog="1"
     cpu_enable="0"

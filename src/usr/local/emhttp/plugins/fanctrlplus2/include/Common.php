@@ -664,3 +664,23 @@ function detect_aux_sensors(): array {
   return $grouped;
 }
 
+// ===== Fan-control interval =====
+// The interval is a number of seconds. Configs written before the switch from
+// minutes are grandfathered by converting their "interval" value, so an
+// existing fan keeps its cadence until it is next saved.
+const FCP_INTERVAL_MIN_SECONDS = 5;
+const FCP_INTERVAL_MAX_SECONDS = 3600;
+const FCP_INTERVAL_DEFAULT_SECONDS = 120;
+
+function cfg_interval_seconds(array $cfg): int {
+  $seconds = (string)($cfg['interval_sec'] ?? '');
+
+  if (!ctype_digit($seconds) || (int)$seconds <= 0) {
+    $minutes = (string)($cfg['interval'] ?? '');
+    $seconds = ctype_digit($minutes) && (int)$minutes > 0
+      ? (string)((int)$minutes * 60)
+      : (string)FCP_INTERVAL_DEFAULT_SECONDS;
+  }
+
+  return max(FCP_INTERVAL_MIN_SECONDS, min(FCP_INTERVAL_MAX_SECONDS, (int)$seconds));
+}

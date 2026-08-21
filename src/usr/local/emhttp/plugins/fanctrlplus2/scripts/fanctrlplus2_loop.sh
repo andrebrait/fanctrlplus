@@ -218,5 +218,5 @@ while true; do
     fi
   fi
 
-  sleep $((interval * 60))
+  sleep "$(interval_seconds)"
 done

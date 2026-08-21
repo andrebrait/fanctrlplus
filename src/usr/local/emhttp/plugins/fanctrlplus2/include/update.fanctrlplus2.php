@@ -24,6 +24,8 @@ $rename_map = [];
 $used_files = [];
 $docroot = $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 
+require_once "$docroot/plugins/$plugin/include/Common.php";
+
 if (!is_dir($cfgpath)) {
   mkdir($cfgpath, 0777, true);
 }
@@ -211,12 +213,14 @@ foreach ($_POST['#file'] as $i => $file) {
 
   file_put_contents($old_path, "custom=\"$custom\"\n...");
 
-  // Require Interval to be a positive integer.
+  // Require Interval to be a positive number of seconds.
   if (!ctype_digit($interval) || intval($interval) <= 0) {
     ob_clean();
-    echo json_encode(['status' => 'error', 'message' => "Interval cannot be empty or 0 (recommended: 1–5 min)."]);
+    echo json_encode(['status' => 'error', 'message' => "Interval cannot be empty or 0 (recommended: 60–300 sec)."]);
     exit;
   } 
+
+  $interval_seconds = cfg_interval_seconds(['interval_sec' => $interval]);
 
   // === Rename temporary files to the final custom-name filename ===
   if (strpos($old_file, 'temp_') !== false && !empty($controller)) {
@@ -248,7 +252,12 @@ foreach ($_POST['#file'] as $i => $file) {
     'idle'       => (string)$idle_abs,
     'low'        => $low_temp,
     'high'       => $high_temp,
-    'interval'   => $_POST['interval'][$i] ?? '',
+    // The interval field posts a bare number of seconds; writing it under the
+    // seconds key also migrates a config that still held minutes.
+    'interval_sec' => (string)$interval_seconds,
+    // Kept only so that rolling the plugin back to a version that reads
+    // minutes finds a sane value instead of sleeping zero seconds per tick.
+    'interval'   => (string)max(1, (int)ceil($interval_seconds / 60)),
     'disks'      => $legacy_disks,
     'disk_group_count' => (string)$disk_group_count,
     'syslog'     => $syslog_val,

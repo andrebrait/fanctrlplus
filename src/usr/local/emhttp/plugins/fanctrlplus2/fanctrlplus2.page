@@ -82,7 +82,7 @@ pwm="102"
 max="255"
 low="40"
 high="60"
-interval="2"
+interval_sec="120"
 disks=""
 syslog="1"
 cpu_enable="0"
@@ -546,7 +546,7 @@ $(function() {
           { selector: 'input[id^="cpu_high_temp_input_"]', unit: '°C', min: 1, max: 110 },
           { selector: 'input[id^="aux_low_temp_input_"]', unit: '°C', min: 1, max: 110 },
           { selector: 'input[id^="aux_high_temp_input_"]', unit: '°C', min: 1, max: 110 },
-          { selector: 'input[id^="interval_input_"]', unit: ' min', min: 1, max: 60 }
+          { selector: 'input[id^="interval_input_"]', unit: ' sec', min: 5, max: 3600 }
         ]);
 
         $html.find('select[id^="cpu-enable-"]').each(function () {
@@ -703,14 +703,14 @@ $(function() {
       { selector: 'input[id^="cpu_high_temp_input_"]', unit: '°C', min: 1, max: 110 },
       { selector: 'input[id^="aux_low_temp_input_"]', unit: '°C', min: 1, max: 110 },
       { selector: 'input[id^="aux_high_temp_input_"]', unit: '°C', min: 1, max: 110 },
-      { selector: 'input[id^="interval_input_"]', unit: ' min', min: 1, max: 60 }
+      { selector: 'input[id^="interval_input_"]', unit: ' sec', min: 5, max: 3600 }
     ]);
     loadPWMOptions();
     bindPWMChangeHandlers();
   });
 
   function stripUnit(val) {
-    return (val ?? '').toString().replace(/\s*(min|°C|%)/gi, '').trim();
+    return (val ?? '').toString().replace(/\s*(sec|min|°C|%)/gi, '').trim();
   }
 
   // Identify modal.
@@ -1190,7 +1190,7 @@ $(function() {
 
       if (!/^\d+$/.test(interval) || parseInt(interval) <= 0) {
         valid = false;
-        errorMsg = 'Interval cannot be empty or 0 (recommended: 1–5 min).';
+        errorMsg = 'Interval cannot be empty or 0 (recommended: 60–300 sec).';
         return false;
       } 
     });
@@ -1811,7 +1811,7 @@ $(function() {
 
     <p><strong>Fan Speed Range:</strong> This sets the minimum and maximum PWM duty cycle values. For example, setting the range to 40–80% means the fan will always run at least 40% speed when cool, and will not exceed 80% speed even at high temperatures.</p>
 
-    <p><strong>Interval:</strong> How often the plugin checks disk (and, if enabled, CPU) temperatures and adjusts fan speed accordingly. Shorter intervals provide more responsive cooling but may result in more frequent fan changes.</p>  
+    <p><strong>Interval:</strong> How often, in seconds, the plugin checks disk (and, if enabled, CPU and auxiliary) temperatures and adjusts fan speed accordingly. Shorter intervals provide more responsive cooling but may result in more frequent fan changes. Anything from 5&nbsp;seconds to 1&nbsp;hour is accepted; sub-minute intervals are meant for CPU or other fast-reacting sensors, since polling disks that often keeps them busy for little benefit.</p>  
 
     <p><strong>Run Now:</strong> Immediately applies the current fan setting based on the latest temperature. Useful for testing or verifying PWM control and fan response without waiting for the next scheduled check.</p>
 
@@ -1872,7 +1872,7 @@ $(function() {
         <li>Disk 48°C → 94%, CPU 70°C → 70% → Result = <strong>94%</strong> (Disk)</li>
       </ul>
 
-      <p style="margin-top: 8px;"><em>Tip:</em> For CPU-based control, consider setting a <strong>shorter interval</strong> (e.g. 1&nbsp;minute) for better responsiveness.</p>
+      <p style="margin-top: 8px;"><em>Tip:</em> For CPU-based control, consider setting a <strong>shorter interval</strong> (e.g. 15&nbsp;seconds) for better responsiveness.</p>
     </div>
 
     <p><strong>Disks:</strong> Only the selected disks will be monitored to control this fan. Multiple fans can monitor overlapping disks, and one disk can be assigned to multiple fans.</p>
