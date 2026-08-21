@@ -32,10 +32,15 @@ if (preg_match('/(?<!ui-)sortable-placeholder/', $page) || preg_match('/(?<!ui-)
 }
 
 // The grid wraps on its own, from the width one block needs.
-if (!preg_match('/#fan-area\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\((\d+)px/s', $css, $m)) {
+if (!preg_match('/#fan-area\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\((.+?),\s*1fr\)\)/s', $css, $m)) {
   $failures[] = 'The block area must wrap automatically at the width a block needs.';
-} elseif ((int)$m[1] < 400 || (int)$m[1] > 700) {
-  $failures[] = "A block floor of {$m[1]}px is outside the plausible range for a fan block.";
+} else {
+  $trackFloor = trim($m[1]);
+  if (!preg_match('/^min\((\d+)px,\s*100%\)$/', $trackFloor, $f)) {
+    $failures[] = "The track floor must yield to the container on a narrow screen, got \"$trackFloor\".";
+  } elseif ((int)$f[1] < 400 || (int)$f[1] > 700) {
+    $failures[] = "A block floor of {$f[1]}px is outside the plausible range for a fan block.";
+  }
 }
 // auto-fit would collapse the empty tracks and stretch a lone block across the
 // whole page.

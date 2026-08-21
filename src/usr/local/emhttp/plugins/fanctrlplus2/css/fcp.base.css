@@ -368,10 +368,12 @@ dt.containerSettingsDt {
 /* The blocks are one list laid side by side, wrapping to the next row when the
    width runs out. auto-fill rather than auto-fit, so a single block keeps a
    column's width instead of stretching across the whole page. The floor is what
-   one block needs: its label column plus a 300px control. */
+   one block needs -- its label column plus a 300px control -- but a floor is a
+   minimum the track will not go below, and on a phone that is wider than the
+   screen, so it gives way to the container first. */
 #fan-area {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(510px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(510px, 100%), 1fr));
   gap: 16px;
   padding: 8px;
   align-items: start;
