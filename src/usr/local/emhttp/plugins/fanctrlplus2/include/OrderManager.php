@@ -54,9 +54,19 @@ class OrderManager {
     return $flattened;
   }
 
+  // The order is written from posted data on more than one path, so entries are
+  // reduced to a bare filename here rather than on each of them: an entry names
+  // a config in the plugin's directory and can never reach outside it.
   public static function writeOrder(array $files): bool {
+    $names = [];
+    foreach ($files as $cfg) {
+      if (!is_string($cfg)) continue;
+      $cfg = basename(trim($cfg));
+      if ($cfg !== '' && $cfg !== '.' && $cfg !== '..') $names[] = $cfg;
+    }
+
     $lines = [];
-    foreach (array_values($files) as $i => $cfg) {
+    foreach ($names as $i => $cfg) {
       $lines[] = 'order' . $i . '="' . $cfg . '"';
     }
 
