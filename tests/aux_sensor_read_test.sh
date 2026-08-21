@@ -118,6 +118,95 @@ chmod +x "$tmp/mget_temp"
 expect_equal "" "$(aux_read_sensor "mlx:0000:77:00.0")" \
   "A failed mget_temp call must yield no reading."
 
+# ===== Custom sensor scripts (issue #1) =====
+# A custom script prints the temperature in Celsius and nothing else; on error
+# it prints nothing and exits 1, which disables it for that round only.
+mkdir -p "$tmp/sensors.d"
+fcp_custom_sensor_dir="$tmp/sensors.d"
+fcp_custom_sensor_timeout=1
+
+write_sensor() {
+  local name="$1"
+  cat > "$tmp/sensors.d/$name"
+  chmod +x "$tmp/sensors.d/$name"
+}
+
+write_sensor ambient <<'STUB'
+#!/bin/bash
+echo 24
+STUB
+expect_equal "24" "$(aux_read_sensor "custom:ambient")" \
+  "A script that prints a temperature must be used."
+
+write_sensor precise <<'STUB'
+#!/bin/bash
+printf '44.7\n'
+STUB
+expect_equal "44" "$(aux_read_sensor "custom:precise")" \
+  "A fractional reading must be reported in whole degrees."
+
+write_sensor broken <<'STUB'
+#!/bin/bash
+exit 1
+STUB
+expect_equal "" "$(aux_read_sensor "custom:broken")" \
+  "A script that fails must yield no reading."
+
+write_sensor noisy_failure <<'STUB'
+#!/bin/bash
+echo 99
+exit 1
+STUB
+expect_equal "" "$(aux_read_sensor "custom:noisy_failure")" \
+  "The exit status decides: output from a failed script must be ignored."
+
+write_sensor chatty <<'STUB'
+#!/bin/bash
+echo "Temperature is 55 degrees"
+STUB
+expect_equal "" "$(aux_read_sensor "custom:chatty")" \
+  "A script that prints anything but the temperature must yield no reading."
+
+write_sensor implausible <<'STUB'
+#!/bin/bash
+echo 900
+STUB
+expect_equal "" "$(aux_read_sensor "custom:implausible")" \
+  "An implausible reading must not pin the fan to maximum."
+
+write_sensor slow <<'STUB'
+#!/bin/bash
+sleep 30
+echo 40
+STUB
+expect_equal "" "$(aux_read_sensor "custom:slow")" \
+  "A script that hangs must be abandoned for the round."
+
+printf '#!/bin/bash\necho 50\n' > "$tmp/sensors.d/not_executable"
+expect_equal "" "$(aux_read_sensor "custom:not_executable")" \
+  "A file that is not executable must be skipped."
+
+expect_equal "" "$(aux_read_sensor "custom:absent")" \
+  "A name with no script behind it must yield no reading."
+
+# The sensor list is user-editable config: a name must stay inside the drop-in
+# directory and must never be assembled into a command.
+cat > "$tmp/escape_target" <<'STUB'
+#!/bin/bash
+touch "$ESCAPE_MARKER"
+echo 60
+STUB
+chmod +x "$tmp/escape_target"
+export ESCAPE_MARKER="$tmp/escaped"
+expect_equal "" "$(aux_read_sensor "custom:../escape_target")" \
+  "A traversing name must be rejected."
+expect_equal "" "$(aux_read_sensor "custom:ambient; $tmp/escape_target")" \
+  "A name carrying shell syntax must be rejected."
+if [[ -e "$tmp/escaped" ]]; then
+  printf 'A rejected custom sensor name still executed something.\n' >&2
+  failures=$((failures + 1))
+fi
+
 # ===== aux_max_temp_reading =====
 printf '50000\n' > "$tmp/temp3_input"
 cat > "$tmp/mget_temp" <<'STUB'
@@ -132,6 +221,11 @@ expect_equal "50" "$(aux_max_temp_reading "$tmp/temp3_input,$tmp/does_not_exist,
   "Unreadable sensors and empty entries must be skipped, not counted as 0."
 expect_equal "" "$(aux_max_temp_reading "$tmp/does_not_exist")" \
   "No readable sensor must yield no reading at all."
+
+expect_equal "71" "$(aux_max_temp_reading "custom:ambient,mlx:0000:77:00.0")" \
+  "A custom sensor competes for the maximum like any other source."
+expect_equal "24" "$(aux_max_temp_reading "custom:broken,custom:ambient")" \
+  "A failing custom sensor must not hold back the ones that work."
 
 if (( failures > 0 )); then
   printf '%d aux sensor assertion(s) failed.\n' "$failures" >&2

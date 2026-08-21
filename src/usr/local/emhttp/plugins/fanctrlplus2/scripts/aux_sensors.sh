@@ -6,6 +6,12 @@
 
 # shellcheck disable=SC2034
 
+# Drop-in directory for user-supplied sensor scripts. Each executable there is
+# one sensor: it prints the temperature in Celsius and nothing else, or prints
+# nothing and exits non-zero, which disables it for that round only.
+fcp_custom_sensor_dir="${fcp_custom_sensor_dir:-/boot/config/plugins/fanctrlplus2/sensors.d}"
+fcp_custom_sensor_timeout="${fcp_custom_sensor_timeout:-5}"
+
 # Echo the first usable binary. Absolute candidates must be executable; bare
 # names are looked up in PATH. Returns 1 when none of them is installed.
 aux_find_bin() {
@@ -63,7 +69,7 @@ aux_locate_bins() {
 # cannot be read. Tokens are matched strictly: a sensor string is user-editable
 # config and is passed to an external command.
 aux_read_sensor() {
-  local sensor="$1" temp="" raw
+  local sensor="$1" temp="" raw script
 
   case "$sensor" in
     storcli:*)
@@ -83,6 +89,19 @@ aux_read_sensor() {
       [[ "$sensor" =~ ^mlx:([0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F])$ ]] || return 0
       temp=$("$aux_mget_temp_bin" -d "${BASH_REMATCH[1]}" 2>/dev/null \
         | grep -oE '[0-9]+' | head -n 1)
+      ;;
+    custom:*)
+      # The name addresses a file inside the drop-in directory: it is never
+      # part of a command line, and anything that could leave that directory
+      # is refused outright.
+      [[ "$sensor" =~ ^custom:([A-Za-z0-9._-]+)$ ]] || return 0
+      script="$fcp_custom_sensor_dir/${BASH_REMATCH[1]}"
+      [[ "${BASH_REMATCH[1]}" == .* || ! -x "$script" ]] && return 0
+      temp=$(timeout "$fcp_custom_sensor_timeout" "$script" 2>/dev/null) || return 0
+      # The contract is the temperature and nothing else, so anything that is
+      # not a plausible number is a broken script rather than a reading.
+      temp="${temp%%.*}"
+      [[ "$temp" =~ ^[0-9]+$ ]] && (( temp < 200 )) || temp=""
       ;;
     *)
       [[ -f "$sensor" ]] || return 0

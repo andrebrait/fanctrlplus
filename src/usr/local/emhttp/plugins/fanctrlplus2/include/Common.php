@@ -314,6 +314,58 @@ function detect_storcli_temps(string $storcli_bin): array {
   return $result;
 }
 
+// ===== User-supplied sensor scripts =====
+// Any executable dropped in the sensors.d directory is a sensor. The contract
+// is deliberately small: print the temperature in Celsius and nothing else, or
+// print nothing and exit non-zero, which disables it for that round only.
+const FCP_CUSTOM_SENSOR_DIR = '/boot/config/plugins/fanctrlplus2/sensors.d';
+const FCP_CUSTOM_SENSOR_TIMEOUT = 5;
+
+// Whole degrees Celsius from a script's output, or null when the script did
+// not honour the contract. A fractional reading is truncated.
+function parse_custom_sensor_output(string $output): ?int {
+  $reading = trim($output);
+  if (!preg_match('/^\d+(?:\.\d+)?$/', $reading)) return null;
+
+  $temp = (int)$reading;
+  return $temp < 200 ? $temp : null;
+}
+
+// Run every custom sensor script and offer the ones that reported a reading.
+// Returns array of ['path' => 'custom:ambient', 'label' => 'ambient (24°C)', ...]
+function detect_custom_temps(string $dir = FCP_CUSTOM_SENSOR_DIR): array {
+  $result = [];
+  $scripts = glob("$dir/*") ?: [];
+  sort($scripts);
+
+  foreach ($scripts as $script) {
+    $name = basename($script);
+    if (!is_file($script) || !is_executable($script)) continue;
+    if ($name[0] === '.') continue;
+
+    $output = [];
+    $status = 0;
+    exec(
+      'timeout ' . FCP_CUSTOM_SENSOR_TIMEOUT . ' ' . escapeshellarg($script) . ' 2>/dev/null',
+      $output,
+      $status
+    );
+    if ($status !== 0) continue;
+
+    $temp = parse_custom_sensor_output(implode("\n", $output));
+    if ($temp === null) continue;
+
+    $result[] = [
+      'path'  => "custom:{$name}",
+      'label' => "{$name} ({$temp}°C)",
+      'chip'  => 'Custom Sensors',
+      'idx'   => count($result),
+    ];
+  }
+
+  return $result;
+}
+
 // Find the Mellanox mget_temp binary (shipped with the Mellanox Firmware Tools)
 function find_mget_temp(): ?string {
   $candidates = [
@@ -645,6 +697,11 @@ function detect_aux_sensors(): array {
     foreach (detect_mlx_temps($mget_temp) as $mlx) {
       $result[] = $mlx;
     }
+  }
+
+  // Append whatever the user's own sensor scripts report
+  foreach (detect_custom_temps() as $cs) {
+    $result[] = $cs;
   }
 
   // Sort by chip name, then sensor index
