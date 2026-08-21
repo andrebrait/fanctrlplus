@@ -24,8 +24,12 @@ expect_equal(null, parse_mget_temp(''),
   'Empty output must not become a temperature.');
 expect_equal(0, parse_mget_temp("0\n"),
   'A zero reading is a reading; an unreadable card fails the call instead.');
-expect_equal(200, parse_mget_temp("250\n"),
-  'A reading just above the ceiling is clamped, not discarded.');
+expect_equal(250, parse_mget_temp("250\n"),
+  'A hot reading is reported as measured, not trimmed.');
+expect_equal(300, parse_mget_temp("300\n"),
+  'The top of the plausible range is still a reading.');
+expect_equal(null, parse_mget_temp("301\n"),
+  'Just past it is not.');
 // The failure the reporter of #1 described: the tool exits 0 and prints a
 // sentinel when it cannot read the card. Offering that as a sensor, or letting
 // it drive a fan, would be worse than having no reading.

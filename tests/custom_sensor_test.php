@@ -22,8 +22,12 @@ expect_equal(null, parse_custom_sensor_output("Temperature is 55 degrees\n"),
   'The contract is the temperature and nothing else.');
 expect_equal(null, parse_custom_sensor_output(''),
   'No output means nothing to report.');
-expect_equal(200, parse_custom_sensor_output("250\n"),
-  'A reading just above the ceiling is clamped, not discarded.');
+expect_equal(250, parse_custom_sensor_output("250\n"),
+  'A hot reading is reported as measured, not trimmed.');
+expect_equal(300, parse_custom_sensor_output("300\n"),
+  'The top of the plausible range is still a reading.');
+expect_equal(null, parse_custom_sensor_output("301\n"),
+  'Just past it is not.');
 expect_equal(null, parse_custom_sensor_output("10000\n"),
   'A value no sensor could produce is not a reading at all.');
 expect_equal(0, parse_custom_sensor_output("-5\n"),
