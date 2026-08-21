@@ -169,8 +169,18 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
             <path class="frame" fill="var(--frame-color)" d="M463.017,0H49.001C21.928,0,0.005,21.932,0.005,48.987v414.016C0.005,490.059,21.928,512,49.001,512h414.016 c27.055,0,48.978-21.941,48.978-48.996V48.987C511.995,21.932,490.073,0,463.017,0z M463.017,31.706 c9.539,0,17.281,7.743,17.281,17.282c0,9.547-7.742,17.28-17.281,17.28c-9.556,0-17.299-7.734-17.299-17.28 C445.718,39.448,453.461,31.706,463.017,31.706z M49.001,31.706c9.538,0,17.281,7.743,17.281,17.282 c0,9.556-7.743,17.28-17.281,17.28c-9.556,0-17.299-7.724-17.299-17.28C31.702,39.448,39.445,31.706,49.001,31.706z M48.983,480.284c-9.538,0-17.281-7.734-17.281-17.281s7.743-17.281,17.281-17.281c9.556,0,17.299,7.734,17.299,17.281 S58.539,480.284,48.983,480.284z M463.017,480.284c-9.556,0-17.299-7.734-17.299-17.281c0-9.538,7.743-17.281,17.299-17.281 c9.539,0,17.281,7.743,17.281,17.281C480.298,472.55,472.556,480.284,463.017,480.284z M255.991,489.324 c-128.855,0-233.32-104.466-233.32-233.33c0-128.854,104.466-233.319,233.32-233.319c128.873,0,233.338,104.465,233.338,233.319 C489.329,384.858,384.864,489.324,255.991,489.324z"/>
           </svg>
         </div>
-            <span class="drag-handle" ><i class="fa fa-reorder"></i></span>
       </div> 
+
+      <!-- Reordering: a button per direction, which a touch screen can use and
+           which says exactly where a block will land. -->
+      <div class="fcp-reorder">
+        <button type="button" class="fcp-move-up" title="Move this fan configuration earlier" aria-label="Move earlier">
+          <i class="fa fa-arrow-up"></i>
+        </button>
+        <button type="button" class="fcp-move-down" title="Move this fan configuration later" aria-label="Move later">
+          <i class="fa fa-arrow-down"></i>
+        </button>
+      </div>
 
       <!-- Fan controls inside each fan block. -->
       <div class="fan-tools fcp-fan-tools">
