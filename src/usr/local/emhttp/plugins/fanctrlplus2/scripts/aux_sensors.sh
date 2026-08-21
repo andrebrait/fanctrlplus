@@ -18,8 +18,10 @@ fcp_custom_sensor_timeout="${fcp_custom_sensor_timeout:-5}"
 # source that reports an odd value in play: the curve saturates at its own high
 # point anyway, so the ceiling and a wild reading drive the fan identically,
 # and a source with nothing to report says so by producing no reading at all.
+# A fan curve has nothing below zero, so a sub-zero reading is floored there.
+# There is no ceiling: a reading inside the plausible range is reported as
+# measured rather than trimmed to a number the sensor never gave.
 fcp_temp_floor=0
-fcp_temp_ceiling=200
 
 # Beyond this, a value is not a measurement at all. Tools report failure in
 # band -- mget_temp has been seen printing 10000 or -10000 when it cannot read
@@ -41,7 +43,6 @@ fcp_clamp_temp() {
   (( temp < fcp_temp_implausible_below || temp > fcp_temp_implausible_above )) && return 0
 
   (( temp < fcp_temp_floor )) && temp=$fcp_temp_floor
-  (( temp > fcp_temp_ceiling )) && temp=$fcp_temp_ceiling
   printf '%s' "$temp"
 }
 

@@ -45,10 +45,12 @@ export STORCLI_ARGS_FILE="$tmp/storcli.args"
 # can act on rather than thrown away: the curve saturates at its high point
 # anyway, so a wild reading and the ceiling drive the fan identically.
 expect_equal "45" "$(fcp_clamp_temp 45)" "An in-range reading passes through."
-expect_equal "200" "$(fcp_clamp_temp 250)" "A reading just above the ceiling is clamped, not dropped."
-expect_equal "0" "$(fcp_clamp_temp -5)" "A reading just below the floor is clamped, not dropped."
+expect_equal "250" "$(fcp_clamp_temp 250)" "A hot reading is reported as measured, not trimmed."
+expect_equal "300" "$(fcp_clamp_temp 300)" "The top of the plausible range is still a reading."
+expect_equal "0" "$(fcp_clamp_temp -5)" "Below zero is floored: a fan curve has nothing below it."
+expect_equal "0" "$(fcp_clamp_temp -100)" "The bottom of the plausible range floors to zero."
 expect_equal "0" "$(fcp_clamp_temp 0)" "Zero is a reading like any other."
-expect_equal "200" "$(fcp_clamp_temp 0250)" "A padded reading is read in base 10, never as octal."
+expect_equal "250" "$(fcp_clamp_temp 0250)" "A padded reading is read in base 10, never as octal."
 expect_equal "7" "$(fcp_clamp_temp 007)" "Leading zeros do not change the reading."
 
 # Tools report failure in band: mget_temp has been seen returning 10000 or
@@ -57,6 +59,8 @@ expect_equal "7" "$(fcp_clamp_temp 007)" "Leading zeros do not change the readin
 # reading at all and the source sits the round out.
 expect_equal "" "$(fcp_clamp_temp 10000)" "A sentinel far above any temperature is not a reading."
 expect_equal "" "$(fcp_clamp_temp -10000)" "Nor is one far below."
+expect_equal "" "$(fcp_clamp_temp 301)" "Just past the plausible range is not a reading."
+expect_equal "" "$(fcp_clamp_temp -101)" "Nor is just below it."
 expect_equal "" "$(fcp_clamp_temp 900)" "Nor is a value no sensor in a computer could report."
 expect_equal "" "$(fcp_clamp_temp abc)" "A non-numeric value is not a reading at all."
 expect_equal "" "$(fcp_clamp_temp "")" "An empty value is not a reading at all."
@@ -82,8 +86,12 @@ expect_equal "" "$(aux_read_sensor "$tmp/temp1_zero_input")" \
   "An hwmon input reading 0 means the sensor is not populated."
 
 printf '250000\n' > "$tmp/temp1_hot_input"
-expect_equal "200" "$(aux_read_sensor "$tmp/temp1_hot_input")" \
-  "An hwmon reading above the ceiling is clamped."
+expect_equal "250" "$(aux_read_sensor "$tmp/temp1_hot_input")" \
+  "A hot hwmon reading is reported as measured."
+
+printf '9999000\n' > "$tmp/temp1_bogus_input"
+expect_equal "" "$(aux_read_sensor "$tmp/temp1_bogus_input")" \
+  "An hwmon reading no sensor could produce yields nothing."
 
 printf 'nonsense\n' > "$tmp/temp2_input"
 expect_equal "" "$(aux_read_sensor "$tmp/temp2_input")" \
@@ -127,8 +135,8 @@ cat > "$tmp/mget_temp" <<'STUB'
 printf '250\n'
 STUB
 chmod +x "$tmp/mget_temp"
-expect_equal "200" "$(aux_read_sensor "mlx:0000:77:00.0")" \
-  "A NIC reading just above the ceiling is clamped rather than discarded."
+expect_equal "250" "$(aux_read_sensor "mlx:0000:77:00.0")" \
+  "A hot NIC reading is reported as measured."
 
 # The failure the reporter of #1 described: mget_temp exits 0 and prints a
 # sentinel. Pinning the fan to maximum on that would be the worst outcome.
@@ -237,8 +245,8 @@ write_sensor hot <<'STUB'
 #!/bin/bash
 echo 250
 STUB
-expect_equal "200" "$(aux_read_sensor "custom:hot")" \
-  "A reading just above the ceiling is clamped; the script said it was hot."
+expect_equal "250" "$(aux_read_sensor "custom:hot")" \
+  "A hot reading is reported as measured; the script said it was hot."
 
 write_sensor implausible <<'STUB'
 #!/bin/bash

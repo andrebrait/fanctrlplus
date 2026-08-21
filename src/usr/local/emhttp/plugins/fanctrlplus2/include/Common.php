@@ -320,8 +320,10 @@ function detect_storcli_temps(string $storcli_bin): array {
 // so the ceiling and a wild reading drive the fan identically. A source with
 // nothing to report says so by producing no reading at all, never by a
 // sentinel value.
+// A fan curve has nothing below zero, so a sub-zero reading is floored there.
+// There is no ceiling: a reading inside the plausible range is reported as
+// measured rather than trimmed to a number the sensor never gave.
 const FCP_TEMP_FLOOR = 0;
-const FCP_TEMP_CEILING = 200;
 
 // Beyond this, a value is not a measurement at all. Tools report failure in
 // band -- mget_temp has been seen printing 10000 or -10000 when it cannot read
@@ -333,7 +335,7 @@ const FCP_TEMP_IMPLAUSIBLE_ABOVE = 300;
 
 function fcp_clamp_temp(int $temp): ?int {
   if ($temp < FCP_TEMP_IMPLAUSIBLE_BELOW || $temp > FCP_TEMP_IMPLAUSIBLE_ABOVE) return null;
-  return max(FCP_TEMP_FLOOR, min(FCP_TEMP_CEILING, $temp));
+  return max(FCP_TEMP_FLOOR, $temp);
 }
 
 // ===== User-supplied sensor scripts =====
