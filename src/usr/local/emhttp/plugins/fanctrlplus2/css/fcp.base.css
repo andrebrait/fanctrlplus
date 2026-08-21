@@ -604,7 +604,7 @@ dt.containerSettingsDt {
    zero-height, invisible shim: the browser measures that string in the very
    font in use, so the two columns end up the same width by construction. */
 .disk-group-row table td:first-child::before {
-  content: "Fan Speed on Idle:";
+  content: "PWM Controller:";
   display: block;
   height: 0;
   overflow: hidden;
