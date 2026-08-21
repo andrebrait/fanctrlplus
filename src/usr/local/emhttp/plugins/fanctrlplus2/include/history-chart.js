@@ -7,6 +7,10 @@ const FCP_HISTORY_DISK_PALETTE = ['#4285f4', '#8e44ad', '#16a085', '#e67e22', '#
 const FCP_HISTORY_SOURCE_COLORS = { cpu: '#db4437', aux: '#0f9d58', idle: '#9e9e9e' };
 const FCP_HISTORY_WINDOW_KEY = 'fcp2_history_window_minutes';
 const FCP_HISTORY_WINDOW_DEFAULT = 60;
+const FCP_HISTORY_WINDOW_CHOICES = [5, 10, 15, 30, 60, 120, 240];
+// Below this the seven axis ticks land less than a minute apart, so HH:MM
+// would print the same label repeatedly.
+const FCP_HISTORY_SECONDS_AXIS_BELOW = 15;
 const FCP_HISTORY_REFRESH_KEY = 'fcp2_history_refresh_seconds';
 const FCP_HISTORY_REFRESH_DEFAULT = 60;
 const FCP_HISTORY_REFRESH_CHOICES = [5, 10, 15, 30, 60];
@@ -52,15 +56,18 @@ function historyTooltipTitle(pointMs) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function historyTickLabel(valueMs) {
+function historyTickLabel(valueMs, windowMinutes = FCP_HISTORY_WINDOW_DEFAULT) {
   const d = new Date(valueMs);
   const pad = n => String(n).padStart(2, '0');
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const hhmm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return windowMinutes < FCP_HISTORY_SECONDS_AXIS_BELOW
+    ? `${hhmm}:${pad(d.getSeconds())}`
+    : hhmm;
 }
 
 function historyWindowMinutes(storage) {
   const raw = Number(storage?.getItem?.(FCP_HISTORY_WINDOW_KEY));
-  return [30, 60, 120, 240].includes(raw) ? raw : FCP_HISTORY_WINDOW_DEFAULT;
+  return FCP_HISTORY_WINDOW_CHOICES.includes(raw) ? raw : FCP_HISTORY_WINDOW_DEFAULT;
 }
 
 // How often the chart re-reads the history file. A minute is plenty for a fan
@@ -146,7 +153,7 @@ function fcpInitHistoryWidget(fans) {
             type: 'linear',
             min: Date.now() - windowMinutes * 60000,
             max: Date.now(),
-            ticks: { maxTicksLimit: 7, color: tickColor, callback: historyTickLabel },
+            ticks: { maxTicksLimit: 7, color: tickColor, callback: v => historyTickLabel(v, windowMinutes) },
             grid: { color: gridColor },
           },
           y: {
