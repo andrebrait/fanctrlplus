@@ -1,0 +1,26 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The suite needs nothing beyond these three, all present on the runner.
+      # Printed so a missing one is obvious rather than a confusing failure.
+      - name: Show interpreter versions
+        run: |
+          php --version | head -1
+          bash --version | head -1
+          node --version
+
+      - name: Run the test suite
+        run: tests/run-all.sh

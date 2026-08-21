@@ -1,4 +1,20 @@
-# **FanCtrl Plus 2**
+<div align="center">
+
+<img src="src/usr/local/emhttp/plugins/fanctrlplus2/images/fanctrlplus2-static.svg" alt="FanCtrl Plus 2 logo" width="150">
+
+<h1>FanCtrl Plus 2</h1>
+
+<p><strong>Temperature-driven PWM fan control for <a href="https://unraid.net/">Unraid</a>.</strong></p>
+
+<p>
+  <a href="https://github.com/andrebrait/fanctrlplus/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/andrebrait/fanctrlplus/test.yml?branch=main&label=tests" alt="Tests"></a>
+  <a href="https://github.com/andrebrait/fanctrlplus/releases"><img src="https://img.shields.io/github/v/release/andrebrait/fanctrlplus?label=release&color=blue" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/Unraid-6.9%2B-e8543f" alt="Supported Unraid versions">
+  <a href="https://github.com/andrebrait/fanctrlplus/releases"><img src="https://img.shields.io/github/downloads/andrebrait/fanctrlplus/total?color=blueviolet" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/andrebrait/fanctrlplus?color=green" alt="License: GPL-2.0-only"></a>
+</p>
+
+</div>
 
 **FanCtrl Plus 2** is an Unraid plugin that provides automatic fan control based on the temperatures of HDDs, NVMe drives, Unassigned Devices, and optionally the CPU.
 Each fan configuration can monitor specific drives or the CPU, define a temperature range, and scale fan speed automatically using a linear control algorithm.  
