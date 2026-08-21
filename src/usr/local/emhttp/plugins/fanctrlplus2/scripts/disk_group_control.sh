@@ -171,3 +171,26 @@ history_append() {
     tail -n "$fcp_history_max_lines" "$file" > "$tmp_file" && mv -f "$tmp_file" "$file"
   fi
 }
+
+# ===== Loop cadence =====
+# Configs written before the interval became a seconds value stored minutes in
+# "interval"; those are grandfathered by converting them, so an existing fan
+# keeps the cadence it was set to. The floor matters because each tick that
+# changes the PWM already sleeps 4s to read the resulting RPM back.
+fcp_interval_min_seconds=5
+fcp_interval_default_seconds=120
+
+interval_seconds() {
+  local secs="${interval_sec:-}"
+
+  if [[ ! "$secs" =~ ^[0-9]+$ ]] || (( secs <= 0 )); then
+    if [[ "${interval:-}" =~ ^[0-9]+$ ]] && (( interval > 0 )); then
+      secs=$((interval * 60))
+    else
+      secs=$fcp_interval_default_seconds
+    fi
+  fi
+
+  (( secs < fcp_interval_min_seconds )) && secs=$fcp_interval_min_seconds
+  printf '%s' "$secs"
+}

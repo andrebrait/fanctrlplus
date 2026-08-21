@@ -9,7 +9,7 @@ Configuration is done through a user-friendly interface, with custom thresholds,
 - Full-featured Web UI for configuration and monitoring
 - Supports temporary fan configuration with safe validation and custom naming
 - Automatically starts with the Unraid array for hands-free operation
-- Set custom thresholds and intervals per fan
+- Set custom thresholds and intervals per fan, from 5 seconds to 1 hour
 - Control multiple PWM fans independently
 - Monitor temps from array disks, NVMe, unassigned devices, and optionally the CPU
 - Monitor auxiliary hwmon, storcli, NVIDIA GPU, and Mellanox NIC (`mget_temp`) temperature sensors
