@@ -63,8 +63,8 @@ function render_disk_group_row($i, $g, $grp, $disks) {
         </td>
       </tr>
       <tr>
-        <td class="fcp-help-cursor" title="Select disks, NVMe drives, or other block devices belonging to this group.">Include Disk(s):</td>
-        <td>
+        <td class="fcp-help-cursor" title="Select disks, NVMe drives, or other block devices belonging to this group.">Disk(s):</td>
+        <td class="fcp-ddcl-cell">
           <select class="disk-select fcp-w-300" name="disk_group_disks[<?=$i?>][<?=$g?>][]" multiple>
             <?php foreach ($disks as $group => $entries): ?>
               <optgroup label="<?=htmlspecialchars($group)?>">
@@ -86,7 +86,7 @@ function render_disk_group_row($i, $g, $grp, $disks) {
         </td>
       </tr>
       <tr>
-        <td class="fcp-help-cursor" title="Fan runs at minimum speed at or below Low Temp, and maximum speed at or above High Temp for this group's hottest selected disk.">Group Temperature Range:</td>
+        <td class="fcp-help-cursor" title="Fan runs at minimum speed at or below Low Temp, and maximum speed at or above High Temp for this group's hottest selected disk.">Range:</td>
         <td>
           <div class="fcp-range-grid">
             <input type="text"
@@ -309,7 +309,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
              lets e.g. HDDs, SATA SSDs, and NVMe SSDs each get their own range
              on the same fan. -->
         <tr>
-          <td colspan="2">
+          <td colspan="2" class="fcp-groups-cell">
             <div class="disk-groups" id="disk-groups-<?=$i?>">
               <?php foreach ($disk_groups as $g => $grp): ?>
                 <?= render_disk_group_row($i, $g, $grp, $disks) ?>
@@ -325,7 +325,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
         <!-- CPU Temp Monitoring Dropdown -->
         <tr>
-          <td class="fcp-help-cursor" title="Enable or disable monitoring CPU temperature for this fan.">CPU Temp Monitor:</td>
+          <td class="fcp-help-cursor" title="Enable or disable monitoring CPU temperature for this fan.">Monitor:</td>
           <td>
             <select id="cpu-enable-<?=$i?>" name="cpu_enable[<?=$i?>]" class="fcp-enable-select" onchange="handleCpuEnableChange(this, <?=$i?>);">
               <option value="0" <?=($cfg['cpu_enable'] ?? '') != '1' ? 'selected' : ''?>>Disabled</option>
@@ -348,7 +348,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
         <!-- CPU Temp Range -->
         <tr class="cpu-control cpu-control-<?=$i?>">
-          <td class="cpu-label fcp-help-cursor" title="Fan runs at minimum speed at or below Low Temp, and maximum speed at or above High Temp. See chart for details.">CPU Temperature Range:</td>
+          <td class="cpu-label fcp-help-cursor" title="Fan runs at minimum speed at or below Low Temp, and maximum speed at or above High Temp. See chart for details.">Range:</td>
           <td>
             <div class="fcp-range-grid">
               <input type="text"
@@ -380,7 +380,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
         <!-- Aux Temp Monitoring Dropdown -->
         <tr>
-          <td class="fcp-help-cursor" title="Enable or disable monitoring an auxiliary temperature sensor (e.g. network card, chipset, VRM) for this fan.">Aux Temp Monitor:</td>
+          <td class="fcp-help-cursor" title="Enable or disable monitoring an auxiliary temperature sensor (e.g. network card, chipset, VRM) for this fan.">Monitor:</td>
           <td>
             <select id="aux-enable-<?=$i?>" name="aux_enable[<?=$i?>]" class="fcp-enable-select" onchange="handleAuxEnableChange(this, <?=$i?>);">
               <option value="0" <?=($cfg['aux_enable'] ?? '') != '1' ? 'selected' : ''?>>Disabled</option>
@@ -391,8 +391,8 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
         <!-- Aux Sensor(s) -->
         <tr class="aux-control aux-control-<?=$i?>">
-          <td class="aux-label fcp-help-cursor" title="Select one or more auxiliary temperature sensors to monitor. The highest temperature across all selected sensors is used. Lists non-CPU, non-NVMe hwmon sensors, plus storcli, nvidia-smi and Mellanox NICs if available, and any script you dropped in sensors.d.">Include Sensor(s):</td>
-          <td>
+          <td class="aux-label fcp-help-cursor" title="Select one or more auxiliary temperature sensors to monitor. The highest temperature across all selected sensors is used. Lists non-CPU, non-NVMe hwmon sensors, plus storcli, nvidia-smi and Mellanox NICs if available, and any script you dropped in sensors.d.">Sensor(s):</td>
+          <td class="fcp-ddcl-cell">
             <?php $aux_selected = array_filter(explode(',', $cfg['aux_sensor'] ?? '')); ?>
             <select class="aux-select aux-input fcp-w-300" name="aux_sensor[<?=$i?>][]" multiple <?=($cfg['aux_enable'] ?? '') != '1' ? 'disabled' : ''?>>
               <?php foreach ($aux_sensors as $group => $entries): ?>
@@ -408,7 +408,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
         <!-- Aux Temp Range -->
         <tr class="aux-control aux-control-<?=$i?>">
-          <td class="aux-label fcp-help-cursor" title="Fan runs at minimum speed at or below Low Temp, and maximum speed at or above High Temp. See chart for details.">Aux Temperature Range:</td>
+          <td class="aux-label fcp-help-cursor" title="Fan runs at minimum speed at or below Low Temp, and maximum speed at or above High Temp. See chart for details.">Range:</td>
           <td>
             <div class="fcp-range-grid">
               <input type="text"

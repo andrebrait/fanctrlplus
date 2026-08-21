@@ -6,6 +6,121 @@ $page = file_get_contents($sourceRoot . '/fanctrlplus2.page');
 $css = file_get_contents($sourceRoot . '/css/fcp.base.css');
 $failures = [];
 
+// The cell hosting the nested table carries the same 1px cell padding as every
+// other cell, and the nested cells add their own on top, so the group labels
+// start one pixel right of the labels above them. The hosting cell gives its
+// padding up so the two tables share a left edge.
+if (!preg_match('/<td colspan="2" class="[^"]*fcp-groups-cell/', $render)) {
+  $failures[] = 'The cell hosting the disk groups must be identifiable for its padding to be removed.';
+}
+if (!preg_match('/\.fcp-groups-cell\s*\{[^}]*padding-left:\s*0;[^}]*padding-right:\s*0;/s', $css)) {
+  $failures[] = 'The disk groups cell must not indent its nested table.';
+}
+
+// Disk groups render in their own nested table, so its label column sizes
+// itself independently of the fan block's and the two drift apart. The widest
+// label in the outer table is the reference both are calibrated to.
+$referenceLabel = 'Fan Speed on Idle:';
+if (!preg_match('/>\s*' . preg_quote($referenceLabel, '/') . '\s*<\/td>/', $render)) {
+  $failures[] = "The label column is calibrated to \"$referenceLabel\", which no longer exists.";
+}
+if (!preg_match('/\.disk-group-row table td:first-child::before\s*\{[^}]*content:\s*"' . preg_quote($referenceLabel, '/') . '"/s', $css)) {
+  $failures[] = "The disk group label column must be calibrated to \"$referenceLabel\".";
+}
+// Checked by removing every @media block and looking for the rule in what is
+// left, since a regex cannot tell nesting from adjacency.
+$cssOutsideMediaQueries = $css;
+while (($at = strpos($cssOutsideMediaQueries, '@media')) !== false) {
+  $open = strpos($cssOutsideMediaQueries, '{', $at);
+  if ($open === false) break;
+  $depth = 0;
+  $end = $open;
+  for ($k = $open, $len = strlen($cssOutsideMediaQueries); $k < $len; $k++) {
+    if ($cssOutsideMediaQueries[$k] === '{') $depth++;
+    if ($cssOutsideMediaQueries[$k] === '}') {
+      $depth--;
+      if ($depth === 0) { $end = $k; break; }
+    }
+  }
+  $cssOutsideMediaQueries = substr($cssOutsideMediaQueries, 0, $at) . substr($cssOutsideMediaQueries, $end + 1);
+}
+if (!str_contains($cssOutsideMediaQueries, '.disk-group-row table td:first-child::before')) {
+  $failures[] = 'The calibration must apply at every width: the columns need to line up on a phone too.';
+}
+if (!preg_match('/\.disk-group-row[^{]*td:first-child::before\s*\{[^}]*height:\s*0;/s', $css)) {
+  $failures[] = 'The calibration must not occupy any visible space of its own.';
+}
+
+// Row labels are kept short so a fan block fits a phone screen without the
+// label column pushing the controls sideways.
+foreach ([
+  'Group Temperature Range:',
+  'CPU Temp Monitor:',
+  'CPU Temperature Range:',
+  'Aux Temp Monitor:',
+  'Aux Temperature Range:',
+  'Include Sensor(s):',
+  'Include Disk(s):',
+] as $retired) {
+  if (str_contains($render, ">$retired<")) {
+    $failures[] = "The long row label \"$retired\" must be shortened for narrow screens.";
+  }
+}
+foreach (['>Range:</td>' => 3, '>Monitor:</td>' => 2, '>Sensor(s):</td>' => 1, '>Disk(s):</td>' => 1] as $label => $expected) {
+  $actual = substr_count($render, $label);
+  if ($actual !== $expected) {
+    $failures[] = "Expected $expected occurrences of $label in the fan block, found $actual.";
+  }
+}
+
+// The widget writes an inline pixel width on the open menu, sized to its widest
+// option, which on a phone is wider than the screen and pushes the page
+// sideways. On narrow screens it is capped at the cell instead.
+if (!preg_match('/@media \(max-width: 1024px\)\s*\{.*\.fcp-ddcl-cell \.ui-dropdownchecklist-dropcontainer-wrapper[^}]*max-width:\s*100%/s', $css)) {
+  $failures[] = 'The open menu must be capped at its cell on narrow screens.';
+}
+// Each option row has a fixed height, so a wrapped option is drawn over the
+// next one and its second line starts under the icon rather than the text. The
+// options stay on one line at every width; the capped menu scrolls instead.
+if (preg_match('/\.fcp-ddcl-cell[^{]*\.ui-dropdownchecklist-item \.ui-dropdownchecklist-text\s*\{[^}]*white-space:\s*normal/s', $css)) {
+  $failures[] = 'Option text must never wrap: the row height is fixed, so it would overlap the next option.';
+}
+if (!preg_match('/@media \(max-width: 1024px\)\s*\{.*\.fcp-ddcl-cell \.ui-dropdownchecklist-dropcontainer\s*\{[^}]*overflow-x:\s*auto/s', $css)) {
+  $failures[] = 'A menu capped narrower than its options must scroll horizontally.';
+}
+
+// The dropdownchecklist widget positions its open menu with
+// jQuery .position(), which measures against elem.offsetParent -- the table
+// cell, by the table-cell rule, whether or not it is positioned. The menu
+// itself is position:absolute, so its containing block is the nearest
+// POSITIONED ancestor. Unless the hosting cell is positioned those are two
+// different boxes and the menu lands far from its field, near the top left of
+// whichever ancestor happens to be positioned.
+foreach (['disk-select', 'aux-select'] as $selectClass) {
+  $offset = 0;
+  $found = 0;
+  while (($pos = strpos($render, $selectClass, $offset)) !== false) {
+    $offset = $pos + 1;
+    $found++;
+    $cellStart = strrpos(substr($render, 0, $pos), '<td');
+    if ($cellStart === false) {
+      $failures[] = "A $selectClass is not inside a table cell.";
+      continue;
+    }
+    $cellTag = substr($render, $cellStart, strpos($render, '>', $cellStart) - $cellStart + 1);
+    if (!str_contains($cellTag, 'fcp-ddcl-cell')) {
+      $failures[] = "The cell hosting a $selectClass must carry fcp-ddcl-cell so the open menu "
+        . "is positioned against the same box the widget measured: $cellTag";
+    }
+  }
+  if ($found === 0) {
+    $failures[] = "No $selectClass was found in the fan block markup.";
+  }
+}
+if (!preg_match('/\.fcp-ddcl-cell\s*\{[^}]*position:\s*relative;/s', $css)) {
+  $failures[] = 'fcp-ddcl-cell must be positioned, or it cannot be the menu\'s containing block.';
+}
+
 if (!str_contains($render, 'class="disk-group-heading"')) {
   $failures[] = 'The disk group name and remove button must share a constrained wrapper.';
 }

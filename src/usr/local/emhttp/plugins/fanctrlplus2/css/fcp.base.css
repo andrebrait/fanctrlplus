@@ -204,6 +204,16 @@
   font-size: 12px;
 }
 
+/* The dropdownchecklist widget places its open menu using jQuery .position(),
+   which measures against elem.offsetParent. For an element in a table that is
+   the cell itself, positioned or not. The menu is absolutely positioned, so it
+   resolves against the nearest POSITIONED ancestor instead -- a different box,
+   which put the menu far from its own field. Positioning the cell makes both
+   the same box, so the widget's own arithmetic lands where it intended. */
+.fcp-ddcl-cell {
+  position: relative;
+}
+
 /* Dropdown (closed state width control) */
 .pwm-controller,
 .ui-dropdownchecklist-selector-wrapper {
@@ -587,6 +597,29 @@ dt.containerSettingsDt {
   }
 }
 
+/* Disk groups render in their own nested table, so its label column is sized
+   by its own labels and drifts out of line with the fan block's column beside
+   it. Rather than pick a pixel width that would need re-tuning whenever a font
+   or a label changes, the cell carries the outer table's widest label as a
+   zero-height, invisible shim: the browser measures that string in the very
+   font in use, so the two columns end up the same width by construction. */
+.disk-group-row table td:first-child::before {
+  content: "Fan Speed on Idle:";
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+/* That cell carries the same padding as every other cell, and the nested
+   table's own cells add theirs on top, so the group rows would start one pixel
+   right of the rows above them. It gives its horizontal padding up instead. */
+.fcp-groups-cell {
+  padding-left: 0;
+  padding-right: 0;
+}
+
 @media (max-width: 1399px) {
   /* Let fan blocks and fieldsets use the full width. */
   .fan-block,
@@ -709,6 +742,23 @@ dt.containerSettingsDt {
   .ui-dropdownchecklist-text {
     white-space: normal !important;
     text-overflow: initial !important;
+  }
+
+  /* The widget writes an inline pixel width on the open menu, sized to its
+     widest option, which on a phone is wider than the screen and pushes the
+     whole page sideways. The hosting cell is the menu's containing block, so
+     capping it there keeps it on screen and lets it follow the layout. */
+  .fcp-ddcl-cell .ui-dropdownchecklist-dropcontainer-wrapper,
+  .fcp-ddcl-cell .ui-dropdownchecklist-dropcontainer {
+    max-width: 100% !important;
+  }
+  /* The options themselves keep their single-line layout at every width: each
+     row has a fixed height, so a wrapped option is drawn over the one below it
+     and its second line starts under the icon instead of the text. A menu
+     narrower than its widest option scrolls sideways within its own box, which
+     leaves the page itself the width of the screen. */
+  .fcp-ddcl-cell .ui-dropdownchecklist-dropcontainer {
+    overflow-x: auto;
   }
 
   /* Let disk and CPU temperature range inputs share available space. */
