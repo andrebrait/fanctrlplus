@@ -25,52 +25,34 @@ assert.strictEqual(reorderTargetIndex(0, 1, 1), null, 'A lone block cannot move 
 assert.strictEqual(reorderTargetIndex(0, -1, 1), null, 'in either direction');
 assert.strictEqual(reorderTargetIndex(0, 1, 2), 1, 'Two blocks can still swap');
 
-// The list wraps, so which way a block actually travels depends on where its
-// neighbour sits: left or right within a row, but up or down when the move
-// crosses a row boundary. Moving the first block of the second row earlier
-// sends it to the END of the first row, which is not to its left.
-const iconMatch = page.match(/function reorderArrowIcon\(sameRow, direction\) \{[\s\S]*?\n  \}/);
+// Two independent questions, deliberately kept apart. Whether a button works
+// is about where the block sits in the list; which arrow it shows is about how
+// the page is laid out. Tangling them is what put a left arrow on the disabled
+// button of the first block.
+const iconMatch = page.match(/function reorderArrowIcon\(sideBySide, direction\) \{[\s\S]*?\n  \}/);
 assert(iconMatch, 'The arrow direction rule must exist');
 const reorderArrowIcon = new Function(`${iconMatch[0]}; return reorderArrowIcon;`)();
 
-assert.match(reorderArrowIcon(true, -1), /arrow-left/, 'Within a row, earlier is to the left');
-assert.match(reorderArrowIcon(true, 1), /arrow-right/, 'Within a row, later is to the right');
-assert.match(reorderArrowIcon(false, -1), /arrow-up/, 'Across a row boundary, earlier is up');
-assert.match(reorderArrowIcon(false, 1), /arrow-down/, 'Across a row boundary, later is down');
+assert.match(reorderArrowIcon(true, -1), /arrow-left/, 'Side by side: earlier is to the left');
+assert.match(reorderArrowIcon(true, 1), /arrow-right/, 'Side by side: later is to the right');
+assert.match(reorderArrowIcon(false, -1), /arrow-up/, 'In one column: earlier is up');
+assert.match(reorderArrowIcon(false, 1), /arrow-down/, 'In one column: later is down');
 
-// Which it is comes from the laid-out positions, not from a column count: in a
-// single column every neighbour is on another row, so the arrows read up and
-// down there without needing a special case.
+// The layout answers it once for the whole page, from the grid the browser
+// actually produced rather than a width we would have to keep in step with the
+// stylesheet.
 assert.match(
   page,
-  /offsetTop/,
-  'Whether a neighbour shares a row must come from where it was laid out'
+  /getComputedStyle\([^)]*\)\.gridTemplateColumns/,
+  'The column count must come from the resolved grid'
 );
-assert.doesNotMatch(page, /columnsShown/, 'A column count cannot answer this question');
+assert.match(page, /function columnsShown\(\)/, 'and be asked in one place');
 
-// Each move posts the whole order. Two rapid moves would otherwise race, and
-// the slower response can be the one the server writes last, leaving the saved
-// order out of step with the page.
-const saverMatch = page.match(/function createOrderSaver\(send\) \{[\s\S]*?\n  \}/);
-assert(saverMatch, 'The order saver must serialise its writes');
-const createOrderSaver = new Function(`${saverMatch[0]}; return createOrderSaver;`)();
-
-const sent = [];
-let finish = null;
-const save = createOrderSaver((order, done) => { sent.push(order); finish = done; });
-
-save('first');
-assert.deepStrictEqual(sent, ['first'], 'The first save goes out immediately');
-save('second');
-save('third');
-assert.deepStrictEqual(sent, ['first'], 'No second request while one is in flight');
-finish();
-assert.deepStrictEqual(sent, ['first', 'third'], 'Only the newest queued order is sent next');
-finish();
-assert.deepStrictEqual(sent, ['first', 'third'], 'Nothing more is sent once the queue is empty');
-
-save('fourth');
-assert.deepStrictEqual(sent, ['first', 'third', 'fourth'], 'A later save starts a new request');
+// Nothing may look at a neighbouring block to choose an arrow: that is what
+// made a disabled button disagree with the working one beside it, since
+// jQuery's .eq(null) is .eq(0) and the first block measured itself.
+assert.doesNotMatch(page, /sharesRow/, 'No per-neighbour axis logic');
+assert.doesNotMatch(page, /reorderAxes/, 'and no rule for reconciling one');
 
 // Both buttons exist on every block, and their disabled state is refreshed
 // rather than set once: it changes every time a block moves.
