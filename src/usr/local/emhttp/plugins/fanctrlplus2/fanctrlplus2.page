@@ -1013,23 +1013,52 @@ $(function() {
   // Whether blocks can be reordered. Toggled by the lock in the header.
   let reorderUnlocked = false;
 
-  // How many columns the grid ended up with. Read from the resolved track list
-  // rather than worked out from a width, so it cannot drift from what the grid
-  // actually did.
-  function columnsShown() {
-    const area = document.getElementById('fan-area');
-    if (!area) return 1;
-    const tracks = getComputedStyle(area).gridTemplateColumns;
-    if (!tracks || tracks === 'none') return 1;
-    return tracks.trim().split(/\s+/).filter(Boolean).length;
+  // Each move posts the whole order, so two rapid moves would race and the
+  // slower response could be the one the server writes last. At most one
+  // request is in flight; anything asked for meanwhile collapses into a single
+  // follow-up carrying the newest order, since an older one is never wanted.
+  function createOrderSaver(send) {
+    let inFlight = false;
+    let queued = null;
+
+    return function save(order) {
+      if (inFlight) {
+        queued = order;
+        return;
+      }
+      inFlight = true;
+      send(order, function finished() {
+        inFlight = false;
+        const next = queued;
+        queued = null;
+        if (next !== null) save(next);
+      });
+    };
   }
 
-  // The list wraps, so "earlier" is up while the blocks are in one column and to
-  // the left once they sit side by side.
-  function reorderArrowIcons(columnsShown) {
-    return columnsShown > 1
-      ? { earlier: 'fa fa-arrow-left', later: 'fa fa-arrow-right' }
-      : { earlier: 'fa fa-arrow-up', later: 'fa fa-arrow-down' };
+  const saveOrderToServer = createOrderSaver(function (order, finished) {
+    $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', {
+      op: 'saveorder',
+      order: order
+    }).done(function () {
+      refreshSyslogSettings();
+    }).always(finished);
+  });
+
+  // Which way a block actually travels: left or right within a row, up or down
+  // when the move crosses a row boundary. Moving the first block of a row
+  // earlier sends it to the END of the row above, which is not to its left.
+  function reorderArrowIcon(sameRow, direction) {
+    if (sameRow) return direction < 0 ? 'fa fa-arrow-left' : 'fa fa-arrow-right';
+    return direction < 0 ? 'fa fa-arrow-up' : 'fa fa-arrow-down';
+  }
+
+  // Two blocks share a row when the layout put them at the same height. Asked of
+  // the laid-out elements rather than of a column count, so a single column --
+  // where every neighbour is on another row -- needs no special case.
+  function sharesRow($block, $neighbour) {
+    if (!$block.length || !$neighbour.length) return false;
+    return $block[0].offsetTop === $neighbour[0].offsetTop;
   }
 
   // Where a block lands when a move button is pressed, or null if it is already
@@ -1044,16 +1073,17 @@ $(function() {
     const $blocks = $('#fan-area').children('.fan-block');
     const count = $blocks.length;
 
-    const icons = reorderArrowIcons(columnsShown());
-
     $blocks.each(function (index) {
       const $block = $(this);
+      const earlier = reorderTargetIndex(index, -1, count);
+      const later = reorderTargetIndex(index, 1, count);
+
       $block.find('.fcp-move-up')
-        .prop('disabled', reorderTargetIndex(index, -1, count) === null)
-        .find('i').attr('class', icons.earlier);
+        .prop('disabled', earlier === null)
+        .find('i').attr('class', reorderArrowIcon(sharesRow($block, $blocks.eq(earlier)), -1));
       $block.find('.fcp-move-down')
-        .prop('disabled', reorderTargetIndex(index, 1, count) === null)
-        .find('i').attr('class', icons.later);
+        .prop('disabled', later === null)
+        .find('i').attr('class', reorderArrowIcon(sharesRow($block, $blocks.eq(later)), 1));
     });
   }
 
@@ -1481,15 +1511,9 @@ $(function() {
         }
       });
 
-      // Save immediately to /plugins/fanctrlplus2/order.cfg.
+      // Save to /plugins/fanctrlplus2/order.cfg, one request at a time.
       if (order.length > 0) {
-        $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', {
-          op: 'saveorder',
-          order: order
-        }).done(function () {
-          refreshSyslogSettings();
-        }).fail(function (jqXHR, textStatus, errorThrown) {
-        });
+        saveOrderToServer(order);
       }
     }
   updatePwmDropdowns();    
