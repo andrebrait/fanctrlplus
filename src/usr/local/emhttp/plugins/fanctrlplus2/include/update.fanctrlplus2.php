@@ -300,15 +300,12 @@ foreach (glob("$cfgpath/{$plugin}_*.cfg") as $cfgfile) {
 // === Write order.cfg through OrderManager.php ===
 require_once "$docroot/plugins/fanctrlplus2/include/OrderManager.php";
 
-$order_left = array_map(function($f) use ($rename_map) {
-  return $rename_map[$f] ?? $f;
-}, $_POST['order_left'] ?? []);
-
-$order_right = array_map(function($f) use ($rename_map) {
-  return $rename_map[$f] ?? $f;
-}, $_POST['order_right'] ?? []);
-
-OrderManager::writeOrder(array_values($order_left), array_values($order_right));
+// The posted order is one list, whose entries may have been renamed in this
+// same save.
+OrderManager::writeOrder(array_values(array_map(
+  fn($f) => $rename_map[$f] ?? $f,
+  $_POST['order'] ?? []
+)));
 
 // Restart the fanctrlplus2 daemon.
 $script = "/usr/local/emhttp/plugins/$plugin/scripts/rc.fanctrlplus2";

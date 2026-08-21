@@ -296,22 +296,14 @@ switch ($op) {
       json_response(['status' => 'error', 'message' => 'Order not array']);
     }
 
-    $output = "";
+    // One list, in the order the blocks appear on screen.
+    $order = array_values(array_filter($order_raw, function ($f) use ($cfg_dir) {
+      return is_string($f) && trim($f) !== '' && is_file("$cfg_dir/$f");
+    }));
 
-    foreach (['left', 'right'] as $side) {
-      if (!isset($order_raw[$side]) || !is_array($order_raw[$side])) continue;
-
-      $valid = array_values(array_filter($order_raw[$side], function ($f) use ($cfg_dir) {
-        return is_string($f) && trim($f) !== '' && is_file("$cfg_dir/$f");
-      }));
-
-      foreach ($valid as $i => $file) {
-        $output .= "{$side}{$i}=\"$file\"\n";
-      }
-    }
-
-    if ($output !== "") {
-      file_put_contents("$cfg_dir/order.cfg", $output);
+    if ($order) {
+      require_once "$docroot/plugins/$plugin/include/OrderManager.php";
+      OrderManager::writeOrder($order);
       json_response(['status' => 'ok']);
     } else {
       error_log("[fanctrlplus2] ❌ Blocked invalid saveorder: " . print_r($order_raw, true));

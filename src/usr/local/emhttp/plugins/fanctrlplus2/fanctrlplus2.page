@@ -96,70 +96,40 @@ INI
   $cfg_files = glob("$cfg_dir/{$plugin}_*.cfg");
 }  
 
-// Read the left and right column order from order.cfg.
-$order_left = [];
-$order_right = [];
+// Read the block order. The layout puts them side by side and wraps, so an
+// arrangement is just this list; anything not recorded yet joins the end.
+require_once "$docroot/plugins/$plugin/include/OrderManager.php";
+$order = OrderManager::readOrder();
+$seen = array_flip($order);
 
-$order_file = "$cfg_dir/order.cfg";
-if (is_file($order_file)) {
-  $ini = parse_ini_file($order_file);
-  foreach ($ini as $k => $v) {
-    if (strpos($k, 'left') === 0)  $order_left[] = $v;
-    if (strpos($k, 'right') === 0) $order_right[] = $v;
-  }
-}
-
-// Track configurations already present in order.cfg.
-$seen = array_flip(array_merge($order_left, $order_right));
-
-// Prepare fan blocks for the left, right, and fallback groups.
-$fan_column_left  = [];
-$fan_column_right = [];
+$fan_blocks = [];
 $all_cfg = [];
 
-// Render the left column.
-foreach ($order_left as $file) {
+foreach ($order as $file) {
   $path = "$cfg_dir/$file";
   if (is_file($path)) {
     $cfg = parse_ini_file($path);
     $cfg['file'] = $file;
-    $fan_column_left[] = $cfg;
+    $fan_blocks[] = $cfg;
     $all_cfg[] = $cfg;
   }
 }
 
-// Render the right column.
-foreach ($order_right as $file) {
-  $path = "$cfg_dir/$file";
-  if (is_file($path)) {
-    $cfg = parse_ini_file($path);
-    $cfg['file'] = $file;
-    $fan_column_right[] = $cfg;
-    $all_cfg[] = $cfg;
-  }
-}
+// Saved configurations first, then any temp_x.cfg, which is where a new fan
+// starts out.
+foreach ([false, true] as $temporary) {
+  foreach ($cfg_files as $path) {
+    $basename = basename($path);
+    if ((strpos($basename, '_temp_') !== false) !== $temporary) continue;
+    if (isset($seen[$basename])) continue;
 
-// Put saved configurations missing from order.cfg in the right column.
-foreach ($cfg_files as $path) {
-  $basename = basename($path);
-  if (!isset($seen[$basename]) && strpos($basename, '_temp_') === false) {
     $cfg = parse_ini_file($path);
     $cfg['file'] = $basename;
-    $fan_column_right[] = $cfg;
+    $fan_blocks[] = $cfg;
     $all_cfg[] = $cfg;
   }
 }
 
-// Put every temp_x.cfg in the right column by default.
-foreach ($cfg_files as $path) {
-  $basename = basename($path);
-  if (strpos($basename, '_temp_') !== false) {
-    $cfg = parse_ini_file($path);
-    $cfg['file'] = $basename;
-    $fan_column_right[] = $cfg;
-    $all_cfg[] = $cfg;
-  }
-}
 $pwms = list_pwm();
 $disks = list_valid_disks_by_id();
 $width = 300;
@@ -504,7 +474,7 @@ $(function() {
   };
 
   window.ensureAtLeastOneFanBlock = function () {
-    const realBlocks = $('.fan-block').not('.sortable-placeholder, .ui-sortable-placeholder');
+    const realBlocks = $('.fan-block').not('.ui-sortable-placeholder');
     if (realBlocks.length === 0) {
       addFan();
     }
@@ -514,12 +484,8 @@ $(function() {
     const index = $('.fan-block').length;
 
     $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', { op: 'newtemp', index: index }, function (html) {
-      const leftCount = $('#fan-column-left .fan-block').length;
-      const rightCount = $('#fan-column-right .fan-block').length;
-      const targetColumn = (leftCount <= rightCount) ? '#fan-column-left' : '#fan-column-right';
-
       const $html = $(html);
-      $(targetColumn).append($html);
+      $('#fan-area').append($html);
 
       initOriginalForBlock($html);
 
@@ -528,7 +494,6 @@ $(function() {
       $html.find('.aux-select').dropdownchecklist(auxDropdownChecklistOptions);
 
       updateAllFanStatus();
-      ensureColumnDroppable();
       applySortableState();
       updatePwmDropdowns();
       bindPWMChangeHandlers();
@@ -1045,83 +1010,36 @@ $(function() {
     $('#apply-btn').prop('disabled', !dirty);
   }
 
-  function ensureColumnDroppable() {
-    ['#fan-column-left', '#fan-column-right'].forEach(function (selector) {
-      const $col = $(selector);
-
-      if (!sortableUnlocked) {
-        $col.find('.sortable-placeholder').remove();
-        return;
-      }
-
-      if (
-        $col.children('.fan-block:not(.sortable-placeholder)').length === 0 &&
-        $col.find('.sortable-placeholder').length === 0
-      ) {
-        $col.append('<div class="fan-block sortable-placeholder"></div>');
-      }
-
-      if ($col.children('.fan-block:not(.sortable-placeholder)').length > 0) {
-        $col.find('.sortable-placeholder').remove();
-      }
-      const blockHeight = $('.fan-block:not(.sortable-placeholder):first').outerHeight();
-      $('.sortable-placeholder').css('min-height', blockHeight + 'px');
-    });
-  }
-
-  // Sorting is locked by default.
+  // Whether blocks can be dragged. Toggled by the lock in the header.
   let sortableUnlocked = false;
 
-  // Locking destroys the sortable; unlocking recreates it.
+  // The one place the sortable is set up. There were two, and they drifted
+  // apart; the blocks are one list in one container now, so there is one.
   function applySortableState() {
-    const $cols = $('#fan-column-left, #fan-column-right');
+    const $area = $('#fan-area');
 
-    $cols.each(function () {
-      const inst = $(this).sortable('instance');
-      if (inst) $(this).sortable('destroy');
-    });
+    if ($area.sortable('instance')) $area.sortable('destroy');
 
     if (!sortableUnlocked) {
-      $cols.find('.sortable-placeholder').remove();
-      $cols.removeClass('ui-sortable ui-sortable-disabled');
-      $cols.find('.fan-block').removeClass('ui-sortable-handle');
+      $area.removeClass('ui-sortable ui-sortable-disabled');
+      $area.find('.fan-block').removeClass('ui-sortable-handle');
       return;
     }
 
-    ensureColumnDroppable();
-
-    // Recreate the sortable when unlocked.
-    const hasHandle = $cols.find('.fcp-drag-handle').length > 0;
+    const hasHandle = $area.find('.fcp-drag-handle').length > 0;
     const opts = {
-      items: '> .fan-block:not(.sortable-placeholder)',
+      items: '> .fan-block',
       tolerance: 'pointer',
       placeholder: 'fan-placeholder',
       start: function (e, ui) { ui.placeholder.height(ui.item.outerHeight()); },
-      over:  function () { $(this).find('.sortable-placeholder').remove(); },
-      out:   function () {
-        const $col = $(this);
-        const hasReal = $col.children('.fan-block:not(.sortable-placeholder)').length > 0;
-        if (!hasReal && $col.find('.sortable-placeholder').length === 0) {
-          const h = $('.fan-block:not(.sortable-placeholder):first').outerHeight() || 100;
-          $('<div class="fan-block sortable-placeholder"></div>')
-            .css('min-height', h + 'px').appendTo($col);
-        }
-      },
-      update: function () { ensureColumnDroppable(); saveFanOrder(); },
-
+      update: function () { saveFanOrder(); },
       cancel: 'input,textarea,select,button,.dropdownchecklist,.dropdownchecklist *,.fcp-range-grid,.chart-btn',
       distance: 8,
     };
     if (hasHandle) { opts.handle = '.fcp-drag-handle'; opts.delay = 150; }
 
-    $cols.sortable(opts);
+    $area.sortable(opts);
   }
-
-  $('#sort-lock-toggle').on('click', function () {
-    sortableUnlocked = !sortableUnlocked;
-    $('html').toggleClass('fcp-locked', !sortableUnlocked);
-    applySortableState();
-  });
 
   $('.disk-select').dropdownchecklist(dropdownChecklistOptions);
   decorateDiskDropdowns(document);
@@ -1136,7 +1054,6 @@ $(function() {
   });
 
   setApplyAllButtonState();
-  ensureColumnDroppable();
 
   $(document).on('change', '.pwm-controller', updatePwmDropdowns);
 
@@ -1404,11 +1321,10 @@ $(function() {
 
         setTimeout(() => {
           // Keep at least one fan block.
-          const realBlocks = $('.fan-block').not('.sortable-placeholder, .ui-sortable-placeholder');
+          const realBlocks = $('.fan-block').not('.ui-sortable-placeholder');
           if (realBlocks.length === 0) {
             ensureAtLeastOneFanBlock();
           }
-          ensureColumnDroppable();
 
           // Update the saved order only for permanent blocks.
           if (!isTemp) {
@@ -1463,61 +1379,6 @@ $(function() {
     e.stopPropagation();
   });
 
-    // Initialize sortable columns.
-    function initSortableUnlocked() {
-      const $cols = $('#fan-column-left, #fan-column-right');
-
-      $cols.each(function () {
-        const inst = $(this).sortable('instance');
-        if (inst) $(this).sortable('destroy');
-      });
-
-      const hasHandle = $cols.find('.fcp-drag-handle').length > 0;
-
-      const opts = {
-        items: '> .fan-block:not(.sortable-placeholder)',
-        connectWith: '.fan-column',
-        opacity: 0.6,
-        tolerance: 'pointer',
-        helper: 'original',
-        placeholder: 'fan-placeholder',
-        start: function (e, ui) { ui.placeholder.height(ui.item.outerHeight()); },
-        over:  function () { $(this).find('.sortable-placeholder').remove(); },
-        out:   function () {
-          const $col = $(this);
-          const hasReal = $col.children('.fan-block:not(.sortable-placeholder)').length > 0;
-          if (!hasReal && $col.find('.sortable-placeholder').length === 0) {
-            const h = $('.fan-block:not(.sortable-placeholder):first').outerHeight() || 100;
-            $('<div class="fan-block sortable-placeholder"></div>')
-              .css('min-height', h + 'px').appendTo($col);
-          }
-        },
-        update: function () { ensureColumnDroppable(); saveFanOrder(); },
-
-        distance: 8,
-        delay: 0,
-
-        cancel: 'input,textarea,select,button,.dropdownchecklist,.dropdownchecklist *,.chart-btn'
-      };
-
-      if (hasHandle) {
-        opts.handle = '.fcp-drag-handle';
-      }
-
-      $cols.sortable(opts);
-      ensureColumnDroppable();
-    }
-
-    // Destroy locked sortables and guard older option-setting code.
-    function destroySortableLocked() {
-      const $cols = $('#fan-column-left, #fan-column-right');
-      $cols.each(function () {
-        const inst = $(this).sortable('instance');
-        if (inst) $(this).sortable('destroy');
-      });
-      $cols.find('.sortable-placeholder').remove();
-    }
-
     // Toggle sorting lock state.
     $('#fanctrlplus2-sort-toggle').on('click', function () {
       if (!sortableUnlocked) {
@@ -1529,12 +1390,7 @@ $(function() {
 
       sortableUnlocked = !sortableUnlocked;
 
-      // Enable or disable sorting.
-      if (sortableUnlocked) {
-        initSortableUnlocked();
-      } else {
-        destroySortableLocked();
-      }
+      applySortableState();
 
       if (sortableUnlocked) {
         // Unlocked state.
@@ -1564,33 +1420,23 @@ $(function() {
 
     // Persist the column order.
     function saveFanOrder() {
-      const order = {
-        left: [],
-        right: []
-      };
+      const order = [];
 
       // Remove old hidden inputs.
-      $('input[name^="order_left"]').remove();
-      $('input[name^="order_right"]').remove();
+      $('input[name^="order["]').remove();
 
-      $('#fan-column-left .fan-block').each(function (i) {
+      $('#fan-area').children('.fan-block').each(function () {
         const val = $(this).find('input.cfg-file').val();
         if (typeof val === 'string' && val.trim() !== '') {
-          order.left.push(val.trim());
-          $('#fan-form').append(`<input type="hidden" name="order_left[${i}]" value="${val.trim()}">`);
-        }
-      });
-
-      $('#fan-column-right .fan-block').each(function (i) {
-        const val = $(this).find('input.cfg-file').val();
-        if (typeof val === 'string' && val.trim() !== '') {
-          order.right.push(val.trim());
-          $('#fan-form').append(`<input type="hidden" name="order_right[${i}]" value="${val.trim()}">`);
+          $('#fan-form').append(
+            `<input type="hidden" name="order[${order.length}]" value="${val.trim()}">`
+          );
+          order.push(val.trim());
         }
       });
 
       // Save immediately to /plugins/fanctrlplus2/order.cfg.
-      if (order.left.length > 0 || order.right.length > 0) {
+      if (order.length > 0) {
         $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', {
           op: 'saveorder',
           order: order
@@ -1713,57 +1559,10 @@ $(function() {
 
   <!--------------- Fan block area --------------->
   <div id="fan-area">
-    <div id="fan-column-left" class="fan-column">
-      <?php $i = 0;
-      foreach ($order_left as $file) {
-        $path = "$cfg_dir/$file";
-        if (is_file($path)) {
-          $cfg = parse_ini_file($path);
-          $cfg['file'] = $file;
-          $all_cfg[] = $cfg;
-          echo render_fan_block($cfg, $i++, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors);
-        }
-      }
-      ?>
-    </div>
-    <div id="fan-column-right" class="fan-column">
-      <?php
-      foreach ($order_right as $file) {
-        $path = "$cfg_dir/$file";
-        if (is_file($path)) {
-          $cfg = parse_ini_file($path);
-          $cfg['file'] = $file;
-          $all_cfg[] = $cfg;
-          echo render_fan_block($cfg, $i++, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors);
-        }
-      }
-      ?>
-    </div>
-    <?php
-    $seen = array_flip(array_merge($order_left, $order_right));
-    $count_left = count($order_left);
-    $count_right = count($order_right);
-    $unsorted_cfgs = array_filter($cfg_files, function ($path) use ($seen) {
-      $basename = basename($path);
-      return !isset($seen[$basename]);
-    });
-    foreach ($unsorted_cfgs as $path) {
-      $basename = basename($path);
-      $cfg = parse_ini_file($path);
-      $cfg['file'] = $basename;
-      $all_cfg[] = $cfg;
-      $html = addslashes(render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors));
-      if ($count_left <= $count_right) {
-        $target = '#fan-column-left';
-        $count_left++;
-      } else {
-        $target = '#fan-column-right';
-        $count_right++;
-      }
-      echo "<script>document.querySelector('$target').insertAdjacentHTML('beforeend', `$html`);</script>";
-      $i++;
-    }
-    ?>
+    <?php $i = 0; ?>
+    <?php foreach ($fan_blocks as $cfg): ?>
+      <?= render_fan_block($cfg, $i++, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors) ?>
+    <?php endforeach; ?>
   </div>
 
   <div class="fcp-actions">
