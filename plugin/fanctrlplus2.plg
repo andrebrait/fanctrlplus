@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.8.1"
+  version="1.8.2"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,18 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.8.2
+
+## What's changed
+
+- Fix the reorder arrows on the first and last fan configuration. The disabled one could point a different way from the working one beside it — a left arrow next to a down arrow — and a page showing a single configuration used left and right on a phone.
+
+Which arrow a button shows is now a question about the layout alone, answered once for the whole page: along the row where configurations sit side by side, down the column where they do not. Whether the button works stays a question about where its configuration sits in the list. The two no longer influence each other.
+
+## Upgrade compatibility
+
+Existing configurations continue to work and need no migration. This changes only which arrow is drawn on the reorder buttons; reordering itself, and everything else, behaves as it did in 1.8.1.
 
 ### 1.8.1
 
@@ -48,27 +60,6 @@ A sensor that errors does not repeat its last value: telling "errored" apart fro
 Existing configurations continue to work and need no migration, and the saved arrangement of fan configurations is unchanged.
 
 Dragging is removed rather than hidden: reordering is done with the arrows, on a desktop as well as a phone. The lock in the header still controls whether the order can be changed at all.
-
-### 1.7.0
-
-## What's changed
-
-- Lay the fan configuration blocks out as **one list that wraps**: they sit side by side and continue on the next row when the window runs out of width, so a wide screen shows three or more across and a phone shows one. Dragging reorders that single list.
-- Fix the **disk and auxiliary sensor menus opening away from their field**, near the top left of the page. On a phone that also scrolled the view away from what you were editing.
-- Stop the open sensor menu **pushing the page sideways on a phone**: it is now no wider than its field, and scrolls within itself instead. Its options keep their single-line layout.
-- Shorten the row labels so a configuration block fits a phone screen: `Include Disk(s):` becomes `Disk(s):`, `Fan Speed on Idle:` becomes `Speed on Idle:`, `Fan Speed Range:` becomes `Speed Range:`, the three temperature ranges become `Range:`, the two monitor toggles become `Monitor:`, and `Include Sensor(s):` becomes `Sensor(s):`. The full wording stays in each label's tooltip.
-- Line the disk group rows up with the rows above them, at every window width.
-- Offer **5, 10 and 15 minute** time frames on the FCP History tile, alongside the existing 30 minutes to 4 hours. At a short interval the 30 minute window is already too dense to show the detail those intervals exist for.
-- Draw the history trace **up to the current time** instead of stopping at the last measurement, so the graph keeps moving between readings rather than appearing to stall. The tip carries no marker, and says what speed is being held and when it was last measured.
-- Keep a dragged block's borders: it was drawn faded, which faded the borders with it, and it is lifted with a shadow instead.
-
-## Upgrade compatibility
-
-Existing configurations continue to work and need no migration.
-
-The block arrangement in `order.cfg` is now a single list. Files written by earlier versions are read and converted automatically, keeping the order the blocks appeared in, and are rewritten in the new form the next time an arrangement is saved. **Downgrading after that point** leaves the older version unable to read the file, in which case every block appears unordered; rearranging them once fixes it.
-
-The FCP History tile keeps its settings: still disabled by default, still one minute between refreshes, still a one hour window unless you chose otherwise.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -122,16 +113,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.1-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.8.1/fanctrlplus2-1.8.1-noarch-1.txz</URL>
-<SHA256>d27ca5bc869b6901453924cd27bcabe753735557269b6a89730c6c47df80df5a</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.2-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.8.2/fanctrlplus2-1.8.2-noarch-1.txz</URL>
+<SHA256>3e2fae8ca3bf7aed9b363cba3737f963ca615fe85b87ee8e4c587d99a64e8b78</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.1-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.2-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -156,7 +147,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.8.1"
+echo " Version: 1.8.2"
 echo "------------------------------------------------"
 echo ""
 exit 0
