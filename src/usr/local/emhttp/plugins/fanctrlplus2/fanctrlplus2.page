@@ -1053,12 +1053,31 @@ $(function() {
     return direction < 0 ? 'fa fa-arrow-up' : 'fa fa-arrow-down';
   }
 
-  // Two blocks share a row when the layout put them at the same height. Asked of
-  // the laid-out elements rather than of a column count, so a single column --
-  // where every neighbour is on another row -- needs no special case.
-  function sharesRow($block, $neighbour) {
-    if (!$block.length || !$neighbour.length) return false;
-    return $block[0].offsetTop === $neighbour[0].offsetTop;
+  // How many columns the grid ended up with, asked of the grid the browser
+  // actually produced rather than of a width this would have to keep in step
+  // with the stylesheet.
+  function columnsShown() {
+    const area = document.getElementById('fan-area');
+    if (!area) return 1;
+    const tracks = getComputedStyle(area).gridTemplateColumns;
+    if (!tracks || tracks === 'none') return 1;
+    return tracks.trim().split(/\s+/).filter(Boolean).length;
+  }
+
+  // Which arrow a button shows is a question about the layout, answered once
+  // for the whole page: along the row where blocks sit side by side, down the
+  // column where they do not. The blocks read like lines of text, so a move
+  // from the start of one row to the end of the row above needs no more
+  // explaining than a word wrapping does.
+  //
+  // Whether a button works is a separate question, about where its block sits
+  // in the list. Deriving the arrow per block from its neighbours instead tangles
+  // the two, and put a left arrow on the disabled button of the first block: a
+  // button with nowhere to go has no neighbour to ask, and jQuery's .eq(null)
+  // is .eq(0), so that block measured itself.
+  function reorderArrowIcon(sideBySide, direction) {
+    if (sideBySide) return direction < 0 ? 'fa fa-arrow-left' : 'fa fa-arrow-right';
+    return direction < 0 ? 'fa fa-arrow-up' : 'fa fa-arrow-down';
   }
 
   // Where a block lands when a move button is pressed, or null if it is already
@@ -1073,17 +1092,17 @@ $(function() {
     const $blocks = $('#fan-area').children('.fan-block');
     const count = $blocks.length;
 
+    const sideBySide = columnsShown() > 1;
+
     $blocks.each(function (index) {
       const $block = $(this);
-      const earlier = reorderTargetIndex(index, -1, count);
-      const later = reorderTargetIndex(index, 1, count);
 
       $block.find('.fcp-move-up')
-        .prop('disabled', earlier === null)
-        .find('i').attr('class', reorderArrowIcon(sharesRow($block, $blocks.eq(earlier)), -1));
+        .prop('disabled', reorderTargetIndex(index, -1, count) === null)
+        .find('i').attr('class', reorderArrowIcon(sideBySide, -1));
       $block.find('.fcp-move-down')
-        .prop('disabled', later === null)
-        .find('i').attr('class', reorderArrowIcon(sharesRow($block, $blocks.eq(later)), 1));
+        .prop('disabled', reorderTargetIndex(index, 1, count) === null)
+        .find('i').attr('class', reorderArrowIcon(sideBySide, 1));
     });
   }
 
