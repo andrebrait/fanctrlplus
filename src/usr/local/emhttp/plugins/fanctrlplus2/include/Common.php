@@ -314,6 +314,77 @@ function detect_storcli_temps(string $storcli_bin): array {
   return $result;
 }
 
+// Find the Mellanox mget_temp binary (shipped with the Mellanox Firmware Tools)
+function find_mget_temp(): ?string {
+  $candidates = [
+    '/usr/bin/mget_temp',
+    '/usr/local/bin/mget_temp',
+    '/usr/bin/mst/mget_temp',
+  ];
+  foreach ($candidates as $path) {
+    if (is_executable($path)) return $path;
+  }
+  $which = trim(shell_exec("which mget_temp 2>/dev/null") ?? '');
+  if ($which !== '' && is_executable($which)) return $which;
+  return null;
+}
+
+// Parse one mget_temp reading. The tool prints the network chip temperature in
+// whole degrees Celsius, bare on most builds and labelled on some, so the first
+// number in the output is the reading. Returns null when there is no plausible
+// temperature to report (unreadable device, driver not loaded).
+function parse_mget_temp(string $output): ?int {
+  if (!preg_match('/\d+/', $output, $m)) return null;
+  $temp = (int)$m[0];
+  return ($temp > 0 && $temp < 200) ? $temp : null;
+}
+
+// Mellanox (vendor 0x15b3) PCI functions, keyed by PCI address with the bound
+// network interface name as the value (empty when the function has no netdev).
+// Virtual functions are skipped: they are the same silicon as their physical
+// function and would list one card many times over.
+function list_mellanox_pci(string $sysfs_devices = '/sys/bus/pci/devices'): array {
+  $result = [];
+
+  foreach (glob("$sysfs_devices/*") as $device) {
+    if (!is_readable("$device/vendor")) continue;
+    if (strtolower(trim((string)@file_get_contents("$device/vendor"))) !== '0x15b3') continue;
+    if (file_exists("$device/physfn")) continue;
+
+    $iface = '';
+    $nets = glob("$device/net/*");
+    if ($nets) $iface = basename($nets[0]);
+
+    $result[basename($device)] = $iface;
+  }
+
+  ksort($result);
+  return $result;
+}
+
+// Detect Mellanox NIC temperatures via mget_temp. The chip temperature is not
+// exposed through hwmon, so this is the only way to steer a fan by it.
+// Returns array of ['path' => 'mlx:0000:77:00.0', 'label' => 'Mellanox eth2 (71°C)', ...]
+function detect_mlx_temps(string $mget_temp): array {
+  $result = [];
+  $idx = 0;
+
+  foreach (list_mellanox_pci() as $bdf => $iface) {
+    $temp = parse_mget_temp((string)shell_exec("$mget_temp -d " . escapeshellarg($bdf) . " 2>/dev/null"));
+    if ($temp === null) continue;
+
+    $name = $iface !== '' ? $iface : $bdf;
+    $result[] = [
+      'path'  => "mlx:{$bdf}",
+      'label' => "Mellanox {$name} ({$temp}°C)",
+      'chip'  => 'Network Adapter',
+      'idx'   => $idx++,
+    ];
+  }
+
+  return $result;
+}
+
 // Find nvidia-smi binary
 function find_nvidia_smi(): ?string {
   $candidates = [
@@ -568,6 +639,14 @@ function detect_aux_sensors(): array {
     }
   }
 
+  // Append Mellanox NIC temperatures via mget_temp (if available)
+  $mget_temp = find_mget_temp();
+  if ($mget_temp !== null) {
+    foreach (detect_mlx_temps($mget_temp) as $mlx) {
+      $result[] = $mlx;
+    }
+  }
+
   // Sort by chip name, then sensor index
   usort($result, function($a, $b){
     return strnatcasecmp($a['chip'], $b['chip'])
@@ -584,3 +663,4 @@ function detect_aux_sensors(): array {
   }
   return $grouped;
 }
+
