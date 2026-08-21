@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.8.0"
+  version="1.8.1"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,20 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.8.1
+
+## What's changed
+
+- A **failed sensor read no longer drives the fan to maximum**. `mget_temp` sometimes returns `10000` or `-10000` when it cannot read a Mellanox card, exiting successfully as it does so; that was being pulled into range as 200 °C, hotter than any real sensor. A value outside −100…300 °C is now treated as no measurement at all, so the sensor sits that round out and is tried again on the next one. Reported by @7leman7 on #1.
+- The same flaw applied to a **custom `sensors.d` script** printing a sentinel, and to a **disk reporting a nonsense SMART value** such as `65535`. Both now sit the round out instead.
+- A reading inside the plausible range is reported **as measured** rather than trimmed to 200 °C, so a genuinely hot sensor shows its real temperature. A sub-zero reading is still floored to 0, because a fan curve has nothing below it.
+
+## Upgrade compatibility
+
+Existing configurations continue to work and need no migration. Nothing about how a fan is configured or how its speed is calculated changes; only which readings count as readings.
+
+A sensor that errors does not repeat its last value: telling "errored" apart from "has nothing to report" matters, because a spun-down disk reports nothing and should let the fan drop to its Idle Speed. A `sensors.d` script that wants to hold its last good reading can cache it itself.
 
 ### 1.8.0
 
@@ -55,26 +69,6 @@ Existing configurations continue to work and need no migration.
 The block arrangement in `order.cfg` is now a single list. Files written by earlier versions are read and converted automatically, keeping the order the blocks appeared in, and are rewritten in the new form the next time an arrangement is saved. **Downgrading after that point** leaves the older version unable to read the file, in which case every block appears unordered; rearranging them once fixes it.
 
 The FCP History tile keeps its settings: still disabled by default, still one minute between refreshes, still a one hour window unless you chose otherwise.
-
-### 1.6.0
-
-## What's changed
-
-- Set the fan control **interval in seconds** instead of whole minutes, from 5 seconds to 1 hour. Sub-minute intervals make it practical to drive a CPU cooler whose BIOS curve is too coarse.
-- Read **Mellanox NIC temperatures** through `mget_temp` (Mellanox Firmware Tools). Those chips publish no hwmon sensor, so this is the only way to steer a fan by them. Cards are found automatically; a card with SR-IOV enabled is listed once, not once per virtual function.
-- Add **custom temperature sensors**: any executable placed in `/boot/config/plugins/fanctrlplus2/sensors.d/` becomes an auxiliary sensor named after the file, selectable per fan next to the built-in sources. The script prints the temperature in Celsius and nothing else, or prints nothing and exits non-zero. A script that fails, prints something else, or takes longer than 5 seconds sits out that round of checks only and is tried again on the next one.
-- Let the **FCP History tile refresh** every 5, 10, 15 or 30 seconds instead of only once a minute, chosen in the tile header next to the time frame and remembered per browser. One minute remains the default.
-- Keep 3000 measurements per fan instead of 1500, so the tile's 4-hour window is still filled at the shortest interval.
-- Clamp every temperature reading to 0–200 °C rather than discarding an out-of-range one, for all sources: disks, CPU, hwmon, storcli, NVIDIA, Mellanox and custom scripts.
-- An auxiliary sensor that cannot be read is now skipped for that round instead of counting as 0 °C, the same way a spun-down disk already was.
-
-## Upgrade compatibility
-
-Existing FanCtrl Plus 2 configurations continue to work and need no migration. An interval saved in minutes keeps exactly the cadence it had: a fan set to 5 minutes runs every 300 seconds, and the setting is rewritten in the new form the first time you save that fan. A rounded minutes value is still written alongside it, so downgrading to 1.5.x keeps working.
-
-The FCP History tile stays disabled by default, and its refresh rate defaults to once a minute, so nothing changes until you ask for it.
-
-Custom sensor scripts are opt-in: the `sensors.d` directory is created on install and is empty. See the README for the contract and an example.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -128,16 +122,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.0-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.8.0/fanctrlplus2-1.8.0-noarch-1.txz</URL>
-<SHA256>baf5cf9006b02ab74aa405dba2fcef2c0be796eb69027ff349dc322deb711487</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.1-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.8.1/fanctrlplus2-1.8.1-noarch-1.txz</URL>
+<SHA256>d27ca5bc869b6901453924cd27bcabe753735557269b6a89730c6c47df80df5a</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.0-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.1-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -162,7 +156,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.8.0"
+echo " Version: 1.8.1"
 echo "------------------------------------------------"
 echo ""
 exit 0
