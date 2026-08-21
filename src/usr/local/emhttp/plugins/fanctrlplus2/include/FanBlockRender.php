@@ -233,7 +233,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
         <!-- Fan Speed Range -->
         <tr>
-          <td class="fcp-help-cursor" title="Set the minimum and maximum fan speed (0–100%). % will be automatically converted to PWM. Hover to see actual values.">Fan Speed Range:</td>
+          <td class="fcp-help-cursor" title="Set the minimum and maximum fan speed (0–100%). % will be automatically converted to PWM. Hover to see actual values.">Speed Range:</td>
           <td>
             <div class="fcp-range-grid">
 
@@ -267,7 +267,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
         <tr>
           <td class="fcp-help-cursor"
               title="Fan speed used when there is no temperature source (all HDDs are spun down and CPU monitoring is not enabled).&#10;Must be ≤ the Min value in Fan Speed Range.&#10;Default 0% = completely stopped.">
-            Fan Speed on Idle:
+            Speed on Idle:
           </td>
           <td>
             <input type="text"
