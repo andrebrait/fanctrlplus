@@ -22,8 +22,10 @@ expect_equal(null, parse_custom_sensor_output("Temperature is 55 degrees\n"),
   'The contract is the temperature and nothing else.');
 expect_equal(null, parse_custom_sensor_output(''),
   'No output means nothing to report.');
-expect_equal(200, parse_custom_sensor_output("900\n"),
-  'A reading above the ceiling is clamped, not discarded.');
+expect_equal(200, parse_custom_sensor_output("250\n"),
+  'A reading just above the ceiling is clamped, not discarded.');
+expect_equal(null, parse_custom_sensor_output("10000\n"),
+  'A value no sensor could produce is not a reading at all.');
 expect_equal(0, parse_custom_sensor_output("-5\n"),
   'A below-zero reading is clamped; errors are reported by the exit status.');
 

@@ -21,6 +21,14 @@ fcp_custom_sensor_timeout="${fcp_custom_sensor_timeout:-5}"
 fcp_temp_floor=0
 fcp_temp_ceiling=200
 
+# Beyond this, a value is not a measurement at all. Tools report failure in
+# band -- mget_temp has been seen printing 10000 or -10000 when it cannot read
+# the card, exiting 0 as it does so -- and clamping such a value to the ceiling
+# would drive the fan to maximum on a failed read. Anything outside leaves the
+# source with nothing to report for that round.
+fcp_temp_implausible_below=-100
+fcp_temp_implausible_above=300
+
 fcp_clamp_temp() {
   local value="${1:-}" temp
 
@@ -29,6 +37,8 @@ fcp_clamp_temp() {
   [[ "$value" =~ ^(-?)0*([0-9]+)$ ]] || return 0
   temp=$((10#${BASH_REMATCH[2]}))
   [[ "${BASH_REMATCH[1]}" == "-" ]] && temp=$(( -temp ))
+
+  (( temp < fcp_temp_implausible_below || temp > fcp_temp_implausible_above )) && return 0
 
   (( temp < fcp_temp_floor )) && temp=$fcp_temp_floor
   (( temp > fcp_temp_ceiling )) && temp=$fcp_temp_ceiling

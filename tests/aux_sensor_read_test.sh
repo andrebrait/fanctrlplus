@@ -45,11 +45,19 @@ export STORCLI_ARGS_FILE="$tmp/storcli.args"
 # can act on rather than thrown away: the curve saturates at its high point
 # anyway, so a wild reading and the ceiling drive the fan identically.
 expect_equal "45" "$(fcp_clamp_temp 45)" "An in-range reading passes through."
-expect_equal "200" "$(fcp_clamp_temp 900)" "A reading above the ceiling is clamped, not dropped."
-expect_equal "0" "$(fcp_clamp_temp -5)" "A reading below the floor is clamped, not dropped."
+expect_equal "200" "$(fcp_clamp_temp 250)" "A reading just above the ceiling is clamped, not dropped."
+expect_equal "0" "$(fcp_clamp_temp -5)" "A reading just below the floor is clamped, not dropped."
 expect_equal "0" "$(fcp_clamp_temp 0)" "Zero is a reading like any other."
-expect_equal "200" "$(fcp_clamp_temp 0900)" "A padded reading is read in base 10, never as octal."
+expect_equal "200" "$(fcp_clamp_temp 0250)" "A padded reading is read in base 10, never as octal."
 expect_equal "7" "$(fcp_clamp_temp 007)" "Leading zeros do not change the reading."
+
+# Tools report failure in band: mget_temp has been seen returning 10000 or
+# -10000 when it cannot read the card. Clamping those would drive the fan to
+# maximum on a failed read, so a value no sensor could produce is not a
+# reading at all and the source sits the round out.
+expect_equal "" "$(fcp_clamp_temp 10000)" "A sentinel far above any temperature is not a reading."
+expect_equal "" "$(fcp_clamp_temp -10000)" "Nor is one far below."
+expect_equal "" "$(fcp_clamp_temp 900)" "Nor is a value no sensor in a computer could report."
 expect_equal "" "$(fcp_clamp_temp abc)" "A non-numeric value is not a reading at all."
 expect_equal "" "$(fcp_clamp_temp "")" "An empty value is not a reading at all."
 
@@ -116,11 +124,23 @@ expect_equal "" "$(aux_read_sensor "mlx:77:00.0")" \
 
 cat > "$tmp/mget_temp" <<'STUB'
 #!/bin/bash
-printf '900\n'
+printf '250\n'
 STUB
 chmod +x "$tmp/mget_temp"
 expect_equal "200" "$(aux_read_sensor "mlx:0000:77:00.0")" \
-  "An out-of-range NIC reading is clamped rather than discarded."
+  "A NIC reading just above the ceiling is clamped rather than discarded."
+
+# The failure the reporter of #1 described: mget_temp exits 0 and prints a
+# sentinel. Pinning the fan to maximum on that would be the worst outcome.
+for sentinel in 10000 -10000; do
+  cat > "$tmp/mget_temp" <<STUB
+#!/bin/bash
+printf '$sentinel\n'
+STUB
+  chmod +x "$tmp/mget_temp"
+  expect_equal "" "$(aux_read_sensor "mlx:0000:77:00.0")" \
+    "A sentinel of $sentinel must leave the sensor out of the round."
+done
 cat > "$tmp/mget_temp" <<'STUB'
 #!/bin/bash
 printf '%s\n' "$*" > "$MGET_ARGS_FILE"
@@ -213,12 +233,19 @@ STUB
 expect_equal "" "$(aux_read_sensor "custom:chatty")" \
   "A script that prints anything but the temperature must yield no reading."
 
+write_sensor hot <<'STUB'
+#!/bin/bash
+echo 250
+STUB
+expect_equal "200" "$(aux_read_sensor "custom:hot")" \
+  "A reading just above the ceiling is clamped; the script said it was hot."
+
 write_sensor implausible <<'STUB'
 #!/bin/bash
-echo 900
+echo 10000
 STUB
-expect_equal "200" "$(aux_read_sensor "custom:implausible")" \
-  "A reading above the ceiling is clamped; the script said it was hot."
+expect_equal "" "$(aux_read_sensor "custom:implausible")" \
+  "A script reporting a value no sensor could produce sits the round out."
 
 write_sensor freezing <<'STUB'
 #!/bin/bash

@@ -323,7 +323,16 @@ function detect_storcli_temps(string $storcli_bin): array {
 const FCP_TEMP_FLOOR = 0;
 const FCP_TEMP_CEILING = 200;
 
-function fcp_clamp_temp(int $temp): int {
+// Beyond this, a value is not a measurement at all. Tools report failure in
+// band -- mget_temp has been seen printing 10000 or -10000 when it cannot read
+// the card, exiting 0 as it does so -- and clamping such a value to the ceiling
+// would drive the fan to maximum on a failed read. Anything outside leaves the
+// source with nothing to report.
+const FCP_TEMP_IMPLAUSIBLE_BELOW = -100;
+const FCP_TEMP_IMPLAUSIBLE_ABOVE = 300;
+
+function fcp_clamp_temp(int $temp): ?int {
+  if ($temp < FCP_TEMP_IMPLAUSIBLE_BELOW || $temp > FCP_TEMP_IMPLAUSIBLE_ABOVE) return null;
   return max(FCP_TEMP_FLOOR, min(FCP_TEMP_CEILING, $temp));
 }
 

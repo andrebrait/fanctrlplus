@@ -24,8 +24,15 @@ expect_equal(null, parse_mget_temp(''),
   'Empty output must not become a temperature.');
 expect_equal(0, parse_mget_temp("0\n"),
   'A zero reading is a reading; an unreadable card fails the call instead.');
-expect_equal(200, parse_mget_temp("900\n"),
-  'A reading above the ceiling is clamped, not discarded.');
+expect_equal(200, parse_mget_temp("250\n"),
+  'A reading just above the ceiling is clamped, not discarded.');
+// The failure the reporter of #1 described: the tool exits 0 and prints a
+// sentinel when it cannot read the card. Offering that as a sensor, or letting
+// it drive a fan, would be worse than having no reading.
+expect_equal(null, parse_mget_temp("10000\n"),
+  'A sentinel far above any temperature is not a reading.');
+expect_equal(null, parse_mget_temp("-10000\n"),
+  'Nor is one far below.');
 
 // ===== list_mellanox_pci =====
 $root = sys_get_temp_dir() . '/fcp_mlx_' . getmypid();
