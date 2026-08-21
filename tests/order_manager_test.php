@@ -80,6 +80,17 @@ $migrated = file_get_contents($orderFile);
 expect_equal(false, str_contains($migrated, 'left0'), 'Saving migrates a two-column file off the old keys.');
 expect_equal(['array.cfg', 'cpu.cfg'], OrderManager::readOrder(), 'Migration preserves the order.');
 
+// The order is written from posted data on two paths, so the filename is
+// checked here rather than on each of them: an entry is a config filename, and
+// nothing that could reach outside the config directory is recorded.
+$cleanup();
+OrderManager::writeOrder(['../../etc/passwd', 'sub/dir/array.cfg', '', 'cpu.cfg']);
+expect_equal(
+  ['passwd', 'array.cfg', 'cpu.cfg'],
+  OrderManager::readOrder(),
+  'Only the filename part of an entry is recorded.'
+);
+
 // ===== Removing =====
 $write("order0=\"array.cfg\"\norder1=\"cpu.cfg\"\norder2=\"nvme.cfg\"\n");
 OrderManager::remove('cpu.cfg');
