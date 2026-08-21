@@ -7,6 +7,9 @@ const FCP_HISTORY_DISK_PALETTE = ['#4285f4', '#8e44ad', '#16a085', '#e67e22', '#
 const FCP_HISTORY_SOURCE_COLORS = { cpu: '#db4437', aux: '#0f9d58', idle: '#9e9e9e' };
 const FCP_HISTORY_WINDOW_KEY = 'fcp2_history_window_minutes';
 const FCP_HISTORY_WINDOW_DEFAULT = 60;
+const FCP_HISTORY_REFRESH_KEY = 'fcp2_history_refresh_seconds';
+const FCP_HISTORY_REFRESH_DEFAULT = 60;
+const FCP_HISTORY_REFRESH_CHOICES = [5, 10, 15, 30, 60];
 
 function historySourceColor(src) {
   const key = (src ?? '').toString();
@@ -60,6 +63,14 @@ function historyWindowMinutes(storage) {
   return [30, 60, 120, 240].includes(raw) ? raw : FCP_HISTORY_WINDOW_DEFAULT;
 }
 
+// How often the chart re-reads the history file. A minute is plenty for a fan
+// measured every couple of minutes, but a fan on a sub-minute interval is only
+// visible as it happens if the tile polls at that pace too.
+function historyRefreshSeconds(storage) {
+  const raw = Number(storage?.getItem?.(FCP_HISTORY_REFRESH_KEY));
+  return FCP_HISTORY_REFRESH_CHOICES.includes(raw) ? raw : FCP_HISTORY_REFRESH_DEFAULT;
+}
+
 /* exported by the Dashboard page */
 function fcpInitHistoryWidget(fans) {
   const windowSelect = document.getElementById('fcp-history-window');
@@ -70,6 +81,25 @@ function fcpInitHistoryWidget(fans) {
       windowMinutes = Number(windowSelect.value) || FCP_HISTORY_WINDOW_DEFAULT;
       try { window.localStorage.setItem(FCP_HISTORY_WINDOW_KEY, String(windowMinutes)); } catch (_e) {}
       charts.forEach(c => c.refresh());
+    });
+  }
+
+  const refreshSelect = document.getElementById('fcp-history-refresh');
+  let refreshSeconds = historyRefreshSeconds(window.localStorage);
+  let refreshTimer = null;
+
+  function armRefreshTimer() {
+    if (refreshTimer !== null) clearInterval(refreshTimer);
+    refreshTimer = setInterval(() => charts.forEach(c => c.refresh()), refreshSeconds * 1000);
+  }
+
+  if (refreshSelect) {
+    refreshSelect.value = String(refreshSeconds);
+    refreshSelect.addEventListener('change', () => {
+      refreshSeconds = Number(refreshSelect.value) || FCP_HISTORY_REFRESH_DEFAULT;
+      try { window.localStorage.setItem(FCP_HISTORY_REFRESH_KEY, String(refreshSeconds)); } catch (_e) {}
+      charts.forEach(c => c.refresh());
+      armRefreshTimer();
     });
   }
 
@@ -164,9 +194,7 @@ function fcpInitHistoryWidget(fans) {
     return { refresh };
   }).filter(Boolean);
 
-  // The loop measures once per interval (minutes); refreshing every minute
-  // picks each new point up as it lands and scrolls the window along.
-  setInterval(() => charts.forEach(c => c.refresh()), 60000);
+  armRefreshTimer();
 }
 
 // Node test hook (browser pages call fcpInitHistoryWidget directly).
@@ -178,5 +206,6 @@ if (typeof module !== 'undefined' && module.exports) {
     historyTooltipTitle,
     historyTickLabel,
     historyWindowMinutes,
+    historyRefreshSeconds,
   };
 }

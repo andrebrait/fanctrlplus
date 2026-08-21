@@ -56,13 +56,21 @@ $isResponsiveWebgui = version_compare((parse_ini_file('/etc/unraid-version')['ve
 $tbodyClass = $isResponsiveWebgui ? 'mixed' : 'sortable';
 
 // Title + double-angle + window select, mirroring the built-in Network
-// tile's interface-selector header (DashStats.page).
+// tile's interface-selector header (DashStats.page). The second select is the
+// poll rate, which matters once a fan runs on a sub-minute interval.
 $windowSelect = <<<SEL
 <select id="fcp-history-window" class="network-select" title="Select time frame">
   <option value="30">30 m</option>
   <option value="60">1 h</option>
   <option value="120">2 h</option>
   <option value="240">4 h</option>
+</select>
+<select id="fcp-history-refresh" class="network-select" title="Select refresh rate">
+  <option value="5">5 s</option>
+  <option value="10">10 s</option>
+  <option value="15">15 s</option>
+  <option value="30">30 s</option>
+  <option value="60">1 m</option>
 </select>
 SEL;
 
@@ -119,7 +127,8 @@ $mytiles["{$pluginname}_history"]['column2'] = <<<EOT
 }
 /* Same select skin as the Network tile's selectors (DashStats.css
    select#netline / select[name="port_select"]). */
-#fcp-history-dashboard #fcp-history-window {
+#fcp-history-dashboard #fcp-history-window,
+#fcp-history-dashboard #fcp-history-refresh {
   border: none;
   padding: 0 12px 0 0;
   width: auto;

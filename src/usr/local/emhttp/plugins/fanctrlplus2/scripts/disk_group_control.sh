@@ -100,7 +100,9 @@ disk_temperature_origin() {
 # One line per loop tick: epoch|source|label|temp|pwm, where source is the
 # machine key (cpu / aux / idle / disk:<group index>) driving the PWM.
 
-fcp_history_max_lines=1500
+# The widest chart window is 4 hours and the fastest interval is 5 seconds, so
+# the cap has to hold 2880 ticks for that window to be shown in full.
+fcp_history_max_lines=3000
 fcp_labels_file="${fcp_labels_file:-/boot/config/plugins/fanctrlplus2/pwm_labels.cfg}"
 
 # Collection follows the dashboard tile switch (__FCP_HISTORY__ in the labels
