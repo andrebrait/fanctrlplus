@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.7.0"
+  version="1.8.0"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,21 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.8.0
+
+## What's changed
+
+- **Reorder fan configurations with a button per direction** instead of dragging. Dragging was unusable on a phone: it fought the page scroll, gave no reliable idea of where a block would land, and flickered while a finger was down. Each configuration now carries two arrows where the drag handle used to be, shown while sorting is unlocked. The one at each end of the list is disabled, and the arrows point along the row or across it depending on where the block would actually land.
+- Fix a fan configuration being **wider than a phone screen**, introduced in 1.7.0 by the wrapping layout.
+- Save the order one request at a time. Two quick moves could previously race, and the slower one could be what ended up saved.
+- Run the test suite on every pull request and on `main`, and show the icon and badges in the README.
+
+## Upgrade compatibility
+
+Existing configurations continue to work and need no migration, and the saved arrangement of fan configurations is unchanged.
+
+Dragging is removed rather than hidden: reordering is done with the arrows, on a desktop as well as a phone. The lock in the header still controls whether the order can be changed at all.
 
 ### 1.7.0
 
@@ -60,16 +75,6 @@ Existing FanCtrl Plus 2 configurations continue to work and need no migration. A
 The FCP History tile stays disabled by default, and its refresh rate defaults to once a minute, so nothing changes until you ask for it.
 
 Custom sensor scripts are opt-in: the `sensors.d` directory is created on install and is empty. See the README for the contract and an example.
-
-### 1.5.2
-
-## What's changed
-
-- Shorten the history tile title to **FCP History** in the Dashboard tile and the General Settings switch.
-
-## Upgrade compatibility
-
-The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -123,16 +128,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.7.0-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.7.0/fanctrlplus2-1.7.0-noarch-1.txz</URL>
-<SHA256>ceb04f2320775d5e04b01619b27ebc9ebb2223fcc416f285c5d2fd7a53622210</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.0-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.8.0/fanctrlplus2-1.8.0-noarch-1.txz</URL>
+<SHA256>baf5cf9006b02ab74aa405dba2fcef2c0be796eb69027ff349dc322deb711487</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.7.0-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.0-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -157,7 +162,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.7.0"
+echo " Version: 1.8.0"
 echo "------------------------------------------------"
 echo ""
 exit 0
