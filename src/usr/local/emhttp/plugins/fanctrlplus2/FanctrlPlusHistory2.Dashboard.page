@@ -60,6 +60,9 @@ $tbodyClass = $isResponsiveWebgui ? 'mixed' : 'sortable';
 // poll rate, which matters once a fan runs on a sub-minute interval.
 $windowSelect = <<<SEL
 <select id="fcp-history-window" class="network-select" title="Select time frame">
+  <option value="5">5 m</option>
+  <option value="10">10 m</option>
+  <option value="15">15 m</option>
   <option value="30">30 m</option>
   <option value="60">1 h</option>
   <option value="120">2 h</option>

@@ -61,11 +61,22 @@ expectEqual(
 const stamp = new Date(2026, 6, 16, 9, 5, 7).getTime();
 expectEqual('09:05:07', historyTooltipTitle(stamp), 'Tooltip titles are HH:MM:SS.');
 expectEqual('09:05', historyTickLabel(stamp), 'Axis ticks are HH:MM.');
+// A short window packs its ticks less than a minute apart, so HH:MM would
+// print the same label several times over.
+expectEqual('09:05:07', historyTickLabel(stamp, 5), 'A 5 minute window needs seconds on the axis.');
+expectEqual('09:05:07', historyTickLabel(stamp, 10), 'A 10 minute window needs seconds on the axis.');
+expectEqual('09:05', historyTickLabel(stamp, 15), 'From 15 minutes up the ticks are a minute or more apart.');
+expectEqual('09:05', historyTickLabel(stamp, 240), 'A wide window keeps HH:MM.');
 
 // ===== Window preference =====
 const store = value => ({ getItem: () => value });
 expectEqual(60, historyWindowMinutes(store(null)), 'Default window is 60 minutes.');
 expectEqual(120, historyWindowMinutes(store('120')), 'A stored valid window is honored.');
+// Sub-30-minute windows are where per-tick detail is visible at a short
+// interval: 5 minutes at a 5 second interval is 60 points.
+expectEqual(5, historyWindowMinutes(store('5')), 'The shortest offered window is honored.');
+expectEqual(10, historyWindowMinutes(store('10')), 'A 10 minute window is honored.');
+expectEqual(15, historyWindowMinutes(store('15')), 'A 15 minute window is honored.');
 expectEqual(60, historyWindowMinutes(store('45')), 'A stored invalid window falls back to the default.');
 expectEqual(60, historyWindowMinutes(undefined), 'Missing storage falls back to the default.');
 
@@ -89,6 +100,16 @@ const historyJs = fs.readFileSync(`${sourceRoot}/include/history-chart.js`, 'utf
 
 expectEqual(true, /id="fcp-history-refresh"/.test(historyPage),
   'The tile header must carry the refresh selector.');
+[5, 10, 15, 30, 60, 120, 240].forEach(minutes => {
+  expectEqual(true, new RegExp(`<option value="${minutes}">`).test(historyPage),
+    `The window selector must offer ${minutes} minutes.`);
+});
+// Chart.js hands its tick callback (value, index, ticks), so the window has to
+// be closed over rather than left to arrive as the second argument.
+expectEqual(false, /callback: historyTickLabel\b/.test(historyJs),
+  'The tick callback must not take Chart.js\' index as the window.');
+expectEqual(true, /historyTickLabel\(\w+, windowMinutes\)/.test(historyJs),
+  'The tick callback must pass the selected window.');
 [5, 10, 15, 30, 60].forEach(seconds => {
   expectEqual(true, new RegExp(`<option value="${seconds}"`).test(historyPage),
     `The refresh selector must offer ${seconds}s.`);
