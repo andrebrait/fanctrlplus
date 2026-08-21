@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.6.0"
+  version="1.7.0"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,27 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.7.0
+
+## What's changed
+
+- Lay the fan configuration blocks out as **one list that wraps**: they sit side by side and continue on the next row when the window runs out of width, so a wide screen shows three or more across and a phone shows one. Dragging reorders that single list.
+- Fix the **disk and auxiliary sensor menus opening away from their field**, near the top left of the page. On a phone that also scrolled the view away from what you were editing.
+- Stop the open sensor menu **pushing the page sideways on a phone**: it is now no wider than its field, and scrolls within itself instead. Its options keep their single-line layout.
+- Shorten the row labels so a configuration block fits a phone screen: `Include Disk(s):` becomes `Disk(s):`, `Fan Speed on Idle:` becomes `Speed on Idle:`, `Fan Speed Range:` becomes `Speed Range:`, the three temperature ranges become `Range:`, the two monitor toggles become `Monitor:`, and `Include Sensor(s):` becomes `Sensor(s):`. The full wording stays in each label's tooltip.
+- Line the disk group rows up with the rows above them, at every window width.
+- Offer **5, 10 and 15 minute** time frames on the FCP History tile, alongside the existing 30 minutes to 4 hours. At a short interval the 30 minute window is already too dense to show the detail those intervals exist for.
+- Draw the history trace **up to the current time** instead of stopping at the last measurement, so the graph keeps moving between readings rather than appearing to stall. The tip carries no marker, and says what speed is being held and when it was last measured.
+- Keep a dragged block's borders: it was drawn faded, which faded the borders with it, and it is lifted with a shadow instead.
+
+## Upgrade compatibility
+
+Existing configurations continue to work and need no migration.
+
+The block arrangement in `order.cfg` is now a single list. Files written by earlier versions are read and converted automatically, keeping the order the blocks appeared in, and are rewritten in the new form the next time an arrangement is saved. **Downgrading after that point** leaves the older version unable to read the file, in which case every block appears unordered; rearranging them once fixes it.
+
+The FCP History tile keeps its settings: still disabled by default, still one minute between refreshes, still a one hour window unless you chose otherwise.
 
 ### 1.6.0
 
@@ -45,16 +66,6 @@ Custom sensor scripts are opt-in: the `sensors.d` directory is created on instal
 ## What's changed
 
 - Shorten the history tile title to **FCP History** in the Dashboard tile and the General Settings switch.
-
-## Upgrade compatibility
-
-The configuration format is unchanged. Existing FanCtrl Plus 2 configurations continue to work without a migration.
-
-### 1.5.1
-
-## What's changed
-
-- Draw history-graph markers exactly as thick as the line (2 px, borderless): they blend into a populated trace but keep isolated points visible while the history is still sparse, such as right after enabling the tile or upgrading the plugin.
 
 ## Upgrade compatibility
 
@@ -112,16 +123,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.6.0-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.6.0/fanctrlplus2-1.6.0-noarch-1.txz</URL>
-<SHA256>037c3554572614ebd63f6a02bc5fcd6c98e047a6f25081cd1f3c5291688f9b0d</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.7.0-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.7.0/fanctrlplus2-1.7.0-noarch-1.txz</URL>
+<SHA256>ceb04f2320775d5e04b01619b27ebc9ebb2223fcc416f285c5d2fd7a53622210</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.6.0-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.7.0-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -146,7 +157,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.6.0"
+echo " Version: 1.7.0"
 echo "------------------------------------------------"
 echo ""
 exit 0
