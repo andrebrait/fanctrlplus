@@ -25,25 +25,52 @@ assert.strictEqual(reorderTargetIndex(0, 1, 1), null, 'A lone block cannot move 
 assert.strictEqual(reorderTargetIndex(0, -1, 1), null, 'in either direction');
 assert.strictEqual(reorderTargetIndex(0, 1, 2), 1, 'Two blocks can still swap');
 
-// The list wraps, so "earlier" is up in a single column and to the left once
-// blocks sit side by side. The arrows follow what the eye sees.
-const iconMatch = page.match(/function reorderArrowIcons\(columnsShown\) \{[\s\S]*?\n  \}/);
+// The list wraps, so which way a block actually travels depends on where its
+// neighbour sits: left or right within a row, but up or down when the move
+// crosses a row boundary. Moving the first block of the second row earlier
+// sends it to the END of the first row, which is not to its left.
+const iconMatch = page.match(/function reorderArrowIcon\(sameRow, direction\) \{[\s\S]*?\n  \}/);
 assert(iconMatch, 'The arrow direction rule must exist');
-const reorderArrowIcons = new Function(`${iconMatch[0]}; return reorderArrowIcons;`)();
+const reorderArrowIcon = new Function(`${iconMatch[0]}; return reorderArrowIcon;`)();
 
-assert.match(reorderArrowIcons(1).earlier, /arrow-up/, 'One column: earlier is up');
-assert.match(reorderArrowIcons(1).later, /arrow-down/, 'One column: later is down');
-assert.match(reorderArrowIcons(2).earlier, /arrow-left/, 'Side by side: earlier is to the left');
-assert.match(reorderArrowIcons(3).later, /arrow-right/, 'Side by side: later is to the right');
-assert.match(reorderArrowIcons(0).earlier, /arrow-up/, 'An unknown column count reads as one');
+assert.match(reorderArrowIcon(true, -1), /arrow-left/, 'Within a row, earlier is to the left');
+assert.match(reorderArrowIcon(true, 1), /arrow-right/, 'Within a row, later is to the right');
+assert.match(reorderArrowIcon(false, -1), /arrow-up/, 'Across a row boundary, earlier is up');
+assert.match(reorderArrowIcon(false, 1), /arrow-down/, 'Across a row boundary, later is down');
 
-// How many columns are on screen is asked of the browser rather than derived
-// from a breakpoint, so it cannot drift from what the grid actually did.
+// Which it is comes from the laid-out positions, not from a column count: in a
+// single column every neighbour is on another row, so the arrows read up and
+// down there without needing a special case.
 assert.match(
   page,
-  /getComputedStyle\([^)]*\)\.gridTemplateColumns/,
-  'The column count must come from the resolved grid, not a duplicated breakpoint'
+  /offsetTop/,
+  'Whether a neighbour shares a row must come from where it was laid out'
 );
+assert.doesNotMatch(page, /columnsShown/, 'A column count cannot answer this question');
+
+// Each move posts the whole order. Two rapid moves would otherwise race, and
+// the slower response can be the one the server writes last, leaving the saved
+// order out of step with the page.
+const saverMatch = page.match(/function createOrderSaver\(send\) \{[\s\S]*?\n  \}/);
+assert(saverMatch, 'The order saver must serialise its writes');
+const createOrderSaver = new Function(`${saverMatch[0]}; return createOrderSaver;`)();
+
+const sent = [];
+let finish = null;
+const save = createOrderSaver((order, done) => { sent.push(order); finish = done; });
+
+save('first');
+assert.deepStrictEqual(sent, ['first'], 'The first save goes out immediately');
+save('second');
+save('third');
+assert.deepStrictEqual(sent, ['first'], 'No second request while one is in flight');
+finish();
+assert.deepStrictEqual(sent, ['first', 'third'], 'Only the newest queued order is sent next');
+finish();
+assert.deepStrictEqual(sent, ['first', 'third'], 'Nothing more is sent once the queue is empty');
+
+save('fourth');
+assert.deepStrictEqual(sent, ['first', 'third', 'fourth'], 'A later save starts a new request');
 
 // Both buttons exist on every block, and their disabled state is refreshed
 // rather than set once: it changes every time a block moves.
