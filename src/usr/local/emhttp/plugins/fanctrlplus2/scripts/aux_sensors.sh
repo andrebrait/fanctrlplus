@@ -22,12 +22,17 @@ fcp_temp_floor=0
 fcp_temp_ceiling=200
 
 fcp_clamp_temp() {
-  local value="${1:-}"
+  local value="${1:-}" temp
 
-  [[ "$value" =~ ^-?[0-9]+$ ]] || return 0
-  (( value < fcp_temp_floor )) && value=$fcp_temp_floor
-  (( value > fcp_temp_ceiling )) && value=$fcp_temp_ceiling
-  printf '%s' "$value"
+  # Base 10 explicitly: a padded reading like 0900 is a decimal temperature,
+  # not an octal literal that would fail the arithmetic outright.
+  [[ "$value" =~ ^(-?)0*([0-9]+)$ ]] || return 0
+  temp=$((10#${BASH_REMATCH[2]}))
+  [[ "${BASH_REMATCH[1]}" == "-" ]] && temp=$(( -temp ))
+
+  (( temp < fcp_temp_floor )) && temp=$fcp_temp_floor
+  (( temp > fcp_temp_ceiling )) && temp=$fcp_temp_ceiling
+  printf '%s' "$temp"
 }
 
 # Echo the first usable binary. Absolute candidates must be executable; bare
@@ -105,8 +110,11 @@ aux_read_sensor() {
       # either bare ("71") or labelled; take the first number either way.
       [[ -n "$aux_mget_temp_bin" ]] || return 0
       [[ "$sensor" =~ ^mlx:([0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F])$ ]] || return 0
-      temp=$("$aux_mget_temp_bin" -d "${BASH_REMATCH[1]}" 2>/dev/null \
-        | grep -oE '\-?[0-9]+' | head -n 1)
+      # The exit status decides whether there is a reading. These tools print
+      # their errors on stdout as well, and those carry digits (the PCI address
+      # itself does), so a failed call must never be parsed for a number.
+      raw=$("$aux_mget_temp_bin" -d "${BASH_REMATCH[1]}" 2>/dev/null) || return 0
+      temp=$(grep -oE -- '-?[0-9]+' <<< "$raw" | head -n 1)
       ;;
     custom:*)
       # The name addresses a file inside the drop-in directory: it is never

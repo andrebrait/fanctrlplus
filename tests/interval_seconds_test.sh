@@ -50,6 +50,16 @@ interval_sec="1" interval="" \
   actual=$(interval_seconds)
 expect_equal "5" "$actual" "Below-floor values must be clamped to 5s."
 
+# The ceiling is the same one the settings page enforces, so a hand-edited
+# config cannot put the loop outside the supported range.
+interval_sec="99999" interval="" \
+  actual=$(interval_seconds)
+expect_equal "3600" "$actual" "Above-ceiling values must be clamped to one hour."
+
+interval_sec="" interval="1440" \
+  actual=$(interval_seconds)
+expect_equal "3600" "$actual" "A legacy config beyond the ceiling must be clamped too."
+
 if (( failures > 0 )); then
   printf '%d interval assertion(s) failed.\n' "$failures" >&2
   exit 1

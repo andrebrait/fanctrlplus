@@ -1895,7 +1895,7 @@ $(function() {
     <ul>
     <li style="color:red;">
       <strong>CPU Fan Warning:</strong> CPU temperature can change rapidly (within seconds).  
-      FanCtrl&nbsp;Plus checks temperatures at most once per minute, so it cannot react as fast as BIOS or hardware fan control.  
+      FanCtrl&nbsp;Plus only checks temperatures once per interval, so even at the shortest interval it cannot react as fast as BIOS or hardware fan control.  
       It is strongly recommended to leave your CPU fan under BIOS/firmware control.  
       If you still choose to control CPU fan via FanCtrl&nbsp;Plus, monitor behavior closely and proceed at your own risk.
     </li>
