@@ -5,6 +5,7 @@ const {
   historyTooltipTitle,
   historyTickLabel,
   historyWindowMinutes,
+  historyRefreshSeconds,
 } = require(`${__dirname}/../src/usr/local/emhttp/plugins/fanctrlplus2/include/history-chart.js`);
 
 const failures = [];
@@ -67,6 +68,35 @@ expectEqual(60, historyWindowMinutes(store(null)), 'Default window is 60 minutes
 expectEqual(120, historyWindowMinutes(store('120')), 'A stored valid window is honored.');
 expectEqual(60, historyWindowMinutes(store('45')), 'A stored invalid window falls back to the default.');
 expectEqual(60, historyWindowMinutes(undefined), 'Missing storage falls back to the default.');
+
+// ===== Refresh preference =====
+// The tile polls once a minute unless the user asks for a faster chart, which
+// is what a sub-minute fan interval needs to be visible as it happens.
+expectEqual(60, historyRefreshSeconds(store(null)), 'Default refresh stays at 60 seconds.');
+expectEqual(5, historyRefreshSeconds(store('5')), 'The fastest offered refresh is honored.');
+expectEqual(15, historyRefreshSeconds(store('15')), 'A stored valid refresh is honored.');
+expectEqual(60, historyRefreshSeconds(store('1')), 'A refresh below the offered range falls back to the default.');
+expectEqual(60, historyRefreshSeconds(store('3600')), 'A refresh outside the offered range falls back to the default.');
+expectEqual(60, historyRefreshSeconds(store('abc')), 'A non-numeric refresh falls back to the default.');
+expectEqual(60, historyRefreshSeconds(undefined), 'Missing storage falls back to the default refresh.');
+
+// ===== The tile offers the refresh choices and re-arms its timer =====
+const fs = require('fs');
+const sourceRoot = process.env.FCP_SOURCE_ROOT
+  || `${__dirname}/../src/usr/local/emhttp/plugins/fanctrlplus2`;
+const historyPage = fs.readFileSync(`${sourceRoot}/FanctrlPlusHistory2.Dashboard.page`, 'utf8');
+const historyJs = fs.readFileSync(`${sourceRoot}/include/history-chart.js`, 'utf8');
+
+expectEqual(true, /id="fcp-history-refresh"/.test(historyPage),
+  'The tile header must carry the refresh selector.');
+[5, 10, 15, 30, 60].forEach(seconds => {
+  expectEqual(true, new RegExp(`<option value="${seconds}"`).test(historyPage),
+    `The refresh selector must offer ${seconds}s.`);
+});
+expectEqual(true, /clearInterval/.test(historyJs),
+  'Changing the refresh rate must replace the running timer, not stack another one.');
+expectEqual(false, /setInterval\([^)]*, 60000\)/.test(historyJs),
+  'The poll rate must come from the preference, not a hardcoded minute.');
 
 if (failures.length) {
   console.error(failures.join('\n'));
