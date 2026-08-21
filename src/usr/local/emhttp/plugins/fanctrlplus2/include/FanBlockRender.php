@@ -391,7 +391,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
         <!-- Aux Sensor(s) -->
         <tr class="aux-control aux-control-<?=$i?>">
-          <td class="aux-label fcp-help-cursor" title="Select one or more auxiliary temperature sensors to monitor. The highest temperature across all selected sensors is used. Lists non-CPU, non-NVMe hwmon sensors, plus storcli/nvidia-smi if available.">Include Sensor(s):</td>
+          <td class="aux-label fcp-help-cursor" title="Select one or more auxiliary temperature sensors to monitor. The highest temperature across all selected sensors is used. Lists non-CPU, non-NVMe hwmon sensors, plus storcli, nvidia-smi and Mellanox NICs if available, and any script you dropped in sensors.d.">Include Sensor(s):</td>
           <td>
             <?php $aux_selected = array_filter(explode(',', $cfg['aux_sensor'] ?? '')); ?>
             <select class="aux-select aux-input fcp-w-300" name="aux_sensor[<?=$i?>][]" multiple <?=($cfg['aux_enable'] ?? '') != '1' ? 'disabled' : ''?>>

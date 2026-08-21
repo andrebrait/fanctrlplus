@@ -12,7 +12,7 @@ Configuration is done through a user-friendly interface, with custom thresholds,
 - Set custom thresholds and intervals per fan, from 5 seconds to 1 hour
 - Control multiple PWM fans independently
 - Monitor temps from array disks, NVMe, unassigned devices, and optionally the CPU
-- Monitor auxiliary hwmon, storcli, NVIDIA GPU, and Mellanox NIC (`mget_temp`) temperature sensors
+- Monitor auxiliary hwmon, storcli, NVIDIA GPU, and Mellanox NIC (`mget_temp`) temperature sensors, or any sensor of your own through a custom script
 - Use independent temperature ranges for multiple disk groups on one fan
 - Uses a linear control algorithm to smoothly adjust fan speed (PWM) based on the current temperature (disk or CPU) between your defined low/high values
 - Identify and label PWM controllers to match physical fans easily
@@ -39,6 +39,37 @@ FanCtrl Plus because both may control the same PWM devices. To migrate:
 3. Install FanCtrl Plus 2 again using the URL above.
 
 Do not reinstall or run upstream FanCtrl Plus while FanCtrl Plus 2 is installed.
+
+## Custom temperature sensors
+
+Any sensor the plugin does not know about can be added as a script. Drop an
+executable file in:
+
+```text
+/boot/config/plugins/fanctrlplus2/sensors.d/
+```
+
+Each executable in that directory becomes one auxiliary sensor, named after the
+file, selectable per fan alongside the built-in sources. The contract is:
+
+- print the temperature in degrees Celsius and nothing else (a fractional
+  reading is truncated to whole degrees);
+- on any error, print nothing and exit with a non-zero status.
+
+A sensor that errors, prints anything other than a temperature, or takes longer
+than 5 seconds is skipped for that round of checks only; the fan keeps being
+driven by its other sources, and the script is tried again on the next round. A
+reading of 0 °C counts as unavailable, the same as for every other sensor.
+
+```sh
+#!/bin/bash
+# /boot/config/plugins/fanctrlplus2/sensors.d/ambient
+temp=$(some-tool --read-ambient 2>/dev/null) || exit 1
+[[ "$temp" =~ ^[0-9]+$ ]] || exit 1
+echo "$temp"
+```
+
+Remember to make the file executable (`chmod +x`).
 
 Support / Issues
 - https://github.com/andrebrait/fanctrlplus/issues
