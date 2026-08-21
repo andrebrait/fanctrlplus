@@ -31,7 +31,9 @@ if (preg_match('/(?<!ui-)sortable-placeholder/', $page) || preg_match('/(?<!ui-)
   $failures[] = 'Standing empty-column blocks must be gone; only the drag placeholder remains.';
 }
 
-// The grid wraps on its own, from the width one block needs.
+// The grid wraps on its own, from the width one block needs -- but that width
+// is a floor for the track, and a bare one is wider than a phone, which makes
+// the block overflow the screen. It has to give way to the container.
 if (!preg_match('/#fan-area\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\((.+?),\s*1fr\)\)/s', $css, $m)) {
   $failures[] = 'The block area must wrap automatically at the width a block needs.';
 } else {
@@ -67,25 +69,31 @@ if (str_contains($logic, "'columns'")) {
   $failures[] = 'The saveorder handler still expects columns.';
 }
 
-// One sortable, over the one container: two implementations drifted apart
-// before, and the one that lost track of connecting them won.
-$setups = preg_match_all('/\.sortable\(opts\)/', $page);
-if ($setups !== 1) {
-  $failures[] = "There must be exactly one sortable setup, found $setups.";
-}
-if (str_contains($page, 'initSortableUnlocked') || str_contains($page, 'destroySortableLocked')) {
-  $failures[] = 'The second, divergent sortable setup must be gone.';
+// Blocks are reordered with a button per direction, at every width. Nothing
+// drags any more, so nothing needs a sortable, a drag ghost or a handle.
+if (str_contains($page, '.sortable(') || str_contains($page, 'sortableUnlocked')) {
+  $failures[] = 'Dragging is gone: nothing may set up or track a sortable.';
 }
 
-// The lock state is module-scope: a refactor that removes the block it was
-// declared in leaves every reference to it throwing ReferenceError, and only
-// when the user clicks the lock. Assert the declaration survives.
-foreach (['sortableUnlocked'] as $stateVariable) {
+// Module-scope state: a refactor that removes the block a variable was declared
+// in leaves every reference to it throwing ReferenceError, and only when the
+// user reaches that code path. Assert the declarations survive.
+foreach (['reorderUnlocked'] as $stateVariable) {
   $declarations = preg_match_all('/\b(?:let|const|var)\s+' . preg_quote($stateVariable, '/') . '\b/', $page);
   $references = preg_match_all('/\b' . preg_quote($stateVariable, '/') . '\b/', $page);
   if ($references > 0 && $declarations !== 1) {
     $failures[] = "\"$stateVariable\" is referenced $references times but declared $declarations times.";
   }
+}
+
+// The README is the first thing a user reads, so it must not still advertise a
+// way of working that was removed.
+$readme = file_get_contents(__DIR__ . '/../README.md');
+if (preg_match('/drag[- ]and[- ]drop|drag and drop/i', $readme)) {
+  $failures[] = 'The README still advertises drag and drop, which no longer exists.';
+}
+if (!preg_match('/reorder/i', $readme)) {
+  $failures[] = 'The README must say how fan configurations are reordered.';
 }
 
 if ($failures) {

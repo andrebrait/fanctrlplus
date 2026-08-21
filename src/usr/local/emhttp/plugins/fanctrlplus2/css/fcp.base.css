@@ -328,33 +328,38 @@
   background-color: var(--orange-800);
 }
 
-/* ===== Drag / Sortable ===== */
-.drag-handle {
-  display: none;
+/* ===== Reordering ===== */
+/* Offered only while the lock is open. */
+.fcp-reorder { display: none; }
+.fan-block.reorderable .fcp-reorder {
+  display: flex;
+  gap: 4px;
   position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  z-index: 2;
-  text-align: center;
-  line-height: 36px;
-  cursor: grab;
-  font-size: 1.3em;
-  transition: all 0.25s ease-in-out;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
 }
-.fan-block.draggable .drag-handle { color: var(--orange-300); }
-.drag-handle:hover { transform: scale(1.2); }
+.fcp-reorder button {
+  /* Pinned rather than requested: a flex item keeps its content width unless
+     min-width says otherwise, and the page sizes buttons in rem, so both are
+     taken out of the picture here. */
+  width: 28px;
+  height: 28px;
+  min-width: 0;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.fcp-reorder button i { font-size: 12px; line-height: 1; }
+.fcp-reorder button:disabled { opacity: 0.35; cursor: default; }
 
-/* Ghost while dragging: the only placeholder, showing where the block would
-   land if it were dropped now. */
-.fan-placeholder {
-  border: 1px solid #bbb;
-  border-radius: 6px;
-  background-color: #f9f9f9;
-  width: 98%;
-  box-sizing: border-box;
-  margin: 0 auto;
-  min-height: 180px;
-}
 
 /* ===== Form layout tweaks ===== */
 dt.containerSettingsDt {
@@ -390,12 +395,6 @@ dt.containerSettingsDt {
   border: 1px solid #ccc;
   border-radius: 6px;
   position: relative;
-}
-.fan-block.draggable { cursor: move !important; }
-.fan-block.ui-sortable-helper {
-  cursor: grabbing !important;
-  /* Lifted rather than faded: fading took the borders with it. */
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
 }
 
 .cpu-label.disabled { opacity: 0.5; }

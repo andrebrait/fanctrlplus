@@ -474,7 +474,7 @@ $(function() {
   };
 
   window.ensureAtLeastOneFanBlock = function () {
-    const realBlocks = $('.fan-block').not('.ui-sortable-placeholder');
+    const realBlocks = $('.fan-block');
     if (realBlocks.length === 0) {
       addFan();
     }
@@ -494,7 +494,7 @@ $(function() {
       $html.find('.aux-select').dropdownchecklist(auxDropdownChecklistOptions);
 
       updateAllFanStatus();
-      applySortableState();
+      applyReorderState();
       updatePwmDropdowns();
       bindPWMChangeHandlers();
 
@@ -621,7 +621,7 @@ $(function() {
 
   $(document).ready(bindFanSpeedEvents);
   $(document).ready(bindIdleEvents); 
-  $(document).ready(applySortableState);
+  $(document).ready(applyReorderState);
 
   function bindUnitInputs(unitConfigs) {
     unitConfigs.forEach(({ selector, unit, min = 0, max = 100 }) => {
@@ -1010,35 +1010,76 @@ $(function() {
     $('#apply-btn').prop('disabled', !dirty);
   }
 
-  // Whether blocks can be dragged. Toggled by the lock in the header.
-  let sortableUnlocked = false;
+  // Whether blocks can be reordered. Toggled by the lock in the header.
+  let reorderUnlocked = false;
 
-  // The one place the sortable is set up. There were two, and they drifted
-  // apart; the blocks are one list in one container now, so there is one.
-  function applySortableState() {
-    const $area = $('#fan-area');
+  // How many columns the grid ended up with. Read from the resolved track list
+  // rather than worked out from a width, so it cannot drift from what the grid
+  // actually did.
+  function columnsShown() {
+    const area = document.getElementById('fan-area');
+    if (!area) return 1;
+    const tracks = getComputedStyle(area).gridTemplateColumns;
+    if (!tracks || tracks === 'none') return 1;
+    return tracks.trim().split(/\s+/).filter(Boolean).length;
+  }
 
-    if ($area.sortable('instance')) $area.sortable('destroy');
+  // The list wraps, so "earlier" is up while the blocks are in one column and to
+  // the left once they sit side by side.
+  function reorderArrowIcons(columnsShown) {
+    return columnsShown > 1
+      ? { earlier: 'fa fa-arrow-left', later: 'fa fa-arrow-right' }
+      : { earlier: 'fa fa-arrow-up', later: 'fa fa-arrow-down' };
+  }
 
-    if (!sortableUnlocked) {
-      $area.removeClass('ui-sortable ui-sortable-disabled');
-      $area.find('.fan-block').removeClass('ui-sortable-handle');
-      return;
-    }
+  // Where a block lands when a move button is pressed, or null if it is already
+  // at that end. The same rule decides whether the button is offered at all, so
+  // a button that does nothing cannot be shown as available.
+  function reorderTargetIndex(index, direction, count) {
+    const target = index + direction;
+    return (target < 0 || target >= count) ? null : target;
+  }
 
-    const hasHandle = $area.find('.fcp-drag-handle').length > 0;
-    const opts = {
-      items: '> .fan-block',
-      tolerance: 'pointer',
-      placeholder: 'fan-placeholder',
-      start: function (e, ui) { ui.placeholder.height(ui.item.outerHeight()); },
-      update: function () { saveFanOrder(); },
-      cancel: 'input,textarea,select,button,.dropdownchecklist,.dropdownchecklist *,.fcp-range-grid,.chart-btn',
-      distance: 8,
-    };
-    if (hasHandle) { opts.handle = '.fcp-drag-handle'; opts.delay = 150; }
+  function updateReorderButtons() {
+    const $blocks = $('#fan-area').children('.fan-block');
+    const count = $blocks.length;
 
-    $area.sortable(opts);
+    const icons = reorderArrowIcons(columnsShown());
+
+    $blocks.each(function (index) {
+      const $block = $(this);
+      $block.find('.fcp-move-up')
+        .prop('disabled', reorderTargetIndex(index, -1, count) === null)
+        .find('i').attr('class', icons.earlier);
+      $block.find('.fcp-move-down')
+        .prop('disabled', reorderTargetIndex(index, 1, count) === null)
+        .find('i').attr('class', icons.later);
+    });
+  }
+
+  function moveBlock($block, direction) {
+    const $blocks = $('#fan-area').children('.fan-block');
+    const target = reorderTargetIndex($blocks.index($block), direction, $blocks.length);
+    if (target === null) return;
+
+    const $neighbour = $blocks.eq(target);
+    if (direction < 0) $block.insertBefore($neighbour); else $block.insertAfter($neighbour);
+
+    updateReorderButtons();
+    saveFanOrder();
+  }
+
+  $(document).on('click', '.fcp-move-up', function () {
+    moveBlock($(this).closest('.fan-block'), -1);
+  });
+  $(document).on('click', '.fcp-move-down', function () {
+    moveBlock($(this).closest('.fan-block'), 1);
+  });
+
+  // Reflects the lock: the buttons are only offered while it is open.
+  function applyReorderState() {
+    $('.fan-block').toggleClass('reorderable', reorderUnlocked);
+    updateReorderButtons();
   }
 
   $('.disk-select').dropdownchecklist(dropdownChecklistOptions);
@@ -1054,6 +1095,13 @@ $(function() {
   });
 
   setApplyAllButtonState();
+
+  // Wrapping into a different number of columns turns the arrows.
+  let reorderIconTimer = null;
+  $(window).on('resize', function () {
+    clearTimeout(reorderIconTimer);
+    reorderIconTimer = setTimeout(updateReorderButtons, 150);
+  });
 
   $(document).on('change', '.pwm-controller', updatePwmDropdowns);
 
@@ -1315,13 +1363,15 @@ $(function() {
     $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', { op: 'delete', file: file })
       .done(function () {
         block.remove();
+        // Which blocks are first and last has changed.
+        updateReorderButtons();
 
         const safeId = custom.replace(/[^a-zA-Z0-9_-]/g, '');
         $('#syslog-row-' + safeId).remove();
 
         setTimeout(() => {
           // Keep at least one fan block.
-          const realBlocks = $('.fan-block').not('.ui-sortable-placeholder');
+          const realBlocks = $('.fan-block');
           if (realBlocks.length === 0) {
             ensureAtLeastOneFanBlock();
           }
@@ -1381,31 +1431,27 @@ $(function() {
 
     // Toggle sorting lock state.
     $('#fanctrlplus2-sort-toggle').on('click', function () {
-      if (!sortableUnlocked) {
+      if (!reorderUnlocked) {
         if ($('.fan-block[data-file*="_temp_"]').length > 0) {
           alert("Temporary fan configurations found. Please name them or delete before unlocking.");
           return;
         }
       }
 
-      sortableUnlocked = !sortableUnlocked;
+      reorderUnlocked = !reorderUnlocked;
 
-      applySortableState();
+      applyReorderState();
 
-      if (sortableUnlocked) {
+      if (reorderUnlocked) {
         // Unlocked state.
-        $('.fan-block').addClass('draggable');
         $('.fan-svg-container').hide();
-        $('.drag-handle').show();
         $(this)
           .removeClass('icon-u-lock green-text')
           .addClass('icon-u-lock-open red-text')
           .attr('title', 'Lock sorting fan configurations');
       } else {
         // Locked state.
-        $('.fan-block').removeClass('draggable');
         $('.fan-svg-container').show();
-        $('.drag-handle').hide();
         $(this)
           .removeClass('icon-u-lock-open red-text')
           .addClass('icon-u-lock green-text')
