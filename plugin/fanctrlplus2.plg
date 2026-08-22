@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.8.2"
+  version="1.8.3"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,16 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.8.3
+
+## What's changed
+
+- Fix the plugin's description on the **Plugins** page. Unraid builds that column from the README packaged inside the plugin, and the release was packaging the project's README, so the description was the whole thing — badges, install instructions and licence notes in a table cell. It is now a description written for that column.
+
+## Upgrade compatibility
+
+Existing configurations continue to work and need no migration. Nothing about fan control changes; this affects only the text Unraid shows for the plugin itself.
 
 ### 1.8.2
 
@@ -45,21 +55,6 @@ Existing configurations continue to work and need no migration. This changes onl
 Existing configurations continue to work and need no migration. Nothing about how a fan is configured or how its speed is calculated changes; only which readings count as readings.
 
 A sensor that errors does not repeat its last value: telling "errored" apart from "has nothing to report" matters, because a spun-down disk reports nothing and should let the fan drop to its Idle Speed. A `sensors.d` script that wants to hold its last good reading can cache it itself.
-
-### 1.8.0
-
-## What's changed
-
-- **Reorder fan configurations with a button per direction** instead of dragging. Dragging was unusable on a phone: it fought the page scroll, gave no reliable idea of where a block would land, and flickered while a finger was down. Each configuration now carries two arrows where the drag handle used to be, shown while sorting is unlocked. The one at each end of the list is disabled, and the arrows point along the row or across it depending on where the block would actually land.
-- Fix a fan configuration being **wider than a phone screen**, introduced in 1.7.0 by the wrapping layout.
-- Save the order one request at a time. Two quick moves could previously race, and the slower one could be what ended up saved.
-- Run the test suite on every pull request and on `main`, and show the icon and badges in the README.
-
-## Upgrade compatibility
-
-Existing configurations continue to work and need no migration, and the saved arrangement of fan configurations is unchanged.
-
-Dragging is removed rather than hidden: reordering is done with the arrows, on a desktop as well as a phone. The lock in the header still controls whether the order can be changed at all.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -113,16 +108,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.2-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.8.2/fanctrlplus2-1.8.2-noarch-1.txz</URL>
-<SHA256>3e2fae8ca3bf7aed9b363cba3737f963ca615fe85b87ee8e4c587d99a64e8b78</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.3-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.8.3/fanctrlplus2-1.8.3-noarch-1.txz</URL>
+<SHA256>71654ccb0414c8eb7605bcfec87d75241eecbb851ec3a6075dec38be1687542a</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.2-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.3-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -147,7 +142,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.8.2"
+echo " Version: 1.8.3"
 echo "------------------------------------------------"
 echo ""
 exit 0
