@@ -20,15 +20,18 @@ if (!is_file($description)) {
   $size = strlen($text);
 
   if ($size > 500) {
-    $failures[] = "The packaged description is $size bytes; every other plugin's is under 300.";
+    $failures[] = "The packaged description is $size bytes; the limit is 500.";
   }
   if (!str_starts_with(trim($text), '**FanCtrl Plus 2**')) {
     $failures[] = 'The description must open with the plugin name in bold, as the others do.';
   }
-  foreach (['<img', '<div', 'img.shields.io', '```'] as $markup) {
-    if (str_contains($text, $markup)) {
-      $failures[] = "The description must not carry \"$markup\": it is rendered into a table cell.";
-    }
+  // Markdown images, any HTML element, and either fence style: the text lands
+  // in a table cell, so anything that wants a block of its own does not belong.
+  if (preg_match('/!\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])|<\s*[a-z][^>]*>|```|~~~/i', $text)) {
+    $failures[] = 'The description must not contain images, HTML or code fences.';
+  }
+  if (str_contains($text, 'img.shields.io')) {
+    $failures[] = 'The description must not carry badges.';
   }
 }
 
@@ -38,8 +41,14 @@ $workflow = file_get_contents($root . '/.github/workflows/release.yml');
 if (preg_match('/cp\s+README\.md\s/', $workflow)) {
   $failures[] = 'The release must not package the project README as the plugin description.';
 }
-if (!str_contains($workflow, 'plugin/description.md')) {
-  $failures[] = 'The release must package plugin/description.md as the plugin README.';
+// The whole command, not just the path: naming the file in a comment, or
+// copying it somewhere other than the plugin's README, would both pass a
+// looser check while leaving the description wrong.
+if (!preg_match(
+  '/^\s*cp\s+plugin\/description\.md\s+src\/usr\/local\/emhttp\/plugins\/fanctrlplus2\/README\.md\s*$/m',
+  $workflow
+)) {
+  $failures[] = 'The release must copy plugin/description.md to the plugin README.';
 }
 
 if ($failures) {
