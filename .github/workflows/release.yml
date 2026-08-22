@@ -17,4 +17,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           plugin_version: ${{ github.event.release.name }}
           plg_branch: main
-          build_script: cp README.md LICENSE NOTICE THIRD_PARTY_NOTICES.md src/usr/local/emhttp/plugins/fanctrlplus2/
+          # The plugin manager renders the packaged README.md as this plugin's
+          # description on the Plugins page, so it gets the short description
+          # rather than the project's README.
+          build_script: |
+            cp LICENSE NOTICE THIRD_PARTY_NOTICES.md src/usr/local/emhttp/plugins/fanctrlplus2/
+            cp plugin/description.md src/usr/local/emhttp/plugins/fanctrlplus2/README.md
