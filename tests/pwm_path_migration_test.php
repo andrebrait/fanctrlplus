@@ -32,8 +32,23 @@ if (find_moved_pwm_path("$root/devices/pci0000:00/0000:00:14.0/usb1/1-3/1-3:1.0/
 if (find_moved_pwm_path("$port/0003:3904:F001.0005/hwmon/hwmon5/pwm3") !== null) {
     $failures[] = 'A channel the device no longer has must not match.';
 }
-if (find_moved_pwm_path('/sys/class/hwmon/hwmon5/pwm2') !== null) {
+// Two instances of the same device on one port: nothing pins either one.
+$twin = "$root/devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1:1.0";
+$make("$twin/0003:3904:F001.000A/hwmon/hwmon9/pwm1");
+$make("$twin/0003:3904:F001.000B/hwmon/hwmon10/pwm1");
+if (find_moved_pwm_path("$twin/0003:3904:F001.0002/hwmon/hwmon3/pwm1") !== null) {
+    $failures[] = 'An ambiguous match must not be picked.';
+}
+if (find_moved_pwm_path("$twin/0003:3904:F001.000A/hwmon/hwmon9/pwm1") !== "$twin/0003:3904:F001.000A/hwmon/hwmon9/pwm1") {
+    $failures[] = 'A path that still exists must be kept even when it has siblings.';
+}
+
+$make("$root/class/hwmon/hwmon3/pwm2");
+if (find_moved_pwm_path("$root/class/hwmon/hwmon5/pwm2") !== null) {
     $failures[] = 'A /sys/class path carries no device identity and must be left to the chip-name fallback.';
+}
+if (find_moved_pwm_path("$root/devices/platform/nct6775.*/hwmon/hwmon4/pwm2") !== null) {
+    $failures[] = 'A saved path must not be used as a glob pattern.';
 }
 
 exec('rm -rf ' . escapeshellarg($root));

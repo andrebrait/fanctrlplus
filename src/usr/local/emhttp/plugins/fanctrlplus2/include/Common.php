@@ -128,10 +128,15 @@ function extract_chip_and_pwm_from_path(string $old_path): ?array {
 // probe order and a USB HID device gets a new instance suffix
 // (0003:VID:PID.NNNN) each time it enumerates, so both are wildcarded; the
 // rest of the path (bus topology, VID:PID, pwmN) still pins the same device.
+const FCP_HID_INSTANCE = '#(/[0-9A-Fa-f]{4}:[0-9A-Fa-f]{4}:[0-9A-Fa-f]{4})\.[0-9A-Fa-f]+/#';
+
 function find_moved_pwm_path(string $old_path): ?string {
-    if (str_contains($old_path, '/class/hwmon/')) return null; // no device identity
+    // A /sys/class path carries no device identity; glob characters would
+    // turn the saved path into an arbitrary pattern.
+    if (strpos($old_path, '/class/hwmon/') !== false || strpbrk($old_path, '*?[') !== false) return null;
+    if (file_exists($old_path)) return $old_path;
     $pattern = preg_replace(
-        ['#/hwmon/hwmon\d+/#', '#(/[0-9A-Fa-f]{4}:[0-9A-Fa-f]{4}:[0-9A-Fa-f]{4})\.[0-9A-Fa-f]+/#'],
+        ['#/hwmon/hwmon\d+/#', FCP_HID_INSTANCE],
         ['/hwmon/hwmon*/', '$1.*/'],
         $old_path
     );
@@ -140,10 +145,11 @@ function find_moved_pwm_path(string $old_path): ?string {
 }
 
 // Current path for a saved pwm path: the same device first, then any chip with
-// the same driver name and pwmN.
+// the same driver name and pwmN. A USB device that was not found is absent or
+// ambiguous; guessing by name would hand its settings to another controller.
 function current_pwm_path(string $old_path, array $pwm_map): ?string {
     $moved = find_moved_pwm_path($old_path);
-    if ($moved !== null) return $moved;
+    if ($moved !== null || preg_match(FCP_HID_INSTANCE, $old_path)) return $moved;
     $pair = extract_chip_and_pwm_from_path($old_path);
     return $pair ? ($pwm_map[$pair[0].':'.$pair[1]] ?? null) : null;
 }
