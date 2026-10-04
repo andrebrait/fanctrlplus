@@ -231,8 +231,9 @@ function migrate_cfg_and_labels(string $plugin): void {
 function list_pwm(string $hwmon_glob = '/sys/class/hwmon/hwmon*') {
   $out = [];
   foreach (glob($hwmon_glob) ?: [] as $hwmon) {
+    $name = '';
     foreach ([$hwmon, "$hwmon/device"] as $dir) {
-      $name = is_file("$dir/name") ? trim(file_get_contents("$dir/name")) : '';
+      if (is_file("$dir/name")) $name = trim(file_get_contents("$dir/name"));
       foreach (glob("$dir/pwm*") ?: [] as $pwm) {
         if (!preg_match('/^pwm\d+$/', basename($pwm)) || !is_file($pwm)) continue;
         $sensor = realpath($pwm) ?: $pwm;

@@ -16,19 +16,26 @@ $usb = 'usb1/1-14/1-14:1.0/0003:3904:F001.0005/hwmon/hwmon5';
 $chip('hwmon5', $usb, 'arctic_fan_controller',
     ['pwm1', 'pwm2', 'pwm10', 'pwm1_enable', 'pwm10_enable', 'pwm1_auto_point1_pwm']);
 
-// Older drivers put the attributes on the parent device; hwmonN is a stub.
-$legacy = 'platform/w83627hf.656';
-@mkdir("$root/devices/$legacy/hwmon/hwmon2", 0777, true);
-symlink("$root/devices/$legacy", "$root/devices/$legacy/hwmon/hwmon2/device");
-$chip('hwmon2', "$legacy/hwmon/hwmon2", 'w83627hf', []);
-unlink("$root/devices/$legacy/hwmon/hwmon2/name");
-file_put_contents("$root/devices/$legacy/name", "w83627hf\n");
-touch("$root/devices/$legacy/pwm1");
+// Older drivers put the attributes on the parent device; hwmonN is a stub
+// that may or may not carry the name.
+$legacy = function (string $hwmon, string $device, string $name, bool $nameOnDevice) use ($root, $chip): void {
+    @mkdir("$root/devices/$device/hwmon/$hwmon", 0777, true);
+    symlink("$root/devices/$device", "$root/devices/$device/hwmon/$hwmon/device");
+    $chip($hwmon, "$device/hwmon/$hwmon", $name, []);
+    if ($nameOnDevice) {
+        unlink("$root/devices/$device/hwmon/$hwmon/name");
+        file_put_contents("$root/devices/$device/name", "$name\n");
+    }
+    touch("$root/devices/$device/pwm1");
+};
+$legacy('hwmon2', 'platform/w83627hf.656', 'w83627hf', true);
+$legacy('hwmon3', 'platform/it87.552', 'it8728', false);
 
 $pwms = list_pwm("$root/class/hwmon/hwmon*");
 
 $expected = [
-    ['chip' => 'w83627hf',              'name' => 'pwm1',  'sensor' => "$root/devices/$legacy/pwm1"],
+    ['chip' => 'it8728',                'name' => 'pwm1',  'sensor' => "$root/devices/platform/it87.552/pwm1"],
+    ['chip' => 'w83627hf',              'name' => 'pwm1',  'sensor' => "$root/devices/platform/w83627hf.656/pwm1"],
     ['chip' => 'arctic_fan_controller', 'name' => 'pwm1',  'sensor' => "$root/devices/$usb/pwm1"],
     ['chip' => 'arctic_fan_controller', 'name' => 'pwm2',  'sensor' => "$root/devices/$usb/pwm2"],
     ['chip' => 'arctic_fan_controller', 'name' => 'pwm10', 'sensor' => "$root/devices/$usb/pwm10"],
