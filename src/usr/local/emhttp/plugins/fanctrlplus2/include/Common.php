@@ -172,15 +172,18 @@ function safe_rewrite(string $file, string $content): bool {
     return true;
 }
 
-function migrate_cfg_and_labels(string $plugin): void {
-    $cfgpath   = "/boot/config/plugins/$plugin";
+function migrate_cfg_and_labels(string $plugin, string $cfgpath = ''): void {
+    $cfgpath   = $cfgpath ?: "/boot/config/plugins/$plugin";
     $labelFile = "$cfgpath/pwm_labels.cfg";
     $pwm_map   = build_pwm_map();
 
     // --- labels ---
     if (is_file($labelFile)) {
         $lines = file($labelFile, FILE_IGNORE_NEW_LINES) ?: [];
-        $changed = false; $out = [];
+        // A label already saved for the current path (re-entered after the
+        // device moved) wins over a stale one migrated onto the same path;
+        // the label readers take the last line and savelabel edits the first.
+        $changed = false; $out = []; $pos = [];
         foreach ($lines as $line) {
             if (!preg_match('/^(.+?)=(.*)$/', $line, $m)) { $out[]=$line; continue; }
             $old_path = trim($m[1], " \t\n\r\0\x0B\"'");
@@ -194,22 +197,34 @@ function migrate_cfg_and_labels(string $plugin): void {
             $new_path = current_pwm_path($old_path, $pwm_map);
             if ($new_path === null) { log_migrate("migrate label: no match, keep $old_path"); $out[]=$line; continue; }
             if ($new_path !== $old_path) {
+                $changed = true;
+                if (isset($pos[$new_path])) { log_migrate("migrate label: drop $old_path, $new_path already labeled"); continue; }
                 if (preg_match('#/(hwmon\d+)/#', $old_path, $o) && preg_match('#/(hwmon\d+)/#', $new_path, $n)) {
                     log_migrate("migrate label: $old_path → $new_path ({$o[1]} → {$n[1]})");
                 } else {
                     log_migrate("migrate label: $old_path → $new_path");
                 }
+            } elseif (isset($pos[$new_path])) {
                 $changed = true;
-                $out[] = $new_path.'='.$label;
-            } else {
-                $out[] = $line;
+                $out[$pos[$new_path]] = $line;
+                continue;
             }
+            $pos[$new_path] = count($out);
+            $out[] = $new_path.'='.$label;
         }
         if ($changed) safe_rewrite($labelFile, implode("\n", $out));
     }
 
     // --- cfgs ---
-    foreach (glob("$cfgpath/{$plugin}_*.cfg") ?: [] as $cfgfile) {
+    // A fan assigned to the current path while an old one still pointed at
+    // the vanished path keeps it: two loops must not drive the same PWM.
+    $cfgfiles = glob("$cfgpath/{$plugin}_*.cfg") ?: [];
+    $in_use = [];
+    foreach ($cfgfiles as $cfgfile) {
+        $controller = trim((string)((@parse_ini_file($cfgfile) ?: [])['controller'] ?? ''), " \t\n\r\0\x0B\"'");
+        if ($controller !== '' && file_exists($controller)) $in_use[$controller] = true;
+    }
+    foreach ($cfgfiles as $cfgfile) {
         $ini = @parse_ini_file($cfgfile);
         if (!$ini) continue;
 
@@ -225,6 +240,11 @@ function migrate_cfg_and_labels(string $plugin): void {
             continue;
         }
         if ($new_path === $old_path) continue;
+        if (isset($in_use[$new_path])) {
+            log_migrate("migrate cfg: keep $old_path in $cfgfile, $new_path is already controlled");
+            continue;
+        }
+        $in_use[$new_path] = true;
 
         if (preg_match('#/(hwmon\d+)/#', $old_path, $o) && preg_match('#/(hwmon\d+)/#', $new_path, $n)) {
             log_migrate("migrate cfg: $cfgfile controller: $old_path → $new_path ({$o[1]} → {$n[1]})");

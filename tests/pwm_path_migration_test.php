@@ -51,6 +51,38 @@ if (find_moved_pwm_path("$root/devices/platform/nct6775.*/hwmon/hwmon4/pwm2") !=
     $failures[] = 'A saved path must not be used as a glob pattern.';
 }
 
+// The reporter's state after re-assigning by hand: stale lines for the old
+// instance next to new ones for the current path.
+$make("$port/0003:3904:F001.0008/hwmon/hwmon7/pwm8");
+$old = "$port/0003:3904:F001.0005/hwmon/hwmon5";
+$new = "$port/0003:3904:F001.0008/hwmon/hwmon7";
+$cfg = "$root/cfg";
+@mkdir($cfg);
+file_put_contents("$cfg/pwm_labels.cfg", implode("\n", [
+    '__FCP_HISTORY__=1',
+    "$old/pwm9=JBOD_old",
+    "$old/pwm8=Rear",
+    "$new/pwm9=JBOD",
+    "$port/0003:3904:F001.0003/hwmon/hwmon4/pwm9=JBOD_older",
+]) . "\n");
+file_put_contents("$cfg/fanctrlplus2_old.cfg", "custom=\"old\"\ncontroller=\"$old/pwm9\"\n");
+file_put_contents("$cfg/fanctrlplus2_new.cfg", "custom=\"new\"\ncontroller=\"$new/pwm9\"\n");
+file_put_contents("$cfg/fanctrlplus2_rear.cfg", "custom=\"rear\"\ncontroller=\"$old/pwm8\"\n");
+
+migrate_cfg_and_labels('fanctrlplus2', $cfg);
+
+$labels = file("$cfg/pwm_labels.cfg", FILE_IGNORE_NEW_LINES);
+if ($labels !== ['__FCP_HISTORY__=1', "$new/pwm9=JBOD", "$new/pwm8=Rear"]) {
+    $failures[] = "A label saved for the current path must win over a stale one migrated onto it, once. Got:\n" . implode("\n", $labels);
+}
+$controller = fn(string $name) => parse_ini_file("$cfg/fanctrlplus2_$name.cfg")['controller'];
+if ($controller('old') !== "$old/pwm9") {
+    $failures[] = 'A fan must not be migrated onto a PWM another fan already controls.';
+}
+if ($controller('rear') !== "$new/pwm8") {
+    $failures[] = 'A fan on a re-enumerated controller must be migrated to its current path.';
+}
+
 exec('rm -rf ' . escapeshellarg($root));
 
 if ($failures) {
