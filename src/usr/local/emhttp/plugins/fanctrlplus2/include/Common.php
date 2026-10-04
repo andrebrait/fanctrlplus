@@ -124,6 +124,30 @@ function extract_chip_and_pwm_from_path(string $old_path): ?array {
     return null;
 }
 
+// Find where a saved /sys/devices pwm path lives now. The hwmonN index follows
+// probe order and a USB HID device gets a new instance suffix
+// (0003:VID:PID.NNNN) each time it enumerates, so both are wildcarded; the
+// rest of the path (bus topology, VID:PID, pwmN) still pins the same device.
+function find_moved_pwm_path(string $old_path): ?string {
+    if (str_contains($old_path, '/class/hwmon/')) return null; // no device identity
+    $pattern = preg_replace(
+        ['#/hwmon/hwmon\d+/#', '#(/[0-9A-Fa-f]{4}:[0-9A-Fa-f]{4}:[0-9A-Fa-f]{4})\.[0-9A-Fa-f]+/#'],
+        ['/hwmon/hwmon*/', '$1.*/'],
+        $old_path
+    );
+    $matches = glob($pattern) ?: [];
+    return count($matches) === 1 ? $matches[0] : null;
+}
+
+// Current path for a saved pwm path: the same device first, then any chip with
+// the same driver name and pwmN.
+function current_pwm_path(string $old_path, array $pwm_map): ?string {
+    $moved = find_moved_pwm_path($old_path);
+    if ($moved !== null) return $moved;
+    $pair = extract_chip_and_pwm_from_path($old_path);
+    return $pair ? ($pwm_map[$pair[0].':'.$pair[1]] ?? null) : null;
+}
+
 function log_migrate(string $msg): void {
     // Write the plugin log.
     @file_put_contents("/var/log/fanctrlplus2-migrate.log",
@@ -161,13 +185,8 @@ function migrate_cfg_and_labels(string $plugin): void {
                 continue;
             }
 
-            $pair = extract_chip_and_pwm_from_path($old_path);
-            if (!$pair) { log_migrate("migrate label: skip (unparsable) $old_path"); $out[]=$line; continue; }
-            [$chip,$pwmN] = $pair;
-            $key = "$chip:$pwmN";
-            if (!isset($pwm_map[$key])) { log_migrate("migrate label: no match for $chip:$pwmN, keep $old_path"); $out[]=$line; continue; }
-
-            $new_path = $pwm_map[$key];
+            $new_path = current_pwm_path($old_path, $pwm_map);
+            if ($new_path === null) { log_migrate("migrate label: no match, keep $old_path"); $out[]=$line; continue; }
             if ($new_path !== $old_path) {
                 if (preg_match('#/(hwmon\d+)/#', $old_path, $o) && preg_match('#/(hwmon\d+)/#', $new_path, $n)) {
                     log_migrate("migrate label: $old_path → $new_path ({$o[1]} → {$n[1]})");
@@ -194,19 +213,11 @@ function migrate_cfg_and_labels(string $plugin): void {
             continue;
         }
 
-        $pair = extract_chip_and_pwm_from_path($old_path);
-        if (!$pair) { 
-            log_migrate("migrate cfg: skip (unparsable) $cfgfile controller=$old_path"); 
-            continue; 
+        $new_path = current_pwm_path($old_path, $pwm_map);
+        if ($new_path === null) {
+            log_migrate("migrate cfg: no match for $cfgfile, keep $old_path");
+            continue;
         }
-        [$chip,$pwmN] = $pair;
-        $key = "$chip:$pwmN";
-        if (!isset($pwm_map[$key])) { 
-            log_migrate("migrate cfg: no match for $cfgfile ($chip:$pwmN), keep $old_path"); 
-            continue; 
-        }
-
-        $new_path = $pwm_map[$key];
         if ($new_path === $old_path) continue;
 
         if (preg_match('#/(hwmon\d+)/#', $old_path, $o) && preg_match('#/(hwmon\d+)/#', $new_path, $n)) {
