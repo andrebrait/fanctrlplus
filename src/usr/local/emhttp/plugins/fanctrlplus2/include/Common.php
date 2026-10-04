@@ -73,17 +73,9 @@ function normalize_chip_name(string $chip): string {
 
 function build_pwm_map(): array {
     $map = [];
-    foreach (glob("/sys/class/hwmon/hwmon*") as $dir) {
-        $name_file = "$dir/name";
-        if (!is_file($name_file)) continue;
-
-        $chip = normalize_chip_name(trim(file_get_contents($name_file)));
-
-        foreach (glob("$dir/pwm[0-9]") as $pwm_path) {
-            $pwmN = basename($pwm_path);
-            $real = realpath($pwm_path) ?: $pwm_path;
-            $map["$chip:$pwmN"] = $real;
-        }
+    foreach (list_pwm() as $pwm) {
+        if ($pwm['chip'] === '') continue;
+        $map[normalize_chip_name($pwm['chip']).':'.$pwm['name']] = $pwm['sensor'];
     }
     return $map;
 }
@@ -232,17 +224,26 @@ function migrate_cfg_and_labels(string $plugin): void {
 // END: Migrate hwmonX (cfg+labels)
 // ================================
 
-function list_pwm() {
+// The sensor is the resolved /sys/devices path: saved labels and controller
+// settings use it, and the /sys/class/hwmon/hwmonN link follows probe order.
+// Older drivers keep their attributes on the parent device instead.
+// "pwm[0-9]*" would also match pwm1_enable and friends, hence the regex.
+function list_pwm(string $hwmon_glob = '/sys/class/hwmon/hwmon*') {
   $out = [];
-  exec("find /sys/devices -type f -iname 'pwm[0-9]' -exec dirname \"{}\" + | uniq", $chips);
-  foreach ($chips as $chip) {
-    $name = is_file("$chip/name") ? trim(file_get_contents("$chip/name")) : '';
-    foreach (glob("$chip/pwm[0-9]") as $pwm) {
-      $out[] = ['chip' => $name, 'name' => basename($pwm), 'sensor' => $pwm];
+  foreach (glob($hwmon_glob) ?: [] as $hwmon) {
+    $name = '';
+    foreach ([$hwmon, "$hwmon/device"] as $dir) {
+      if (is_file("$dir/name")) $name = trim(file_get_contents("$dir/name"));
+      foreach (glob("$dir/pwm*") ?: [] as $pwm) {
+        if (!preg_match('/^pwm\d+$/', basename($pwm)) || !is_file($pwm)) continue;
+        $sensor = realpath($pwm) ?: $pwm;
+        $out[$sensor] = ['chip' => $name, 'name' => basename($pwm), 'sensor' => $sensor];
+      }
     }
   }
 
-  usort($out, fn($a, $b) => strcmp($a['name'], $b['name']));
+  $out = array_values($out);
+  usort($out, fn($a, $b) => strnatcmp($a['name'], $b['name']) ?: strcmp($a['sensor'], $b['sensor']));
   return $out;
 }
 
