@@ -159,7 +159,7 @@ function log_migrate(string $msg): void {
     @file_put_contents("/var/log/fanctrlplus2-migrate.log",
         date("c")." ".$msg."\n", FILE_APPEND);
     // Mirror the entry to syslog.
-    @exec("logger -t fanctrlplus2 '$msg'");
+    @exec('logger -t fanctrlplus2 ' . escapeshellarg($msg));
 }
 
 function safe_rewrite(string $file, string $content): bool {
@@ -180,37 +180,45 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = ''): void {
     // --- labels ---
     if (is_file($labelFile)) {
         $lines = file($labelFile, FILE_IGNORE_NEW_LINES) ?: [];
-        // A label already saved for the current path (re-entered after the
-        // device moved) wins over a stale one migrated onto the same path;
-        // the label readers take the last line and savelabel edits the first.
-        $changed = false; $out = []; $pos = [];
+        // Several lines can land on one path: a label re-entered for the
+        // current path after the device moved, or stale ones from several
+        // moves. Keep one line, as the readers see it (the last one), except
+        // that a line saved for the current path beats any migrated one.
+        $changed = false; $out = []; $pos = []; $current = [];
         foreach ($lines as $line) {
             if (!preg_match('/^(.+?)=(.*)$/', $line, $m)) { $out[]=$line; continue; }
             $old_path = trim($m[1], " \t\n\r\0\x0B\"'");
             $label    = $m[2];
 
-            if (preg_match('/^__FCP_[A-Z0-9_]+__$/', $old_path)) {
+            // Flags, and empty labels, which the readers ignore.
+            if (preg_match('/^__FCP_[A-Z0-9_]+__$/', $old_path) || $label === '') {
                 $out[] = $line;
                 continue;
             }
 
             $new_path = current_pwm_path($old_path, $pwm_map);
             if ($new_path === null) { log_migrate("migrate label: no match, keep $old_path"); $out[]=$line; continue; }
-            if ($new_path !== $old_path) {
+            $is_current = $new_path === $old_path;
+            if (!$is_current) {
                 $changed = true;
-                if (isset($pos[$new_path])) { log_migrate("migrate label: drop $old_path, $new_path already labeled"); continue; }
                 if (preg_match('#/(hwmon\d+)/#', $old_path, $o) && preg_match('#/(hwmon\d+)/#', $new_path, $n)) {
                     log_migrate("migrate label: $old_path → $new_path ({$o[1]} → {$n[1]})");
                 } else {
                     log_migrate("migrate label: $old_path → $new_path");
                 }
-            } elseif (isset($pos[$new_path])) {
-                $changed = true;
-                $out[$pos[$new_path]] = $line;
-                continue;
             }
-            $pos[$new_path] = count($out);
-            $out[] = $new_path.'='.$label;
+            if (!isset($pos[$new_path])) {
+                $pos[$new_path] = count($out);
+                $out[] = $new_path.'='.$label;
+            } else {
+                $changed = true;
+                if (!$is_current && isset($current[$new_path])) {
+                    log_migrate("migrate label: drop $old_path, $new_path already labeled");
+                    continue;
+                }
+                $out[$pos[$new_path]] = $new_path.'='.$label;
+            }
+            if ($is_current) $current[$new_path] = true;
         }
         if ($changed) safe_rewrite($labelFile, implode("\n", $out));
     }
@@ -222,7 +230,7 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = ''): void {
     $in_use = [];
     foreach ($cfgfiles as $cfgfile) {
         $controller = trim((string)((@parse_ini_file($cfgfile) ?: [])['controller'] ?? ''), " \t\n\r\0\x0B\"'");
-        if ($controller !== '' && file_exists($controller)) $in_use[$controller] = true;
+        if ($controller !== '') $in_use[$controller] = true;
     }
     foreach ($cfgfiles as $cfgfile) {
         $ini = @parse_ini_file($cfgfile);
