@@ -233,21 +233,16 @@ function migrate_cfg_and_labels(string $plugin): void {
 // END: Migrate hwmonX (cfg+labels)
 // ================================
 
-function list_pwm() {
+// The sensor is the resolved /sys/devices path: saved labels and controller
+// settings use it, and the /sys/class/hwmon/hwmonN link follows probe order.
+// "pwm[0-9]*" would also match pwm1_enable and friends, hence the regex.
+function list_pwm(string $hwmon_glob = '/sys/class/hwmon/hwmon*') {
   $out = [];
-  // Enumerate via /sys/class/hwmon, same as build_pwm_map() above -- avoids
-  // a shell exec() + GNU-only `find -regextype` (unavailable on some find
-  // implementations), and glob("pwm*") + a strict regex filter correctly
-  // excludes per-channel attributes (pwm1_enable, pwm1_auto_point1_pwm,
-  // etc.) that a bare "pwm[0-9]*" pattern would also match, since a glob
-  // char class only consumes one character before the trailing "*" takes
-  // over -- "pwm[0-9]*" still matches "pwm1_enable" the same way "pwm*"
-  // does.
-  foreach (glob('/sys/class/hwmon/hwmon*') as $chip) {
+  foreach (glob($hwmon_glob) as $chip) {
     $name = is_file("$chip/name") ? trim(file_get_contents("$chip/name")) : '';
     foreach (glob("$chip/pwm*") as $pwm) {
       if (!preg_match('/^pwm\d+$/', basename($pwm))) continue;
-      $out[] = ['chip' => $name, 'name' => basename($pwm), 'sensor' => $pwm];
+      $out[] = ['chip' => $name, 'name' => basename($pwm), 'sensor' => realpath($pwm) ?: $pwm];
     }
   }
 
