@@ -83,7 +83,8 @@ function fcp_backup_assignments(string $text): array {
                     if (++$i >= $length || strpos('\\"$`', $inside[$i]) === false) throw new InvalidArgumentException('Invalid configuration escape.');
                     $value .= $inside[$i];
                 } else {
-                    if (strpos('"$`', $c) !== false || ord($c) < 32) throw new InvalidArgumentException('Configuration must contain literal values only.');
+                    // Tabs are literal inside double quotes; the form can save them.
+                    if (strpos('"$`', $c) !== false || (ord($c) < 32 && $c !== "\t")) throw new InvalidArgumentException('Configuration must contain literal values only.');
                     $value .= $c;
                 }
             }
@@ -206,7 +207,7 @@ function fcp_restore_config(string $dir, string $json, ?callable $before = null,
             if (!@rename("$stage/old/$name", "$dir/$name")) $retain = true;
         }
         if ($stopped && $after !== null) { try { $after(); } catch (Throwable $restartError) { /* Files remain recovered; report the original failure. */ } }
-        if ($retain) throw new RuntimeException('Restore failed; previous files remain in '.$stage.'/old.', 0, $error);
+        if ($retain) throw new RuntimeException('Restore failed ('.$error->getMessage().'); previous files remain in '.$stage.'/old.', 0, $error);
         throw $error;
     } finally {
         if ($stage !== null && !$retain) {

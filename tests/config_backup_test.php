@@ -107,9 +107,9 @@ catch (InvalidArgumentException $e) { $check(false,'An exported order with stale
 fcp_restore_config($root,$backup);
 $legacy=$files;
 $legacy['fanctrlplus2_JBOD.cfg'] .= "idle_percent=\"10\"\nfan=\"/sys/devices/platform/nct6775.656/hwmon/hwmon5/fan1_input\"\n";
-$legacy['fanctrlplus2_JBOD.cfg'] = str_replace('ata_TEST_DISK','ata_TEST#=@DISK',$legacy['fanctrlplus2_JBOD.cfg']);
+$legacy['fanctrlplus2_JBOD.cfg'] = str_replace(['ata_TEST_DISK','Top '],['ata_TEST#=@DISK',"Top\t"],$legacy['fanctrlplus2_JBOD.cfg']);
 fcp_restore_config($root,$encode($legacy));
-$check(fcp_validate_config_backup(fcp_export_config($root))['fanctrlplus2_JBOD.cfg'] === $legacy['fanctrlplus2_JBOD.cfg'], 'Legacy idle settings and valid udev identifiers must round-trip.');
+$check(fcp_validate_config_backup(fcp_export_config($root))['fanctrlplus2_JBOD.cfg'] === $legacy['fanctrlplus2_JBOD.cfg'], 'Legacy idle settings, tabs in group names and valid udev identifiers must round-trip.');
 fcp_restore_config($root,$backup);
 
 // A restart failure after replacement must roll back the real files, not

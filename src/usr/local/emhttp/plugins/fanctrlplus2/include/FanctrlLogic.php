@@ -99,22 +99,18 @@ switch ($op) {
       if ($status !== 0) throw new RuntimeException('Fan control service is unavailable.');
       return trim(implode("\n", $output));
     };
-    $was_running = false; $had_stop_marker = false;
+    // The array monitor decides and starts under the same lock, so it cannot
+    // start fan control while this restore is swapping files.
+    $was_running = false;
     try {
       $files = fcp_restore_config($cfg_dir, $_POST['backup'],
-        function () use ($service, &$was_running, &$had_stop_marker) {
-          $had_stop_marker = is_file('/var/run/fanctrlplus2.user_stopped');
+        function () use ($service, &$was_running) {
           $state = $service('status');
           if (!in_array($state, ['running','stopped'], true)) throw new RuntimeException('Could not determine fan control status.');
           $was_running = $state === 'running';
           if ($was_running) $service('stop');
-          // Pause automatic starts only for the duration of the replacement.
-          elseif (@file_put_contents('/var/run/fanctrlplus2.user_stopped', '') === false) throw new RuntimeException('Could not retain the stopped state.');
         },
-        function () use ($service, &$was_running, &$had_stop_marker) {
-          if ($was_running) $service('start');
-          elseif (!$had_stop_marker && is_file('/var/run/fanctrlplus2.user_stopped') && !@unlink('/var/run/fanctrlplus2.user_stopped')) throw new RuntimeException('Could not restore automatic startup state.');
-        }
+        function () use ($service, &$was_running) { if ($was_running) $service('start'); }
       );
       json_response(['status'=>'ok','message'=>'Configuration restored','files'=>$files]);
     } catch (InvalidArgumentException $error) {

@@ -783,7 +783,7 @@ $(function() {
         if (pwm.label) {
           display += '（' + pwm.label + '）';
         }
-        select.append(`<option value="${pwm.sensor}">${display}</option>`);
+        select.append($('<option>').val(pwm.sensor).text(display));
       });
     }).fail(function(jqXHR, textStatus, errorThrown) {
       console.error('Failed to load PWM list into ' + selector, textStatus, errorThrown);
@@ -832,8 +832,8 @@ $(function() {
           if (pwm.label) display += `（${pwm.label}）`;
 
           // Apply the selected state.
-          const isSelected = (selectedPWM && pwm.sensor === selectedPWM) ? ' selected' : '';
-          select.append(`<option value="${pwm.sensor}"${isSelected}>${display}</option>`);
+          select.append($('<option>').val(pwm.sensor).text(display)
+            .prop('selected', Boolean(selectedPWM && pwm.sensor === selectedPWM)));
         });
 
         // Preserve selectedPWM when no matching option was discovered.
@@ -935,7 +935,8 @@ $(function() {
           const isSelected = pwm.sensor === selected;
           const isUsed = usedPWMs.includes(pwm.sensor) && !isSelected;
 
-          $(this).append(`<option value="${pwm.sensor}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${display}</option>`);
+          $(this).append($('<option>').val(pwm.sensor).text(display)
+            .prop({selected: isSelected, disabled: isUsed}));
         });
       });
 
