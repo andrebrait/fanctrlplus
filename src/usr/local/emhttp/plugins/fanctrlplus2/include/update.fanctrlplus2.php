@@ -247,6 +247,7 @@ foreach ($_POST['#file'] as $i => $file) {
     'label'      => $custom,
     'service'    => $_POST['service'][$i] ?? '0',
     'controller' => $controller,
+    'controller_identity' => fcp_unique_pwm_identity($controller) ?? $controller,
     'pwm'        => $pwm,
     'max'        => $max_pwm,
     'idle'       => (string)$idle_abs,

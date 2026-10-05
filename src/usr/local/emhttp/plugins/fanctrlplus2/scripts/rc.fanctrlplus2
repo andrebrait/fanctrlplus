@@ -36,6 +36,10 @@ fanctrlplus2.start() {
     service=$(grep -Po '^service="\K[^"]+' "$cfg")
     [[ "$service" != "1" ]] && continue
 
+    # Serial resolution can leave an absent/ambiguous controller unassigned.
+    controller=$(grep -Po '^controller="\K[^"]+' "$cfg")
+    [[ -n "$controller" && -w "$controller" ]] || continue
+
     # Sanitize the custom name before using it in a PID filename.
     raw_custom=$(grep -Po '^custom="\K[^"]+' "$cfg")
     clean_custom=$(echo "$raw_custom" | tr -d '\r\n\t ')

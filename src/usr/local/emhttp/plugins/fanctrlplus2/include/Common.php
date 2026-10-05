@@ -71,15 +71,6 @@ function normalize_chip_name(string $chip): string {
     return $chip;
 }
 
-function build_pwm_map(): array {
-    $map = [];
-    foreach (list_pwm() as $pwm) {
-        if ($pwm['chip'] === '') continue;
-        $map[normalize_chip_name($pwm['chip']).':'.$pwm['name']] = $pwm['sensor'];
-    }
-    return $map;
-}
-
 function extract_chip_and_pwm_from_path(string $old_path): ?array {
     $old_path = trim($old_path, " \t\n\r\0\x0B\"'");
 
@@ -144,14 +135,64 @@ function find_moved_pwm_path(string $old_path): ?string {
     return count($matches) === 1 ? $matches[0] : null;
 }
 
-// Current path for a saved pwm path: the same device first, then any chip with
-// the same driver name and pwmN. A USB device that was not found is absent or
-// ambiguous; guessing by name would hand its settings to another controller.
+// Path-only entries cannot recover a serial after the device has moved.
+// Keep the same-port migration for those legacy/no-serial entries.
 function current_pwm_path(string $old_path, array $pwm_map): ?string {
     $moved = find_moved_pwm_path($old_path);
-    if ($moved !== null || preg_match(FCP_HID_INSTANCE, $old_path)) return $moved;
+    if ($moved !== null || preg_match(FCP_HID_INSTANCE, $old_path) || preg_match('#/usb\d+/#', $old_path)) return $moved;
     $pair = extract_chip_and_pwm_from_path($old_path);
     return $pair ? ($pwm_map[$pair[0].':'.$pair[1]] ?? null) : null;
+}
+
+// A fan is a USB controller plus its interface/hwmon channel, not a USB port.
+// Hex-encoded JSON is safe as an unquoted label key and a shell/INI value.
+function fcp_pwm_identity(string $path): ?string {
+    $path = realpath($path);
+    if ($path === false || !preg_match('#/pwm\d+$#', $path)) return null;
+    for ($dir = dirname($path); $dir !== dirname($dir); $dir = dirname($dir)) {
+        if (!is_file("$dir/idVendor") || !is_file("$dir/idProduct")) continue;
+        $vid = strtolower(trim((string)@file_get_contents("$dir/idVendor")));
+        $pid = strtolower(trim((string)@file_get_contents("$dir/idProduct")));
+        $serial = trim((string)@file_get_contents("$dir/serial"));
+        if (!preg_match('/^[0-9a-f]{4}$/', $vid) || !preg_match('/^[0-9a-f]{4}$/', $pid) || $serial === '') return null;
+        $channel = substr($path, strlen($dir));
+        $channel = preg_replace('#^/[^/]+:(\d+\.\d+)/#', '/interface:$1/', $channel);
+        $channel = preg_replace([FCP_HID_INSTANCE, '#/hwmon/hwmon\d+/#'], ['$1.*/', '/hwmon/hwmon*/'], $channel);
+        $encoded = json_encode([$vid, $pid, $serial, $channel]);
+        return $encoded === false ? null : 'usb:'.bin2hex($encoded);
+    }
+    return null;
+}
+
+function fcp_pwm_identity_map(array $pwms): array {
+    $map = [];
+    foreach ($pwms as $pwm) {
+        $key = fcp_pwm_identity($pwm['sensor']);
+        if ($key === null) continue;
+        // Duplicate serials/channels cannot safely identify either device.
+        $map[$key] = array_key_exists($key, $map) ? null : $pwm['sensor'];
+    }
+    return $map;
+}
+
+// Capture a serial key only while it uniquely identifies this channel.
+// Devices with duplicated/placeholder serials retain their port identity.
+function fcp_unique_pwm_identity(string $path, ?array $identities = null): ?string {
+    $key = fcp_pwm_identity($path);
+    if ($key === null) return null;
+    $identities = $identities ?? fcp_pwm_identity_map(list_pwm());
+    return ($identities[$key] ?? null) === realpath($path) ? $key : null;
+}
+
+function fcp_load_pwm_labels(string $file, string $hwmon_glob = '/sys/class/hwmon/hwmon*'): array {
+    $identities = fcp_pwm_identity_map(list_pwm($hwmon_glob));
+    $labels = [];
+    foreach (is_file($file) ? file($file, FILE_IGNORE_NEW_LINES) : [] as $line) {
+        if (!preg_match('/^(.+?)=(.+)$/', $line, $m)) continue;
+        $path = strpos($m[1], 'usb:') === 0 ? ($identities[$m[1]] ?? null) : $m[1];
+        if ($path !== null && preg_match('#/pwm\d+$#', $path)) $labels[$path] = $m[2];
+    }
+    return $labels;
 }
 
 function log_migrate(string $msg): void {
@@ -172,10 +213,13 @@ function safe_rewrite(string $file, string $content): bool {
     return true;
 }
 
-function migrate_cfg_and_labels(string $plugin, string $cfgpath = ''): void {
+function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hwmon_glob = '/sys/class/hwmon/hwmon*'): void {
     $cfgpath   = $cfgpath ?: "/boot/config/plugins/$plugin";
     $labelFile = "$cfgpath/pwm_labels.cfg";
-    $pwm_map   = build_pwm_map();
+    $pwms = list_pwm($hwmon_glob);
+    $pwm_map = [];
+    foreach ($pwms as $pwm) $pwm_map[normalize_chip_name($pwm['chip']).':'.$pwm['name']] = $pwm['sensor'];
+    $identities = fcp_pwm_identity_map($pwms);
 
     // --- labels ---
     if (is_file($labelFile)) {
@@ -196,9 +240,12 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = ''): void {
                 continue;
             }
 
-            $new_path = current_pwm_path($old_path, $pwm_map);
+            $stable = strpos($old_path, 'usb:') === 0;
+            $new_path = $stable ? ($identities[$old_path] ?? null) : current_pwm_path($old_path, $pwm_map);
             if ($new_path === null) { log_migrate("migrate label: no match, keep $old_path"); $out[]=$line; continue; }
-            $is_current = $new_path === $old_path;
+            $is_current = $stable || $new_path === $old_path;
+            $key = fcp_unique_pwm_identity($new_path, $identities) ?? $new_path;
+            if ($key !== $old_path) $changed = true;
             if (!$is_current) {
                 $changed = true;
                 if (preg_match('#/(hwmon\d+)/#', $old_path, $o) && preg_match('#/(hwmon\d+)/#', $new_path, $n)) {
@@ -207,18 +254,18 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = ''): void {
                     log_migrate("migrate label: $old_path → $new_path");
                 }
             }
-            if (!isset($pos[$new_path])) {
-                $pos[$new_path] = count($out);
-                $out[] = $new_path.'='.$label;
+            if (!isset($pos[$key])) {
+                $pos[$key] = count($out);
+                $out[] = $key.'='.$label;
             } else {
                 $changed = true;
-                if (!$is_current && isset($current[$new_path])) {
+                if (!$is_current && isset($current[$key])) {
                     log_migrate("migrate label: drop $old_path, $new_path already labeled");
                     continue;
                 }
-                $out[$pos[$new_path]] = $new_path.'='.$label;
+                $out[$pos[$key]] = $key.'='.$label;
             }
-            if ($is_current) $current[$new_path] = true;
+            if ($is_current) $current[$key] = true;
         }
         if ($changed) safe_rewrite($labelFile, implode("\n", $out));
     }
@@ -227,41 +274,56 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = ''): void {
     // A fan assigned to the current path while an old one still pointed at
     // the vanished path keeps it: two loops must not drive the same PWM.
     $cfgfiles = glob("$cfgpath/{$plugin}_*.cfg") ?: [];
-    $in_use = [];
-    foreach ($cfgfiles as $cfgfile) {
-        $controller = trim((string)((@parse_ini_file($cfgfile) ?: [])['controller'] ?? ''), " \t\n\r\0\x0B\"'");
-        if ($controller !== '') $in_use[$controller] = true;
-    }
+    $configs = []; $in_use = [];
     foreach ($cfgfiles as $cfgfile) {
         $ini = @parse_ini_file($cfgfile);
         if (!$ini) continue;
-
+        $configs[$cfgfile] = $ini;
+        $path = (string)($ini['controller'] ?? '');
+        $identity = (string)($ini['controller_identity'] ?? '');
+        $source = $identity !== '' ? $identity : $path;
+        $resolved = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : (is_file($source) ? $source : null);
+        // Already-current manual assignments win over stale migrated ones.
+        if ($resolved === $path && $path !== '' && !isset($in_use[$path])) $in_use[$path] = $cfgfile;
+    }
+    foreach ($configs as $cfgfile => $ini) {
+        $original = $ini;
         $old_path = trim((string)($ini['controller'] ?? ''), " \t\n\r\0\x0B\"'");
-
-        if ($old_path === '' || !preg_match('#/hwmon\d+/pwm\d+$#', $old_path)) {
-            continue;
-        }
-
-        $new_path = current_pwm_path($old_path, $pwm_map);
-        if ($new_path === null) {
-            log_migrate("migrate cfg: no match for $cfgfile, keep $old_path");
-            continue;
-        }
-        if ($new_path === $old_path) continue;
-        if (isset($in_use[$new_path])) {
+        $identity = (string)($ini['controller_identity'] ?? '');
+        if ($identity === '' && !preg_match('#/pwm\d+$#', $old_path)) continue;
+        $source = $identity !== '' ? $identity : $old_path;
+        $new_path = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : current_pwm_path($source, $pwm_map);
+        if ($new_path !== null && isset($in_use[$new_path]) && $in_use[$new_path] !== $cfgfile) {
             log_migrate("migrate cfg: keep $old_path in $cfgfile, $new_path is already controlled");
-            continue;
+            if ($identity === '' && !is_file($old_path)) continue;
+            // A live losing path must also stop. Retain its binding for
+            // recovery when the winning assignment is removed.
+            if ($identity === '') $identity = fcp_unique_pwm_identity($old_path, $identities) ?? $old_path;
+            $ini['controller_identity'] = $identity;
+            $new_path = null;
         }
-        $in_use[$new_path] = true;
-
-        if (preg_match('#/(hwmon\d+)/#', $old_path, $o) && preg_match('#/(hwmon\d+)/#', $new_path, $n)) {
-            log_migrate("migrate cfg: $cfgfile controller: $old_path → $new_path ({$o[1]} → {$n[1]})");
+        if ($new_path === null) {
+            log_migrate("migrate cfg: no match for $cfgfile, identity=$identity");
+            // Never drive a replacement at the old path. Keep the identity
+            // so a disconnected/ambiguous controller can recover later.
+            if ($identity === '') continue;
+            $ini['controller'] = '';
         } else {
-            log_migrate("migrate cfg: $cfgfile controller: $old_path → $new_path");
+            $in_use[$new_path] = $cfgfile;
+            $ini['controller'] = $new_path;
+            $ini['controller_identity'] = fcp_unique_pwm_identity($new_path, $identities) ?? $new_path;
+            if ($new_path !== $old_path) log_migrate("migrate cfg: $cfgfile controller: $old_path → $new_path");
         }
-
-        $ini['controller'] = $new_path;
-        $buf=''; foreach ($ini as $k=>$v){ $v=str_replace('"','',(string)$v); $buf.=$k.'="'.$v."\"\n"; }
+        if ($ini === $original) continue;
+        // Only these two fields changed. Re-serializing the entire INI would
+        // re-escape free-text values that are also sourced by the shell.
+        $buf = (string)file_get_contents($cfgfile);
+        foreach (['controller', 'controller_identity'] as $k) {
+            $v = str_replace(["\\", '"', '$', '`', "\r", "\n"], ["\\\\", '\\"', '\\$', '\\`', '', ''], (string)$ini[$k]);
+            $line = "$k=\"$v\"";
+            $buf = preg_replace_callback('/^[ \t]*'.$k.'[ \t]*=.*$/m', function () use ($line) { return $line; }, $buf, -1, $count);
+            if ($count === 0) $buf = rtrim($buf, "\n")."\n".$line."\n";
+        }
         safe_rewrite($cfgfile, $buf);
     }
 }
