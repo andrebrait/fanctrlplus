@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.9.0"
+  version="1.9.1"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,24 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.9.1
+
+## What's changed
+
+- **Configuration backup and restore** (#11). **General Settings** now has **Export backup** and **Restore backup**. A backup is a JSON file with your saved fan configurations, PWM labels (including USB controller identities), dashboard switches and fan order. Restore asks for confirmation, checks the whole file before changing anything, rolls back if replacing the files fails, and leaves fan control running or stopped as it was. Custom sensor scripts, history and logs are not included and are left untouched. (#14)
+- **Custom sensors on the flash drive work** (#9). The Unraid flash drive cannot hold an execute bit, so scripts in `/boot/config/plugins/fanctrlplus2/sensors.d/` were never offered or read. Scripts now only need to be readable and start with a shebang line: the plugin runs a fresh private copy of each one from runtime storage, using the script's own interpreter. The 5-second timeout and the "print the temperature only" contract are unchanged. (#14)
+- PWM labels containing characters such as `<` or `&` now display correctly in the controller dropdowns.
+
+## Upgrade compatibility
+
+Existing configurations need no migration. Custom sensor scripts no longer need `chmod +x`. They now run from a copy, so `$0` points to the copy: use absolute paths for any helper files a script reads.
+
+Keep backups somewhere other than the Unraid flash drive, and back up custom sensor scripts separately.
+
+## Verification
+
+All 26 test files pass. The flash-drive sensor fix was checked on a real `noexec` mount. Export and restore were exercised through the actual settings page, including restoring while fan control was running and while it was stopped. Physical hardware validation is welcome.
 
 ### 1.9.0
 
@@ -55,18 +73,6 @@ Thanks to @mrjacobarussell for the multi-channel fix and detailed ARCTIC control
 ## Upgrade compatibility
 
 Existing configurations continue to work and need no migration. Nothing about fan control changes; this affects only the text Unraid shows for the plugin itself.
-
-### 1.8.2
-
-## What's changed
-
-- Fix the reorder arrows on the first and last fan configuration. The disabled one could point a different way from the working one beside it — a left arrow next to a down arrow — and a page showing a single configuration used left and right on a phone.
-
-Which arrow a button shows is now a question about the layout alone, answered once for the whole page: along the row where configurations sit side by side, down the column where they do not. Whether the button works stays a question about where its configuration sits in the list. The two no longer influence each other.
-
-## Upgrade compatibility
-
-Existing configurations continue to work and need no migration. This changes only which arrow is drawn on the reorder buttons; reordering itself, and everything else, behaves as it did in 1.8.1.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -120,16 +126,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.0-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.0/fanctrlplus2-1.9.0-noarch-1.txz</URL>
-<SHA256>04092b991c8112f483552f6ca27dd40f8420b233c05e886cb791c7efcc2447cd</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.1-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.1/fanctrlplus2-1.9.1-noarch-1.txz</URL>
+<SHA256>250ed9532e2b4e01176f59211724f139e96b721ebe00d5e73d8c814aedc7166f</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.0-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.1-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -154,7 +160,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.9.0"
+echo " Version: 1.9.1"
 echo "------------------------------------------------"
 echo ""
 exit 0
