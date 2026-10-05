@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.8.3"
+  version="1.9.0"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,32 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.9.0
+
+## What's changed
+
+- Discover PWM channels numbered 10 and above, exclude per-channel attributes such as `pwm10_enable`, and list channels in natural numeric order. Older driver layouts remain supported. (#10)
+- Preserve fan labels and group assignments across hwmon renumbering and USB HID re-enumeration instead of leaving them attached to vanished sysfs paths. (#12)
+- Record unique USB controller serial identities so assignments follow controllers across USB port, bus, and hub changes, even when an identical model occupies the old port. Controllers without a unique serial retain separate same-port bindings.
+- Keep missing or ambiguous controller bindings for recovery without controlling another device, and prevent multiple configurations from driving the same PWM channel.
+- Preserve unresolved bindings across configuration saves and renames. Clearing a label also removes its dormant identity entry so it cannot reappear when ambiguity is resolved.
+
+## Upgrade compatibility
+
+Back up `/boot/config/plugins/fanctrlplus2/` before upgrading, especially if you may need to downgrade later. No manual conversion is needed for controllers still identifiable at their saved location: their bindings are upgraded when the service starts.
+
+Start the service on 1.9.0 **before moving a USB controller** so its serial can be recorded. If an older, unrecorded controller has already moved, reassign it once. Controllers without a unique serial must remain on the same USB port. Restart the service after a driver reload or USB port move; this release does not add hot-plug monitoring.
+
+Older plugin versions do not understand the new serial-based label keys. Restore your pre-upgrade configuration backup if downgrading. Device identity identifies the controller's channel, not the physical fan plugged into it.
+
+The export/import request in #11 remains separate and is not included in this release.
+
+## Verification
+
+All 25 test files pass. Isolated runtime smoke checks exercised actual label/configuration endpoints and service startup against synthetic sysfs, including port moves with replacements, ambiguous identities, recovery, saves, and label deletion. Physical hardware validation is still welcome.
+
+Thanks to @mrjacobarussell for the multi-channel fix and detailed ARCTIC controller reports.
 
 ### 1.8.3
 
@@ -41,20 +67,6 @@ Which arrow a button shows is now a question about the layout alone, answered on
 ## Upgrade compatibility
 
 Existing configurations continue to work and need no migration. This changes only which arrow is drawn on the reorder buttons; reordering itself, and everything else, behaves as it did in 1.8.1.
-
-### 1.8.1
-
-## What's changed
-
-- A **failed sensor read no longer drives the fan to maximum**. `mget_temp` sometimes returns `10000` or `-10000` when it cannot read a Mellanox card, exiting successfully as it does so; that was being pulled into range as 200 °C, hotter than any real sensor. A value outside −100…300 °C is now treated as no measurement at all, so the sensor sits that round out and is tried again on the next one. Reported by @7leman7 on #1.
-- The same flaw applied to a **custom `sensors.d` script** printing a sentinel, and to a **disk reporting a nonsense SMART value** such as `65535`. Both now sit the round out instead.
-- A reading inside the plausible range is reported **as measured** rather than trimmed to 200 °C, so a genuinely hot sensor shows its real temperature. A sub-zero reading is still floored to 0, because a fan curve has nothing below it.
-
-## Upgrade compatibility
-
-Existing configurations continue to work and need no migration. Nothing about how a fan is configured or how its speed is calculated changes; only which readings count as readings.
-
-A sensor that errors does not repeat its last value: telling "errored" apart from "has nothing to report" matters, because a spun-down disk reports nothing and should let the fan drop to its Idle Speed. A `sensors.d` script that wants to hold its last good reading can cache it itself.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -108,16 +120,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.3-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.8.3/fanctrlplus2-1.8.3-noarch-1.txz</URL>
-<SHA256>71654ccb0414c8eb7605bcfec87d75241eecbb851ec3a6075dec38be1687542a</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.0-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.0/fanctrlplus2-1.9.0-noarch-1.txz</URL>
+<SHA256>04092b991c8112f483552f6ca27dd40f8420b233c05e886cb791c7efcc2447cd</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.8.3-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.0-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -142,7 +154,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.8.3"
+echo " Version: 1.9.0"
 echo "------------------------------------------------"
 echo ""
 exit 0
