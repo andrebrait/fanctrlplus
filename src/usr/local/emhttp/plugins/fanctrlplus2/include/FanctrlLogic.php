@@ -114,11 +114,13 @@ switch ($op) {
       json_response(['status' => 'error', 'message' => 'Missing pwm']);
       break;
     }
+    $identity = fcp_pwm_identity($pwm);
     $key = fcp_unique_pwm_identity($pwm) ?? $pwm;
     $lines = is_file($label_file) ? file($label_file, FILE_IGNORE_NEW_LINES) : [];
     // Remove both the legacy path and stable key before saving one entry.
-    $lines = array_values(array_filter($lines, function ($line) use ($key, $pwm) {
-      return strpos($line, "$key=") !== 0 && strpos($line, "$pwm=") !== 0;
+    $lines = array_values(array_filter($lines, function ($line) use ($key, $pwm, $identity, $label) {
+      return strpos($line, "$key=") !== 0 && strpos($line, "$pwm=") !== 0
+        && ($label !== '' || $identity === null || strpos($line, "$identity=") !== 0);
     }));
     if ($label !== '') $lines[] = "$key=$label";
     file_put_contents($label_file, implode("\n", $lines) . "\n");

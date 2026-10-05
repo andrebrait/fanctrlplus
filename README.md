@@ -121,6 +121,8 @@ blocked bindings remain saved for recovery when the conflicting assignment
 is removed.
 Saving a configuration without a resolved controller, including a rename,
 retains its binding. Selecting a different controller replaces the binding.
+Clearing a label also removes its dormant USB identity entry, so it cannot
+reappear after serial ambiguity is resolved.
 The identity identifies the controller's header, not the physical fan attached
 to it; replacing the fan does not change the saved assignment.
 
