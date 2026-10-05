@@ -110,38 +110,21 @@ switch ($op) {
     $pwm = $_POST['pwm'] ?? '';
     $label = $_POST['label'] ?? '';
 
-    $label_file = "/boot/config/plugins/fanctrlplus2/pwm_labels.cfg";
-    // Read existing labels.
-    $lines = is_file($label_file) ? file($label_file, FILE_IGNORE_NEW_LINES) : [];
-    $found = false;
-
     if (!$pwm) {
       json_response(['status' => 'error', 'message' => 'Missing pwm']);
       break;
     }
-
-    // An empty label means delete it.
-    if ($label === '') {
-      $new_lines = [];
-      foreach ($lines as $line) {
-        if (strpos($line, "$pwm=") !== 0) $new_lines[] = $line;
-      }
-      file_put_contents($label_file, implode("\n", $new_lines) . "\n");
-      json_response(['status' => 'ok', 'message' => 'Label removed']);
-      break;
-    }
-
-    // Write the label.
-    foreach ($lines as &$line) {
-      if (strpos($line, "$pwm=") === 0) {
-        $line = "$pwm=$label";
-        $found = true;
-        break;
-      }
-    }
-    if (!$found) $lines[] = "$pwm=$label";
+    $identity = fcp_pwm_identity($pwm);
+    $key = fcp_unique_pwm_identity($pwm) ?? $pwm;
+    $lines = is_file($label_file) ? file($label_file, FILE_IGNORE_NEW_LINES) : [];
+    // Remove both the legacy path and stable key before saving one entry.
+    $lines = array_values(array_filter($lines, function ($line) use ($key, $pwm, $identity, $label) {
+      return strpos($line, "$key=") !== 0 && strpos($line, "$pwm=") !== 0
+        && ($label !== '' || $identity === null || strpos($line, "$identity=") !== 0);
+    }));
+    if ($label !== '') $lines[] = "$key=$label";
     file_put_contents($label_file, implode("\n", $lines) . "\n");
-    json_response(['status' => 'ok', 'message' => 'Label saved']);
+    json_response(['status' => 'ok', 'message' => $label === '' ? 'Label removed' : 'Label saved']);
     break;
   
   case 'newtemp':
@@ -324,14 +307,7 @@ switch ($op) {
   case 'getpwm':
     $pwms = list_pwm();
     $label_file = "/boot/config/plugins/fanctrlplus2/pwm_labels.cfg";
-    $labels = [];
-    if (is_file($label_file)) {
-      foreach (file($label_file, FILE_IGNORE_NEW_LINES) as $line) {
-        if (preg_match('/^(.+?)=(.+)$/', $line, $m)) {
-          $labels[$m[1]] = $m[2];
-        }
-      }
-    }
+    $labels = fcp_load_pwm_labels($label_file);
     foreach ($pwms as &$pwm) {
       $pwm['label'] = $labels[$pwm['sensor']] ?? '';
     }

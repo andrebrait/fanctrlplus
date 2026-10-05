@@ -94,6 +94,38 @@ echo "$temp"
 
 Remember to make the file executable (`chmod +x`).
 
+## Fan identity and USB port changes
+
+For USB controllers that expose a unique serial number, fan labels and
+configurations are identified by VID:PID, serial number, interface, and PWM
+channel. The plugin records this identity when a label or configuration is
+saved, and automatically upgrades existing entries at service startup while
+their controller can still be identified. Labels use an encoded `usb:` key in
+`pwm_labels.cfg`; `controller_identity` stores the same key in each fan
+configuration, or a path binding when no unique serial is available. The
+runtime `controller` path is resolved again whenever the service starts.
+
+This preserves assignments when a controller moves to another USB port, even
+when an identical model occupies the old port. Missing or ambiguous identities
+(including duplicate serial numbers for the same channel) remain saved but
+unassigned until they can be resolved; the plugin does not guess another device.
+
+Controllers without a serial number, controllers whose serial is already
+duplicated when first saved, and older entries whose serial has not yet been
+recorded use the same-port path migration. Their existing port assignments
+remain separate. Keep those controllers on the same port. If an unrecorded
+controller has already moved, reassign it once so its serial can be saved.
+Restart the service after a driver reload or port move. If multiple
+configurations resolve to one channel, the already-current assignment wins;
+blocked bindings remain saved for recovery when the conflicting assignment
+is removed.
+Saving a configuration without a resolved controller, including a rename,
+retains its binding. Selecting a different controller replaces the binding.
+Clearing a label also removes its dormant USB identity entry, so it cannot
+reappear after serial ambiguity is resolved.
+The identity identifies the controller's header, not the physical fan attached
+to it; replacing the fan does not change the saved assignment.
+
 Support / Issues
 - https://github.com/andrebrait/fanctrlplus/issues
 

@@ -1,13 +1,7 @@
 <?php
+require_once __DIR__.'/Common.php';
 $label_file = "/boot/config/plugins/fanctrlplus2/pwm_labels.cfg";
-$pwm_labels = [];
-if (is_file($label_file)) {
-  foreach (file($label_file, FILE_IGNORE_NEW_LINES) as $line) {
-    if (preg_match('/^(.+?)=(.+)$/', $line, $m)) {
-      $pwm_labels[$m[1]] = $m[2];
-    }
-  }
-}
+$pwm_labels = fcp_load_pwm_labels($label_file);
 
 // Build the list of disk groups for a fan cfg: [{name, disks:[...], low, high}, ...].
 // disk_group_count>0 -> read disk_group_{g}_* keys. Otherwise fall back to ONE group

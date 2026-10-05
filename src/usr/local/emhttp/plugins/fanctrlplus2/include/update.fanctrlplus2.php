@@ -47,6 +47,12 @@ foreach ($_POST['#file'] as $i => $file) {
   $expected_file = $plugin . '_' . $custom . '.cfg';
   $old_path = "$cfgpath/$old_file";
   $new_path = "$cfgpath/$expected_file";
+  // Read before rename/overwrite: an empty runtime controller means the
+  // saved binding is unresolved, not that the user selected another device.
+  $previous = is_file($old_path) ? (@parse_ini_file($old_path) ?: []) : [];
+  $controller_identity = $controller === ''
+    ? (string)($previous['controller_identity'] ?? $previous['controller'] ?? '')
+    : (fcp_unique_pwm_identity($controller) ?? $controller);
   
   // Read the raw values first.
   $pwm_percent_raw = $_POST['pwm_percent'][$i] ?? '';
@@ -247,6 +253,7 @@ foreach ($_POST['#file'] as $i => $file) {
     'label'      => $custom,
     'service'    => $_POST['service'][$i] ?? '0',
     'controller' => $controller,
+    'controller_identity' => $controller_identity,
     'pwm'        => $pwm,
     'max'        => $max_pwm,
     'idle'       => (string)$idle_abs,

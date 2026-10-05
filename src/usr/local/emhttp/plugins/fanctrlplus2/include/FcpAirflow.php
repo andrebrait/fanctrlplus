@@ -1,27 +1,15 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, max-age=0');
+require_once __DIR__.'/Common.php';
 
 /**
- * Read /abs/.../pwmN=Name entries from pwm_labels.cfg.
- * Use realpath(dirname(...)) plus channel N as the key and map it to fanN_input.
+ * Resolve saved labels to current PWM paths, then map them to fanN_input.
  */
 function load_labels(): array {
   $cfg = '/boot/config/plugins/fanctrlplus2/pwm_labels.cfg';
   $dirN_to_label = []; // key = realdir.'::'.N => label
-  if (!is_file($cfg)) return $dirN_to_label;
-
-  $lines = file($cfg, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-  foreach ($lines as $line) {
-    $line = trim($line);
-    if ($line === '' || $line[0] === '#') continue;
-
-    $eq = strpos($line, '=');
-    if ($eq === false) continue;
-
-    $pwm_path = trim(substr($line, 0, $eq));
-    $label    = trim(substr($line, $eq+1));
-    if ($label === '') continue;
+  foreach (fcp_load_pwm_labels($cfg) as $pwm_path => $label) {
 
     if (preg_match('~/pwm(\d+)$~i', $pwm_path, $m)) {
       $n    = (int)$m[1];
