@@ -27,11 +27,21 @@ $label_file = "$cfg_dir/pwm_labels.cfg";
 
 require_once "$docroot/plugins/$plugin/include/Common.php";
 require_once "/usr/local/emhttp/plugins/fanctrlplus2/include/OrderManager.php";
+require_once __DIR__.'/ConfigBackup.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, max-age=0');
 
 $op = $_GET['op'] ?? $_POST['op'] ?? '';
+
+// Serialize restore/export with every HTTP writer of these configuration files.
+if (in_array($op, ['savelabel','newtemp','delete','setsyslog','saveorder','start','stop','fcp_airflow_toggle','fcp_history_toggle'], true)) {
+  try { $config_lock = fcp_config_lock($cfg_dir); }
+  catch (Throwable $error) { http_response_code(500); json_response(['status'=>'error','message'=>$error->getMessage()]); }
+  register_shutdown_function(function () use ($config_lock) {
+    if (is_resource($config_lock)) { flock($config_lock, LOCK_UN); fclose($config_lock); }
+  });
+}
 
 if ($op === 'refresh_single' && !empty($_GET['custom'])) {
   $custom = escapeshellarg($_GET['custom']);
@@ -59,6 +69,60 @@ function scan_dir($dir) {
 $op = $_GET['op'] ?? $_POST['op'] ?? '';
 
 switch ($op) {
+
+  case 'exportconfig':
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+      header('Allow: GET'); http_response_code(405);
+      json_response(['status'=>'error','message'=>'Use GET to export a configuration.']);
+    }
+    try {
+      $backup = fcp_export_config($cfg_dir);
+      header('Content-Disposition: attachment; filename="fanctrlplus2-config-'.date('Ymd-His').'.json"');
+      echo $backup;
+      exit;
+    } catch (Throwable $error) {
+      http_response_code(500); json_response(['status'=>'error','message'=>$error->getMessage()]);
+    }
+    break;
+
+  case 'importconfig':
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+      header('Allow: POST'); http_response_code(405);
+      json_response(['status'=>'error','message'=>'Use POST to restore a configuration.']);
+    }
+    if (!isset($_POST['backup']) || !is_string($_POST['backup'])) {
+      http_response_code(400); json_response(['status'=>'error','message'=>'A backup JSON document is required.']);
+    }
+    $service = function (string $action): string {
+      $output = []; $status = 0;
+      exec('bash /etc/rc.d/rc.fanctrlplus2 '.escapeshellarg($action).' 2>/dev/null', $output, $status);
+      if ($status !== 0) throw new RuntimeException('Fan control service is unavailable.');
+      return trim(implode("\n", $output));
+    };
+    $was_running = false; $had_stop_marker = false;
+    try {
+      $files = fcp_restore_config($cfg_dir, $_POST['backup'],
+        function () use ($service, &$was_running, &$had_stop_marker) {
+          $had_stop_marker = is_file('/var/run/fanctrlplus2.user_stopped');
+          $state = $service('status');
+          if (!in_array($state, ['running','stopped'], true)) throw new RuntimeException('Could not determine fan control status.');
+          $was_running = $state === 'running';
+          if ($was_running) $service('stop');
+          // Pause automatic starts only for the duration of the replacement.
+          elseif (@file_put_contents('/var/run/fanctrlplus2.user_stopped', '') === false) throw new RuntimeException('Could not retain the stopped state.');
+        },
+        function () use ($service, &$was_running, &$had_stop_marker) {
+          if ($was_running) $service('start');
+          elseif (!$had_stop_marker && is_file('/var/run/fanctrlplus2.user_stopped') && !@unlink('/var/run/fanctrlplus2.user_stopped')) throw new RuntimeException('Could not restore automatic startup state.');
+        }
+      );
+      json_response(['status'=>'ok','message'=>'Configuration restored','files'=>$files]);
+    } catch (InvalidArgumentException $error) {
+      http_response_code(400); json_response(['status'=>'error','message'=>$error->getMessage()]);
+    } catch (Throwable $error) {
+      http_response_code(500); json_response(['status'=>'error','message'=>$error->getMessage()]);
+    }
+    break;
     
   case 'identify':
     $pwm  = $_GET['pwm']  ?? '';
