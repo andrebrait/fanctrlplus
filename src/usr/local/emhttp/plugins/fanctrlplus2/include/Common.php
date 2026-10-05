@@ -447,9 +447,10 @@ function fcp_clamp_temp(int $temp): ?int {
 }
 
 // ===== User-supplied sensor scripts =====
-// Any executable dropped in the sensors.d directory is a sensor. The contract
-// is deliberately small: print the temperature in Celsius and nothing else, or
-// print nothing and exit non-zero, which disables it for that round only.
+// Any readable file dropped in the sensors.d directory is a sensor, executable
+// or not: the directory sits on flash that cannot hold an execute bit. The
+// contract is deliberately small: print the temperature in Celsius and nothing
+// else, or print nothing and exit non-zero, which disables it for that round only.
 const FCP_CUSTOM_SENSOR_DIR = '/boot/config/plugins/fanctrlplus2/sensors.d';
 const FCP_CUSTOM_SENSOR_TIMEOUT = 5;
 
@@ -469,16 +470,22 @@ function detect_custom_temps(string $dir = FCP_CUSTOM_SENSOR_DIR): array {
   $result = [];
   $scripts = glob("$dir/*") ?: [];
   sort($scripts);
+  $runner = dirname(__DIR__) . '/scripts/custom_sensor.sh';
 
   foreach ($scripts as $script) {
     $name = basename($script);
-    if (!is_file($script) || !is_executable($script)) continue;
-    if ($name[0] === '.') continue;
+    // Same names the control loop can read back: no hidden files, no
+    // characters that would not survive the sensor list.
+    if (!preg_match('/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/', $name)) continue;
+    if (!is_file($script) || !is_readable($script)) continue;
 
+    // The flash drive holding the directory cannot carry an execute bit, so
+    // the runner executes a private runtime copy and enforces the timeout.
     $output = [];
     $status = 0;
     exec(
-      'timeout ' . FCP_CUSTOM_SENSOR_TIMEOUT . ' ' . escapeshellarg($script) . ' 2>/dev/null',
+      'bash ' . escapeshellarg($runner) . ' ' . escapeshellarg($script) . ' '
+        . FCP_CUSTOM_SENSOR_TIMEOUT . ' 2>/dev/null',
       $output,
       $status
     );

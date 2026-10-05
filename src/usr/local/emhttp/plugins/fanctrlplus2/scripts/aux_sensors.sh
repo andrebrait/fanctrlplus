@@ -6,11 +6,13 @@
 
 # shellcheck disable=SC2034
 
-# Drop-in directory for user-supplied sensor scripts. Each executable there is
-# one sensor: it prints the temperature in Celsius and nothing else, or prints
-# nothing and exits non-zero, which disables it for that round only.
+# Drop-in directory for user-supplied sensor scripts. Each readable file there
+# is one sensor, executable or not (the flash drive it lives on cannot hold an
+# execute bit): it prints the temperature in Celsius and nothing else, or
+# prints nothing and exits non-zero, which disables it for that round only.
 fcp_custom_sensor_dir="${fcp_custom_sensor_dir:-/boot/config/plugins/fanctrlplus2/sensors.d}"
 fcp_custom_sensor_timeout="${fcp_custom_sensor_timeout:-5}"
+fcp_custom_sensor_runner="${fcp_custom_sensor_runner:-$(dirname "${BASH_SOURCE[0]}")/custom_sensor.sh}"
 
 # ===== Temperature readings =====
 # Every reading the plugin evaluates, whatever produced it, is pulled into the
@@ -133,8 +135,10 @@ aux_read_sensor() {
       # is refused outright.
       [[ "$sensor" =~ ^custom:([A-Za-z0-9._-]+)$ ]] || return 0
       script="$fcp_custom_sensor_dir/${BASH_REMATCH[1]}"
-      [[ "${BASH_REMATCH[1]}" == .* || ! -x "$script" ]] && return 0
-      temp=$(timeout "$fcp_custom_sensor_timeout" "$script" 2>/dev/null) || return 0
+      [[ "${BASH_REMATCH[1]}" == .* ]] && return 0
+      # The flash drive holding the directory cannot carry an execute bit, so
+      # the runner executes a private runtime copy; it also enforces the timeout.
+      temp=$(bash "$fcp_custom_sensor_runner" "$script" "$fcp_custom_sensor_timeout") || return 0
       # The contract is the temperature and nothing else, so output that is not
       # a number comes from a broken script rather than a sensor. A fractional
       # reading is truncated to whole degrees.
