@@ -59,15 +59,15 @@ Do not reinstall or run upstream FanCtrl Plus while FanCtrl Plus 2 is installed.
 
 ## Custom temperature sensors
 
-Any sensor the plugin does not know about can be added as a script. Drop an
-executable file in:
+Any sensor the plugin does not know about can be added as a readable script with
+a valid shebang. Place the file in:
 
 ```text
 /boot/config/plugins/fanctrlplus2/sensors.d/
 ```
 
-Each executable in that directory becomes one auxiliary sensor, named after the
-file, selectable per fan alongside the built-in sources. The contract is:
+Each readable script in that directory becomes one auxiliary sensor, named
+after the file, selectable per fan alongside the built-in sources. The contract is:
 
 - print the temperature in degrees Celsius and nothing else (a fractional
   reading is truncated to whole degrees);
@@ -79,10 +79,9 @@ driven by its other sources, and the script is tried again on the next round.
 Errors are reported by the exit status, never by a sentinel reading: a script
 that prints `0` has reported 0 °C.
 
-Readings are clamped to 0–200 °C, as they are for every other source, so a
-value outside that range drives the fan at the corresponding end of its curve
-rather than being discarded. A script that reads 0 °C when the settings page
-is opened is taken for a dead sensor and is not offered in the list.
+Readings below −100 °C or above 300 °C are rejected as implausible; valid negative
+readings are floored at 0 °C. A script that reads 0 °C when the settings page is
+opened is taken for an unpopulated sensor and is not offered in the list.
 
 ```sh
 #!/bin/bash
@@ -92,7 +91,28 @@ temp=$(some-tool --read-ambient 2>/dev/null) || exit 1
 echo "$temp"
 ```
 
-Remember to make the file executable (`chmod +x`).
+The flash drive does not need executable permissions. The plugin makes a private
+executable copy on runtime storage, preserving the shebang and using the file's
+current contents on each read. The copy is removed after the reading finishes.
+Use absolute paths for helper files: `$0` refers to the runtime copy, not the
+original flash-resident script.
+
+## Configuration backup and restore
+
+Use **General Settings → Export backup** to download saved fan configurations,
+PWM labels, dashboard switches, and fan ordering as a JSON file. Unsaved edits,
+custom sensor scripts, runtime history, and logs are not included.
+
+**Restore backup** asks for confirmation before replacing saved settings. The
+entire file is validated before changes are made, and unrelated files such as
+`sensors.d/` remain untouched. Fan control retains its prior running or stopped
+state; a failed replacement restores the previous managed configuration files.
+Reloading after a successful restore shows the restored settings.
+
+Store backups somewhere other than the Unraid flash drive. Back up custom sensor
+scripts separately. Restored USB identities are resolved by the existing device
+migration at service startup; a missing or ambiguous recorded controller is not
+assigned to another device.
 
 ## Fan identity and USB port changes
 

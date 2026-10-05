@@ -25,10 +25,21 @@ $used_files = [];
 $docroot = $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 
 require_once "$docroot/plugins/$plugin/include/Common.php";
+require_once __DIR__.'/ConfigBackup.php';
 
 if (!is_dir($cfgpath)) {
   mkdir($cfgpath, 0777, true);
 }
+try { $config_lock = fcp_config_lock($cfgpath); }
+catch (Throwable $error) {
+  http_response_code(500);
+  ob_clean();
+  echo json_encode(['status'=>'error','message'=>$error->getMessage()]);
+  exit;
+}
+register_shutdown_function(function () use ($config_lock) {
+  if (is_resource($config_lock)) { flock($config_lock, LOCK_UN); fclose($config_lock); }
+});
 
 header('Content-Type: application/json');
 

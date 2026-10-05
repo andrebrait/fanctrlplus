@@ -198,11 +198,12 @@ expect_equal "" "$(aux_read_sensor "mlx:0000:77:00.0")" \
 mkdir -p "$tmp/sensors.d"
 fcp_custom_sensor_dir="$tmp/sensors.d"
 fcp_custom_sensor_timeout=1
+export FCP_CUSTOM_SENSOR_RUNTIME_DIR="$tmp/sensor-run"
 
 write_sensor() {
   local name="$1"
   cat > "$tmp/sensors.d/$name"
-  chmod +x "$tmp/sensors.d/$name"
+  chmod 600 "$tmp/sensors.d/$name"
 }
 
 write_sensor ambient <<'STUB'
@@ -277,9 +278,65 @@ STUB
 expect_equal "" "$(aux_read_sensor "custom:slow")" \
   "A script that hangs must be abandoned for the round."
 
-printf '#!/bin/bash\necho 50\n' > "$tmp/sensors.d/not_executable"
-expect_equal "" "$(aux_read_sensor "custom:not_executable")" \
-  "A file that is not executable must be skipped."
+# Nothing a reading leaves behind may stay on disk: not after a success, a
+# failing script or the timeout that killed a hung one.
+expect_equal "" "$(ls -A "$FCP_CUSTOM_SENSOR_RUNTIME_DIR")" \
+  "No runtime copy of a sensor script may outlive its reading."
+
+# Flash storage cannot carry an execute bit, so a plain 0600 file is the norm.
+# Every sensor above was written that way; pin it so the fixtures stay honest.
+expect_equal "600" "$(stat -c %a "$tmp/sensors.d/ambient")" \
+  "The fixtures must model flash storage: readable but never executable."
+
+# The script's own interpreter line is honoured, not replaced with bash.
+cat > "$tmp/interp" <<'STUB'
+#!/bin/bash
+sed -n 2p "$1"
+STUB
+chmod +x "$tmp/interp"
+printf '#!%s\n58\n' "$tmp/interp" > "$tmp/sensors.d/interpreted"
+chmod 600 "$tmp/sensors.d/interpreted"
+expect_equal "58" "$(aux_read_sensor "custom:interpreted")" \
+  "The interpreter named by the shebang must run the script."
+
+# The file on flash is the source of truth: an edit applies to the next
+# reading even when size and modification time are unchanged.
+printf '#!/bin/bash\necho 21\n' > "$tmp/sensors.d/edited"
+chmod 600 "$tmp/sensors.d/edited"
+touch -d '2020-01-01' "$tmp/sensors.d/edited"
+expect_equal "21" "$(aux_read_sensor "custom:edited")" "The first version must be read."
+printf '#!/bin/bash\necho 22\n' > "$tmp/sensors.d/edited"
+touch -d '2020-01-01' "$tmp/sensors.d/edited"
+expect_equal "22" "$(aux_read_sensor "custom:edited")" \
+  "An edited script must be read afresh, never from a stale copy."
+
+# A script that cannot be read, or that is not a plain file, is no sensor.
+mkdir "$tmp/sensors.d/adir"
+expect_equal "" "$(aux_read_sensor "custom:adir")" "A directory is not a sensor."
+printf '#!/bin/bash\necho 50\n' > "$tmp/sensors.d/.hidden"
+expect_equal "" "$(aux_read_sensor "custom:.hidden")" "A hidden name is refused."
+expect_equal "" "$(aux_read_sensor "custom:..")" "The parent directory is refused."
+expect_equal "" "$(ls -A "$FCP_CUSTOM_SENSOR_RUNTIME_DIR")" \
+  "Refused and failed readings must leave no runtime copy either."
+
+# Executable copies cannot live in writable/shared or symlinked runtime bases.
+runtime="$FCP_CUSTOM_SENSOR_RUNTIME_DIR"
+mkdir "$tmp/shared-runtime"
+chmod 777 "$tmp/shared-runtime"
+export FCP_CUSTOM_SENSOR_RUNTIME_DIR="$tmp/shared-runtime"
+expect_equal "" "$(aux_read_sensor "custom:ambient")" "A writable shared runtime directory must be refused."
+ln -s "$runtime" "$tmp/runtime-link"
+export FCP_CUSTOM_SENSOR_RUNTIME_DIR="$tmp/runtime-link"
+expect_equal "" "$(aux_read_sensor "custom:ambient")" "A symlinked runtime directory must be refused."
+export FCP_CUSTOM_SENSOR_RUNTIME_DIR="$runtime"
+
+write_sensor stubborn <<'STUB'
+#!/bin/bash
+trap '' TERM
+while :; do sleep 1; done
+STUB
+expect_equal "" "$(aux_read_sensor "custom:stubborn")" "A script ignoring TERM must still be killed and yield no reading."
+expect_equal "" "$(ls -A "$runtime")" "A hard timeout must also remove its private copy."
 
 expect_equal "" "$(aux_read_sensor "custom:absent")" \
   "A name with no script behind it must yield no reading."
