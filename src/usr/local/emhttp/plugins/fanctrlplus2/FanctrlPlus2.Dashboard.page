@@ -116,7 +116,6 @@ echo <<<STYLE
   #fanctrlplus2-dashboard tr.fcp-row .fcp-src{ order:1; width:100%; font-size:90%; }
   #fanctrlplus2-dashboard .fcp-num   { padding-right:6px; }
   #fanctrlplus2-dashboard .fcp-name  { width:26%; }
-  #fanctrlplus2-dashboard .fp-temp   { width:13%; }
   #fanctrlplus2-dashboard .fp-rpm    { width:18%; }
   #fanctrlplus2-dashboard .fp-pct    { width:13%; }
   #fanctrlplus2-dashboard .fcp-status{ width:21%; }
@@ -172,9 +171,10 @@ EOT;
 ?>
 <script>
 // Fill one fan's row. The server sends the source without parentheses ("CPU",
-// "Disk: Group", "Idle") and "*" as the temperature while idling.
+// "Disk: Group", "Idle") and "*" as the temperature while idling, which is
+// shown as "--" since the Source column already says "Idle".
 function setFanRow(tile, f) {
-  const key = (window.CSS && CSS.escape) ? CSS.escape(f.label) : String(f.label).replace(/"/g, '\\"');
+  const key = CSS.escape(f.label);
   const row = tile.querySelector(`tr.fcp-row[data-label="${key}"]`);
   if (!row) return;
 
