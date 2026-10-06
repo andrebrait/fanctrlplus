@@ -157,7 +157,7 @@ the option on the flash drive and reboot:
 
 ```bash
 mkdir -p /boot/config/modprobe.d
-echo "options nct6687 msi_fan_brute_force=1" > /boot/config/modprobe.d/nct6687.conf
+echo "options nct6687 msi_fan_brute_force=1" >> /boot/config/modprobe.d/nct6687.conf
 ```
 
 The option was added to the driver in December 2025; `modinfo nct6687` lists

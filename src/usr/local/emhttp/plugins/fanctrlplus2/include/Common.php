@@ -373,15 +373,17 @@ function fcp_nct6687_brute_force_missing(
   foreach ($controllers as $controller) {
     if (!preg_match('/^pwm(\d+)$/', basename((string)$controller), $m) || (int)$m[1] < 3) continue;
     $dir = dirname($controller);
-    if (trim((string)@file_get_contents("$dir/name")) === 'nct6687') {
+    // The driver names its hwmon device after the chip it found.
+    if (preg_match('/^nct668[367]$/', trim((string)@file_get_contents("$dir/name")))) {
       $hwmon = $dir;
       break;
     }
   }
   if ($hwmon === null || file_exists("$hwmon/fan_control_watchdog")) return false;
 
-  // Kernel bools accept 1/y/t/on, or the bare name; '-' and '_' are interchangeable.
-  $set = '/^\s*options\s+nct6687\s+(?:.*\s)?msi[-_]fan[-_]brute[-_]force(?:=(?:[1yYtT]\S*|[oO][nN]))?(?:\s|$)/m';
+  // Kernel bools accept 1/y/t/on (optionally quoted), or the bare name;
+  // '-' and '_' are interchangeable.
+  $set = '/^\s*options\s+nct6687\s+(?:.*\s)?msi[-_]fan[-_]brute[-_]force(?:="?(?:[1yYtT][^\s"]*|[oO][nN]))?(?:[\s"]|$)/m';
   foreach (glob($modprobe_glob) ?: [] as $conf) {
     if (preg_match($set, (string)@file_get_contents($conf))) return false;
   }

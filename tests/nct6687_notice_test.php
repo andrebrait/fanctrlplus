@@ -33,7 +33,12 @@ $check('default register layout', false, $sys_fan);
 
 file_put_contents("$module/parameters/fan_config", "msi_alt1\n");
 $check('msi_alt1 without the option', true, $sys_fan);
-$check('only CPU and pump channels', false, ["$hwmon/pwm1", "$hwmon/pwm2", "$hwmon/pwm1_enable"]);
+$check('first system channel', true, ["$hwmon/pwm3"]);
+$nct6686 = "$root/devices/platform/nct6687.2593/hwmon/hwmon8";
+@mkdir($nct6686, 0777, true);
+file_put_contents("$nct6686/name", "nct6686\n");
+$check('nct6686 chip', true, ["$other/pwm3", "$nct6686/pwm3"]);
+$check('only CPU and pump channels', false, ["$hwmon/pwm1", "$hwmon/pwm2", "$hwmon/pwm1_enable", "$hwmon/pwm3_enable"]);
 $check('system channel on another chip', false, ["$other/pwm5"]);
 $check('no fans configured', false, []);
 
@@ -42,11 +47,14 @@ foreach ([
     'options nct6687 msi_fan_brute_force=n' => true,
     '# options nct6687 msi_fan_brute_force=1' => true,
     'options nct6683 msi_fan_brute_force=1' => true,
+    'options nct6687x msi_fan_brute_force=1' => true,
     'options nct6687 not_msi_fan_brute_force=1' => true,
     'options nct6687 msi_fan_brute_force=1' => false,
+    "# Set by hand\noptions nct6687 msi_fan_brute_force=1" => false,
     "options nct6687 fan_config=msi_alt1 msi-fan-brute-force=Y\n" => false,
     'options  nct6687 msi_fan_brute_force' => false,
     'options nct6687 msi_fan_brute_force=on' => false,
+    'options nct6687 msi_fan_brute_force="true"' => false,
 ] as $line => $expected) {
     file_put_contents("$modprobe/nct6687.conf", "$line\n");
     $check("modprobe line '$line'", $expected, $sys_fan);
