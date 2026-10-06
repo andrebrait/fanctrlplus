@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.9.2"
+  version="1.9.3"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,25 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.9.3
+
+## What's changed
+
+- **Dashboard widget: one value per column** (#13). The temperature cell packed the value and its source into fixed-width slots, so "40 °C" ran into the source, and a long disk-group name was cut mid-word and drawn over the RPM column on hover. The widget now has one value per column, with units in the headers: Name, Temp (°C), Source, Speed (RPM), PWM (%), Status and Run. (#16)
+ - Values never spill into the next column. Long names and sources end in "…" and show in full on hover.
+ - Numbers are right-aligned, and Status and Run are narrower.
+ - On narrow screens the headers are abbreviated (°C, RPM, %) and each fan's source moves to a second line under the fan.
+ - An idling fan's temperature shows `--` instead of `*`; the Source column says "Idle".
+- Fan names are now HTML-escaped in the widget.
+
+## Upgrade compatibility
+
+No configuration changes. Reload the dashboard after upgrading so the browser picks up the new layout.
+
+## Verification
+
+All 28 test files pass. The widget was rendered from the real page output with Unraid's dashboard stylesheet in headless Chromium at tile widths from 340 to 780 pixels ([renders](https://github.com/andrebrait/fanctrlplus/pull/16#issuecomment-6014405931)). It has not yet been checked on a real Unraid dashboard.
 
 ### 1.9.2
 
@@ -63,32 +82,6 @@ Keep backups somewhere other than the Unraid flash drive, and back up custom sen
 ## Verification
 
 All 26 test files pass. The flash-drive sensor fix was checked on a real `noexec` mount. Export and restore were exercised through the actual settings page, including restoring while fan control was running and while it was stopped. Physical hardware validation is welcome.
-
-### 1.9.0
-
-## What's changed
-
-- Discover PWM channels numbered 10 and above, exclude per-channel attributes such as `pwm10_enable`, and list channels in natural numeric order. Older driver layouts remain supported. (#10)
-- Preserve fan labels and group assignments across hwmon renumbering and USB HID re-enumeration instead of leaving them attached to vanished sysfs paths. (#12)
-- Record unique USB controller serial identities so assignments follow controllers across USB port, bus, and hub changes, even when an identical model occupies the old port. Controllers without a unique serial retain separate same-port bindings.
-- Keep missing or ambiguous controller bindings for recovery without controlling another device, and prevent multiple configurations from driving the same PWM channel.
-- Preserve unresolved bindings across configuration saves and renames. Clearing a label also removes its dormant identity entry so it cannot reappear when ambiguity is resolved.
-
-## Upgrade compatibility
-
-Back up `/boot/config/plugins/fanctrlplus2/` before upgrading, especially if you may need to downgrade later. No manual conversion is needed for controllers still identifiable at their saved location: their bindings are upgraded when the service starts.
-
-Start the service on 1.9.0 **before moving a USB controller** so its serial can be recorded. If an older, unrecorded controller has already moved, reassign it once. Controllers without a unique serial must remain on the same USB port. Restart the service after a driver reload or USB port move; this release does not add hot-plug monitoring.
-
-Older plugin versions do not understand the new serial-based label keys. Restore your pre-upgrade configuration backup if downgrading. Device identity identifies the controller's channel, not the physical fan plugged into it.
-
-The export/import request in #11 remains separate and is not included in this release.
-
-## Verification
-
-All 25 test files pass. Isolated runtime smoke checks exercised actual label/configuration endpoints and service startup against synthetic sysfs, including port moves with replacements, ambiguous identities, recovery, saves, and label deletion. Physical hardware validation is still welcome.
-
-Thanks to @mrjacobarussell for the multi-channel fix and detailed ARCTIC controller reports.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -142,16 +135,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.2-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.2/fanctrlplus2-1.9.2-noarch-1.txz</URL>
-<SHA256>33c3420873e362c1ebd792bb85750f91bb630b7206531e1a881c201916f8d00b</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.3-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.3/fanctrlplus2-1.9.3-noarch-1.txz</URL>
+<SHA256>8d3bd99b5c42686f91f97ece2c79019bfd1a01847c4ad5f40606c98bbd72b2b0</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.2-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.3-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -176,7 +169,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.9.2"
+echo " Version: 1.9.3"
 echo "------------------------------------------------"
 echo ""
 exit 0
