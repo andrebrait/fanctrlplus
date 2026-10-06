@@ -79,6 +79,8 @@ unlink("$modprobe/nct6687.conf");
 
 touch("$hwmon/fan_control_watchdog");
 $check('watchdog attribute present', false, $sys_fan);
+$log = $disabled;
+$check('watchdog attribute outranks the kernel log', false, $sys_fan);
 
 exec('rm -rf ' . escapeshellarg($root));
 

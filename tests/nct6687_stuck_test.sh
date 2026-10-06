@@ -35,12 +35,18 @@ echo msi_alt1 > "$fcp_nct6687_module/parameters/fan_config"
 expect_equal yes "$(channel "$nct/pwm3")" "The first system-fan channel is watched."
 expect_equal no "$(channel "$nct/pwm2")" "The pump channel is not affected."
 expect_equal no "$(channel "$other/pwm5")" "Another chip's channel is not watched."
+echo nct6683 > "$other/name"
+expect_equal yes "$(channel "$other/pwm5")" "The driver's other chip names are watched too."
+touch "$nct/fan_control_watchdog"
+expect_equal no "$(channel "$nct/pwm5")" "A driver running with brute force on is not watched."
 
 # ===== fcp_stuck_ticks =====
 expect_equal 1 "$(fcp_stuck_ticks 0 255 154)" "Set to 100%, stuck at 60%: one stuck tick."
 expect_equal 2 "$(fcp_stuck_ticks 1 255 154)" "A second stuck tick in a row counts up."
+expect_equal 1 "$(fcp_stuck_ticks 0 154 140)" "Just above 60%, the target is checked."
 expect_equal 0 "$(fcp_stuck_ticks 1 153 120)" "A target of 60% or less is not checked."
-expect_equal 0 "$(fcp_stuck_ticks 1 200 196)" "Within 5 of the target counts as reached."
+expect_equal 1 "$(fcp_stuck_ticks 0 200 194)" "More than 5 below the target is stuck."
+expect_equal 0 "$(fcp_stuck_ticks 1 200 195)" "Within 5 of the target counts as reached."
 expect_equal 0 "$(fcp_stuck_ticks 1 200 '')" "An unreadable value resets the count."
 
 # ===== fcp_notify_stuck =====
@@ -51,6 +57,9 @@ fcp_notify_stuck HardDriveFans 255 154 "$tmp/flag"
 expect_equal 1 "$(grep -c '^-s$' "$tmp/calls")" "One notification per fan until the flag is cleared at boot."
 expect_equal 1 "$(grep -c '^Set to 100% but the nct6687 controller reports 60%' "$tmp/calls")" \
   "The notification reports the set and actual speeds as percentages."
+expect_equal 1 "$(grep -cx 'warning' "$tmp/calls")" "The notification is a warning."
+fcp_notify_stuck HardDriveFans 255 154 "$tmp/missing/flag"
+expect_equal 1 "$(grep -c '^-s$' "$tmp/calls")" "Without a flag file, no notification is sent, so ticks cannot repeat it."
 
 if (( failures > 0 )); then
   exit 1

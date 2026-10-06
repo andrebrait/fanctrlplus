@@ -385,8 +385,11 @@ function fcp_nct6687_brute_force_missing(
   if ($hwmon === null || file_exists("$hwmon/fan_control_watchdog")) return false;
 
   // syslog first, dmesg last: dmesg holds the most recent load, but its ring
-  // buffer may have dropped the line on a long uptime.
-  $kernel_log ??= (string)@file_get_contents('/var/log/syslog') . "\n" . (string)@shell_exec('dmesg 2>/dev/null');
+  // buffer may have dropped the line on a long uptime. Only the last 4 MiB of
+  // syslog are read, so a huge log cannot exhaust PHP's memory limit.
+  $syslog = '/var/log/syslog';
+  $kernel_log ??= (string)@file_get_contents($syslog, false, null, -min(4 << 20, (int)@filesize($syslog)))
+    . "\n" . (string)@shell_exec('dmesg 2>/dev/null');
   if (preg_match_all('/nct668\d[^\n]*MSI fan brute force mode: (enabled|disabled)/', $kernel_log, $m)) {
     return end($m[1]) === 'disabled';
   }
