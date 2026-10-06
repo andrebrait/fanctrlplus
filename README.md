@@ -152,8 +152,13 @@ On some MSI boards the nct6687 driver accepts speed changes for the system
 fans (`pwm3` and up) but does not apply them, so those fans stay at about 60%.
 The driver documents this and fixes it with its `msi_fan_brute_force` module
 option. When a configured fan uses one of those channels and the option is not
-detected, the settings page shows a notice with the workaround. On Unraid, set
-the option on the flash drive and reboot:
+detected, the settings page shows a notice with the workaround. The option's
+loaded state is read from the driver's `fan_control_watchdog` attribute or its
+"MSI fan brute force mode" kernel log line, falling back to the modprobe
+configuration. While a fan on one of those channels is set above 60% but reads
+back lower on two checks in a row, the plugin also sends one Unraid
+notification per fan per boot. On Unraid, set the option on the flash drive and
+reboot:
 
 ```bash
 mkdir -p /boot/config/modprobe.d

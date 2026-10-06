@@ -44,6 +44,10 @@ else
   fan_path=""
 fi
 
+stuck_ticks=0
+nct6687_watch=0
+fcp_nct6687_msi_channel "$controller" && nct6687_watch=1
+
 prev_pwm=-1
 hist_file="/var/tmp/${plugin}/history_${plugin}_${custom}"
 
@@ -181,6 +185,15 @@ while true; do
       fi
 
       prev_pwm=$pwm_val
+    fi
+  fi
+
+  # Fans the nct6687 MSI layout may ignore: warn when one stays below its target.
+  if (( nct6687_watch )); then
+    actual_pwm=$(cat "$controller" 2>/dev/null)
+    stuck_ticks=$(fcp_stuck_ticks "$stuck_ticks" "$pwm_val" "$actual_pwm")
+    if (( stuck_ticks >= 2 )); then
+      fcp_notify_stuck "$custom" "$pwm_val" "$actual_pwm" "/var/tmp/${plugin}/nct6687_stuck_${custom}"
     fi
   fi
 

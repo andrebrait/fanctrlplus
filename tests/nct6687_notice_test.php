@@ -17,8 +17,9 @@ file_put_contents("$hwmon/name", "nct6687\n");
 file_put_contents("$other/name", "it8728\n");
 file_put_contents("$modprobe/nct6683.conf", "blacklist nct6683\ninstall nct6683 /bin/false\n");
 
-$check = function (string $label, bool $expected, array $controllers) use (&$failures, $module, $modprobe): void {
-    $actual = fcp_nct6687_brute_force_missing($controllers, $module, "$modprobe/*.conf");
+$log = '';
+$check = function (string $label, bool $expected, array $controllers) use (&$failures, &$log, $module, $modprobe): void {
+    $actual = fcp_nct6687_brute_force_missing($controllers, $module, "$modprobe/*.conf", $log);
     if ($actual !== $expected) {
         $failures[] = "$label: expected " . var_export($expected, true) . ', got ' . var_export($actual, true);
     }
@@ -59,6 +60,21 @@ foreach ([
     file_put_contents("$modprobe/nct6687.conf", "$line\n");
     $check("modprobe line '$line'", $expected, $sys_fan);
 }
+
+// The kernel log reports the loaded value, so it overrides the modprobe files
+// (which the loop above left setting the option).
+$enabled = "Oct  6 06:20:01 Tower kernel: nct6687 nct6687.2592: MSI fan brute force mode: enabled\n";
+$disabled = "[    7.912345] nct6687 nct6687.2592: MSI fan brute force mode: disabled\n";
+$log = $disabled;
+$check('kernel log: disabled, modprobe option set after boot', true, $sys_fan);
+$log = "$disabled$enabled";
+$check('kernel log: latest load enabled', false, $sys_fan);
+$log = "$enabled$disabled";
+$check('kernel log: latest load disabled', true, $sys_fan);
+file_put_contents("$modprobe/nct6687.conf", "options nct6687 msi_fan_brute_force=0\n");
+$log = $enabled;
+$check('kernel log: enabled, option passed outside modprobe.d', false, $sys_fan);
+$log = '';
 unlink("$modprobe/nct6687.conf");
 
 touch("$hwmon/fan_control_watchdog");
