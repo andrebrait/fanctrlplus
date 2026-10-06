@@ -40,14 +40,13 @@ expect_equal yes "$(channel "$other/pwm5")" "The driver's other chip names are w
 touch "$nct/fan_control_watchdog"
 expect_equal no "$(channel "$nct/pwm5")" "A driver running with brute force on is not watched."
 
-# ===== fcp_stuck_ticks =====
-expect_equal 1 "$(fcp_stuck_ticks 0 255 154)" "Set to 100%, stuck at 60%: one stuck tick."
-expect_equal 2 "$(fcp_stuck_ticks 1 255 154)" "A second stuck tick in a row counts up."
-expect_equal 1 "$(fcp_stuck_ticks 0 154 140)" "Just above 60%, the target is checked."
-expect_equal 0 "$(fcp_stuck_ticks 1 153 120)" "A target of 60% or less is not checked."
-expect_equal 1 "$(fcp_stuck_ticks 0 200 194)" "More than 5 below the target is stuck."
-expect_equal 0 "$(fcp_stuck_ticks 1 200 195)" "Within 5 of the target counts as reached."
-expect_equal 0 "$(fcp_stuck_ticks 1 200 '')" "An unreadable value resets the count."
+# ===== fcp_stuck_since =====
+expect_equal 100 "$(fcp_stuck_since '' 100 255 154)" "Set to 100%, stuck at 60%: a stretch starts now."
+expect_equal 100 "$(fcp_stuck_since 100 110 166 154)" "A new target above 60% keeps the stretch going."
+expect_equal 100 "$(fcp_stuck_since 100 110 155 154)" "61% is above 60%; a reading of 154 rounds to 60%."
+expect_equal '' "$(fcp_stuck_since 100 110 154 120)" "A target of 60% or less ends the stretch."
+expect_equal '' "$(fcp_stuck_since 100 110 255 155)" "A reading above 60% ends the stretch."
+expect_equal '' "$(fcp_stuck_since 100 110 255 '')" "An unreadable value ends the stretch."
 
 # ===== fcp_notify_stuck =====
 printf '#!/bin/bash\nprintf "%%s\\n" "$@" >> "%s/calls"\n' "$tmp" > "$fcp_notify_bin"

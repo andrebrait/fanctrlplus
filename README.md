@@ -156,7 +156,7 @@ detected, the settings page shows a notice with the workaround. The option's
 loaded state is read from the driver's `fan_control_watchdog` attribute or its
 "MSI fan brute force mode" kernel log line, falling back to the modprobe
 configuration. While a fan on one of those channels is set above 60% but reads
-back lower on two checks in a row, the plugin also sends one Unraid
+back 60% or less for 10 seconds, the plugin also sends one Unraid
 notification per fan per boot. On Unraid, set the option on the flash drive and
 reboot:
 

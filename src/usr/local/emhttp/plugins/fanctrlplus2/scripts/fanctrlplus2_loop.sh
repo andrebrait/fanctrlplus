@@ -44,7 +44,7 @@ else
   fan_path=""
 fi
 
-stuck_ticks=0
+stuck_since=""
 nct6687_watch=0
 fcp_nct6687_msi_channel "$controller" && nct6687_watch=1
 
@@ -153,9 +153,7 @@ while true; do
   prev_hist_src="$hist_src"
 
   # === Write when PWM changes materially or on the first iteration ===
-  wrote=0
   if [[ "$prev_pwm" == -1 ]]; then
-    wrote=1
     [[ -f "$controller_enable" ]] && echo 1 > "$controller_enable"
     echo "$pwm_val" > "$controller"
     sleep 4
@@ -171,7 +169,6 @@ while true; do
     prev_pwm=$pwm_val
   else
     if (( pwm_val - prev_pwm >= 5 || prev_pwm - pwm_val >= 5 )); then
-      wrote=1
       [[ -f "$controller_enable" ]] && echo 1 > "$controller_enable"
       echo "$pwm_val" > "$controller"
       sleep 4
@@ -191,17 +188,14 @@ while true; do
     fi
   fi
 
-  # Fans the nct6687 MSI layout may ignore: warn when one stays below its
-  # target. A tick that wrote restarts the count while the chip ramps.
+  # Fans the nct6687 MSI layout may ignore: warn once one has stayed at 60% or
+  # less for 10 seconds while set above it. The target is the last value
+  # written, which a change under 5 leaves in place.
   if (( nct6687_watch )); then
     actual_pwm=$(cat "$controller" 2>/dev/null)
-    if (( wrote )); then
-      stuck_ticks=0
-    else
-      stuck_ticks=$(fcp_stuck_ticks "$stuck_ticks" "$pwm_val" "$actual_pwm")
-    fi
-    if (( stuck_ticks >= 2 )); then
-      fcp_notify_stuck "$custom" "$pwm_val" "$actual_pwm" "/var/tmp/${plugin}/nct6687_stuck_${custom}"
+    stuck_since=$(fcp_stuck_since "$stuck_since" "$SECONDS" "$prev_pwm" "$actual_pwm")
+    if [[ -n "$stuck_since" ]] && (( SECONDS - stuck_since >= 10 )); then
+      fcp_notify_stuck "$custom" "$prev_pwm" "$actual_pwm" "/var/tmp/${plugin}/nct6687_stuck_${custom}"
     fi
   fi
 

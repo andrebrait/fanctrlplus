@@ -272,16 +272,21 @@ fcp_nct6687_msi_channel() {
   [[ "$(cat "$fcp_nct6687_module/parameters/fan_config" 2>/dev/null)" == "msi_alt1" ]]
 }
 
-# Echoes the updated count of consecutive ticks where the fan was set above
-# 60% (PWM 153) and read back lower than the target. The caller counts only
-# ticks that wrote nothing, so a chip still ramping to a new value is not
-# mistaken for a stuck one, and acts on two in a row.
-fcp_stuck_ticks() {
-  local count="$1" target="$2" actual="$3"
-  if [[ "$actual" =~ ^[0-9]+$ ]] && (( target > 153 && actual + 5 < target )); then
-    echo $((count + 1))
-  else
-    echo 0
+# A PWM value as a whole percentage, rounded the way the dashboard shows it.
+fcp_pwm_percent() {
+  echo $(( ($1 * 100 + 127) / 255 ))
+}
+
+# Echoes when the current stuck stretch began (the given time, or the start
+# carried over), or nothing when the fan is not stuck. Stuck means set above
+# 60% but reading back 60% or less: the speed a fan ignoring its writes holds.
+# The caller warns once a stretch has lasted 10 seconds, which a chip still
+# ramping up would not.
+fcp_stuck_since() {
+  local since="$1" now="$2" target="$3" actual="$4"
+  if [[ "$actual" =~ ^[0-9]+$ ]] &&
+     (( $(fcp_pwm_percent "$target") > 60 && $(fcp_pwm_percent "$actual") <= 60 )); then
+    echo "${since:-$now}"
   fi
 }
 
@@ -293,5 +298,5 @@ fcp_notify_stuck() {
   touch "$flag" 2>/dev/null || return 0
   "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
     -s "Fan $name is not reaching its set speed" \
-    -d "Set to $(( (target * 100 + 127) / 255 ))% but the nct6687 controller reports $(( (actual * 100 + 127) / 255 ))%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page."
+    -d "Set to $(fcp_pwm_percent "$target")% but the nct6687 controller reports $(fcp_pwm_percent "$actual")%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page."
 }
