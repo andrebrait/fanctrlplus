@@ -33,6 +33,8 @@ aux_locate_bins "${aux_sensor:-}"
 source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/disk_group_control.sh"
 
 plugin="fanctrlplus2"
+# The dashboard updater also creates this, but may start after the loops.
+mkdir -p "/var/tmp/${plugin}"
 custom="${custom:-$(basename "$cfg_file" .cfg)}"
 controller_enable="${controller}_enable"
 
