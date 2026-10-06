@@ -253,3 +253,50 @@ interval_seconds() {
   (( secs > fcp_interval_max_seconds )) && secs=$fcp_interval_max_seconds
   printf '%s' "$secs"
 }
+
+# ===== MSI nct6687 stuck-fan check (#13) =====
+# On MSI boards in the driver's msi_alt1 layout, system-fan channels (pwm3 and
+# up) ignore speed changes unless the msi_fan_brute_force option is set, and
+# stay at about 60%. Reading pwmN back returns the chip's actual output, so a
+# fan driven above 60% that keeps reading back lower is caught here. Drivers
+# that expose fan_control_watchdog run with the option set and are skipped.
+fcp_notify_bin="${fcp_notify_bin:-/usr/local/emhttp/webGui/scripts/notify}"
+fcp_nct6687_module="${fcp_nct6687_module:-/sys/module/nct6687}"
+
+fcp_nct6687_msi_channel() {
+  local controller="$1" chip
+  [[ "$controller" =~ /pwm([0-9]+)$ ]] && (( BASH_REMATCH[1] >= 3 )) || return 1
+  chip=$(cat "$(dirname "$controller")/name" 2>/dev/null)
+  [[ "$chip" =~ ^nct668[367]$ ]] || return 1
+  [[ ! -e "$(dirname "$controller")/fan_control_watchdog" ]] || return 1
+  [[ "$(cat "$fcp_nct6687_module/parameters/fan_config" 2>/dev/null)" == "msi_alt1" ]]
+}
+
+# A PWM value as a whole percentage, rounded the way the dashboard shows it.
+fcp_pwm_percent() {
+  echo $(( ($1 * 100 + 127) / 255 ))
+}
+
+# Echoes when the current stuck stretch began (the given time, or the start
+# carried over), or nothing when the fan is not stuck. Stuck means set above
+# 60% but reading back 60% or less: the speed a fan ignoring its writes holds.
+# The caller warns once a stretch has lasted 10 seconds, which a chip still
+# ramping up would not.
+fcp_stuck_since() {
+  local since="$1" now="$2" target="$3" actual="$4"
+  if [[ "$actual" =~ ^[0-9]+$ ]] &&
+     (( $(fcp_pwm_percent "$target") > 60 && $(fcp_pwm_percent "$actual") <= 60 )); then
+    echo "${since:-$now}"
+  fi
+}
+
+# One Unraid notification per fan per boot; the flag lives on tmpfs. Without
+# a flag every tick would notify again, so no flag means no notification.
+fcp_notify_stuck() {
+  local name="$1" target="$2" actual="$3" flag="$4"
+  [[ -e "$flag" ]] && return 0
+  touch "$flag" 2>/dev/null || return 0
+  "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
+    -s "Fan $name is not reaching its set speed" \
+    -d "Set to $(fcp_pwm_percent "$target")% but the nct6687 controller reports $(fcp_pwm_percent "$actual")%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page."
+}

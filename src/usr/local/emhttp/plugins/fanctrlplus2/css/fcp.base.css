@@ -296,6 +296,8 @@
   margin: 0;
   white-space: nowrap;
 }
+.fcp-nct6687-notice { justify-content: flex-start; }
+.fcp-nct6687-notice code.fcp-cmd { display: block; margin: 4px 0; user-select: all; }
 
 /* ===== Sort toggle ===== */
 .fanctrl-sort-toggle {

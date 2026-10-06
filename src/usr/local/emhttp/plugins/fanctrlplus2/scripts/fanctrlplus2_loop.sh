@@ -33,6 +33,8 @@ aux_locate_bins "${aux_sensor:-}"
 source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/disk_group_control.sh"
 
 plugin="fanctrlplus2"
+# The dashboard updater also creates this, but may start after the loops.
+mkdir -p "/var/tmp/${plugin}"
 custom="${custom:-$(basename "$cfg_file" .cfg)}"
 controller_enable="${controller}_enable"
 
@@ -43,6 +45,10 @@ if [[ "$controller" =~ pwm([0-9]+)$ ]]; then
 else
   fan_path=""
 fi
+
+stuck_since=""
+nct6687_watch=0
+fcp_nct6687_msi_channel "$controller" && nct6687_watch=1
 
 prev_pwm=-1
 hist_file="/var/tmp/${plugin}/history_${plugin}_${custom}"
@@ -181,6 +187,17 @@ while true; do
       fi
 
       prev_pwm=$pwm_val
+    fi
+  fi
+
+  # Fans the nct6687 MSI layout may ignore: warn once one has stayed at 60% or
+  # less for 10 seconds while set above it. The target is the last value
+  # written, which a change under 5 leaves in place.
+  if (( nct6687_watch )); then
+    actual_pwm=$(cat "$controller" 2>/dev/null)
+    stuck_since=$(fcp_stuck_since "$stuck_since" "$SECONDS" "$prev_pwm" "$actual_pwm")
+    if [[ -n "$stuck_since" ]] && (( SECONDS - stuck_since >= 10 )); then
+      fcp_notify_stuck "$custom" "$prev_pwm" "$actual_pwm" "/var/tmp/${plugin}/nct6687_stuck_${custom}"
     fi
   fi
 

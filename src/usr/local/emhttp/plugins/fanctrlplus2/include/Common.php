@@ -354,6 +354,63 @@ function list_pwm(string $hwmon_glob = '/sys/class/hwmon/hwmon*') {
   return $out;
 }
 
+// On MSI boards the nct6687 driver uses its msi_alt1 register layout, where
+// writes to the system-fan channels (pwm3 and up) are accepted but ignored
+// unless the msi_fan_brute_force module option is set; those fans then stay
+// at about 60%. The option is not readable from sysfs, so its state is taken,
+// in order, from the fan_control_watchdog attribute (created only in that
+// mode, by newer builds), the driver's "MSI fan brute force mode" line in the
+// kernel log (printed on auto-detected MSI boards; the latest load wins), and
+// finally the modprobe configuration.
+// https://github.com/Fred78290/nct6687d#loading-msi_fan_brute_force-parameter-fails
+function fcp_nct6687_brute_force_missing(
+  array $controllers,
+  string $module_dir = '/sys/module/nct6687',
+  string $modprobe_glob = '/etc/modprobe.d/*.conf',
+  ?string $kernel_log = null
+): bool {
+  $fan_config = @file_get_contents("$module_dir/parameters/fan_config");
+  if ($fan_config === false || trim($fan_config) !== 'msi_alt1') return false;
+
+  $hwmon = null;
+  foreach ($controllers as $controller) {
+    if (!preg_match('/^pwm(\d+)$/', basename((string)$controller), $m) || (int)$m[1] < 3) continue;
+    $dir = dirname($controller);
+    // The driver names its hwmon device after the chip it found.
+    if (preg_match('/^nct668[367]$/', trim((string)@file_get_contents("$dir/name")))) {
+      $hwmon = $dir;
+      break;
+    }
+  }
+  if ($hwmon === null || file_exists("$hwmon/fan_control_watchdog")) return false;
+
+  // syslog first, dmesg last: dmesg holds the most recent load, but its ring
+  // buffer may have dropped the line on a long uptime. Only the last 4 MiB of
+  // syslog are read, so a huge log cannot exhaust PHP's memory limit.
+  $syslog = '/var/log/syslog';
+  $kernel_log ??= (string)@file_get_contents($syslog, false, null, -min(4 << 20, (int)@filesize($syslog)))
+    . "\n" . (string)@shell_exec('dmesg 2>/dev/null');
+  if (preg_match_all('/nct668\d[^\n]*MSI fan brute force mode: (enabled|disabled)/', $kernel_log, $m)) {
+    return end($m[1]) === 'disabled';
+  }
+
+  // modprobe reads the files in name order and passes every option along, and
+  // the kernel applies them in turn, so the last setting wins. Kernel bools
+  // accept 1/y/t/on (optionally quoted), or the bare name; '-' and '_' are
+  // interchangeable.
+  $files = glob($modprobe_glob) ?: [];
+  usort($files, fn($a, $b) => strcmp(basename($a), basename($b)));
+  $last = null;
+  foreach ($files as $conf) {
+    preg_match_all('/^\s*options\s+nct6687\s+(.*)$/m', (string)@file_get_contents($conf), $lines);
+    foreach ($lines[1] as $args) {
+      preg_match_all('/(?:^|\s)msi[-_]fan[-_]brute[-_]force(?:="?([^\s"]*)"?)?(?=\s|$)/', $args, $vals);
+      foreach ($vals[1] as $val) $last = $val;
+    }
+  }
+  return $last === null || !preg_match('/^(?:$|[1yYtT]|[oO][nN])/', $last);
+}
+
 // Find storcli binary (storcli64, storcli2, storcli) in common paths
 function find_storcli(): ?string {
   $candidates = [

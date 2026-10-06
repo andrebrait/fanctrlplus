@@ -156,6 +156,7 @@ flock($page_config_lock, LOCK_UN);
 fclose($page_config_lock);
 $cpu_sensors = detect_cpu_sensors();
 $aux_sensors = detect_aux_sensors();
+$fcp_nct6687_notice = fcp_nct6687_brute_force_missing(array_column($all_cfg, 'controller'));
 ?>
 
 <div class="fanctrl-header">
@@ -173,6 +174,18 @@ $aux_sensors = detect_aux_sensors();
   <span>FanCtrl Plus 2 files changed on the server. Reload to use matching interface resources.</span>
   <button type="button" id="fcp-asset-reload">Reload page</button>
 </div>
+<?php if ($fcp_nct6687_notice): ?>
+<div class="fcp-asset-update-notice fcp-nct6687-notice">
+  <span>
+    <strong>MSI board detected:</strong> the nct6687 driver may ignore speed changes on system fans, which then stay at about 60%.
+    The driver's documented workaround is its <code>msi_fan_brute_force</code> option. Run the commands below from an Unraid terminal, then reboot:
+    <code class="fcp-cmd">mkdir -p /boot/config/modprobe.d</code>
+    <code class="fcp-cmd">echo "options nct6687 msi_fan_brute_force=1" &gt;&gt; /boot/config/modprobe.d/nct6687.conf</code>
+    If <code>modinfo nct6687 | grep msi_fan_brute_force</code> prints nothing, the installed driver predates the option and needs an update.
+    <a href="https://github.com/Fred78290/nct6687d#loading-msi_fan_brute_force-parameter-fails" target="_blank" rel="noopener">Driver documentation</a>
+  </span>
+</div>
+<?php endif; ?>
 
 <script>
 const DEBUG = false; // Enables diagnostic console output.
