@@ -354,6 +354,40 @@ function list_pwm(string $hwmon_glob = '/sys/class/hwmon/hwmon*') {
   return $out;
 }
 
+// On MSI boards the nct6687 driver uses its msi_alt1 register layout, where
+// writes to the system-fan channels (pwm3 and up) are accepted but ignored
+// unless the msi_fan_brute_force module option is set; those fans then stay
+// at about 60%. The option is not readable from sysfs, so it counts as set
+// when the driver exposes fan_control_watchdog (created only in that mode,
+// by newer builds) or when the modprobe configuration sets it.
+// https://github.com/Fred78290/nct6687d#loading-msi_fan_brute_force-parameter-fails
+function fcp_nct6687_brute_force_missing(
+  array $controllers,
+  string $module_dir = '/sys/module/nct6687',
+  string $modprobe_glob = '/etc/modprobe.d/*.conf'
+): bool {
+  $fan_config = @file_get_contents("$module_dir/parameters/fan_config");
+  if ($fan_config === false || trim($fan_config) !== 'msi_alt1') return false;
+
+  $hwmon = null;
+  foreach ($controllers as $controller) {
+    if (!preg_match('/^pwm(\d+)$/', basename((string)$controller), $m) || (int)$m[1] < 3) continue;
+    $dir = dirname($controller);
+    if (trim((string)@file_get_contents("$dir/name")) === 'nct6687') {
+      $hwmon = $dir;
+      break;
+    }
+  }
+  if ($hwmon === null || file_exists("$hwmon/fan_control_watchdog")) return false;
+
+  // Kernel bools accept 1/y/t/on, or the bare name; '-' and '_' are interchangeable.
+  $set = '/^\s*options\s+nct6687\s+(?:.*\s)?msi[-_]fan[-_]brute[-_]force(?:=(?:[1yYtT]\S*|[oO][nN]))?(?:\s|$)/m';
+  foreach (glob($modprobe_glob) ?: [] as $conf) {
+    if (preg_match($set, (string)@file_get_contents($conf))) return false;
+  }
+  return true;
+}
+
 // Find storcli binary (storcli64, storcli2, storcli) in common paths
 function find_storcli(): ?string {
   $candidates = [

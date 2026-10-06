@@ -146,6 +146,24 @@ reappear after serial ambiguity is resolved.
 The identity identifies the controller's header, not the physical fan attached
 to it; replacing the fan does not change the saved assignment.
 
+## MSI boards with the nct6687 driver
+
+On some MSI boards the nct6687 driver accepts speed changes for the system
+fans (`pwm3` and up) but does not apply them, so those fans stay at about 60%.
+The driver documents this and fixes it with its `msi_fan_brute_force` module
+option. When a configured fan uses one of those channels and the option is not
+detected, the settings page shows a notice with the workaround. On Unraid, set
+the option on the flash drive and reboot:
+
+```bash
+mkdir -p /boot/config/modprobe.d
+echo "options nct6687 msi_fan_brute_force=1" > /boot/config/modprobe.d/nct6687.conf
+```
+
+The option was added to the driver in December 2025; `modinfo nct6687` lists
+it when the installed build supports it. See the
+[driver documentation](https://github.com/Fred78290/nct6687d#loading-msi_fan_brute_force-parameter-fails).
+
 Support / Issues
 - https://github.com/andrebrait/fanctrlplus/issues
 
