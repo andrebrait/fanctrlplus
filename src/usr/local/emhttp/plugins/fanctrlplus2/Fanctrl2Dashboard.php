@@ -60,11 +60,10 @@ foreach (glob("$cfg_path/{$plugin}_*.cfg") as $file) {
 
   $fans[] = [
     'label'       => $label,
-    'temp'        => ($temp_val === "*" ? "*" : "{$temp_val}°C"),
     'temp_raw'    => $temp_val,
     'temp_origin' => $temp_origin,
     'rpm_val'     => $rpm_val,
-    'percent'     => ($pct_val === "-" ? "-" : "{$pct_val} %"),
+    'percent'     => $pct_val,
     'status'      => $status
   ];
 }

@@ -48,33 +48,26 @@ foreach ($cfg_files as $path) {
 // Build the HTML rows.
 $fan_rows = "";
 foreach ($all_cfg as $cfg) {
-  $file = $cfg['file'];
-  $label = $cfg['custom'] ?? $file;
-
   // Skip unnamed fans.
   if (empty($cfg['custom'])) continue;
+  $label = htmlspecialchars($cfg['custom'], ENT_QUOTES, 'UTF-8');
 
   $fan_rows .= <<<ROW
-  <tr>
-    <td>
-      <span class="w26">$label</span>
-      <span class="w18 fcp-col-temp" data-label="$label">
-        <span class="fp-tval">--</span>
-        <span class="fp-origin"></span>
-      </span>
-      <span class="w18 fcp-col-rpm" data-label="$label">
-        <span class="fp-rval">--</span>
-        /
-        <span class="fp-pct">--</span>
-      </span>
-      <span class="w18 fanctrlplus2-fanstatus" data-label="$label">--</span>
-      <span class="w18">
+  <tr class="fcp-row" data-label="$label">
+    <td><div class="fcp-line">
+      <span class="fcp-cell fcp-name" title="$label">$label</span>
+      <span class="fcp-cell fcp-num fp-temp">--</span>
+      <span class="fcp-cell fcp-src fp-origin"></span>
+      <span class="fcp-cell fcp-num fp-rpm">--</span>
+      <span class="fcp-cell fcp-num fp-pct">--</span>
+      <span class="fcp-cell fcp-status fp-status">--</span>
+      <span class="fcp-cell fcp-run">
         <span class="fa fa-refresh fanctrlplus2-refresh"
           data-label="$label"
           style="cursor:pointer;font-size:13px;color:var(--blue-800);vertical-align:middle;"
           title="Manual Run: Read current temperature and set fan speed immediately"></span>
       </span>
-    </td>
+    </div></td>
   </tr>
   ROW;
 }
@@ -91,74 +84,43 @@ echo <<<STYLE
   margin-bottom: 6px;
 }
 
-.fp-rval, .fp-pct{
-  min-width: 30px;
-  display: inline-block;
-  text-align: center;
+/* One value per column; units live in the headers. Cells clip with an
+   ellipsis, like Unraid's w18/w26 but without their hover overflow, which
+   would draw a long value over the next column. */
+#fanctrlplus2-dashboard .fcp-line{ display:flex; align-items:baseline; }
+#fanctrlplus2-dashboard .fcp-cell{
+  flex:none;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  box-sizing:border-box;
 }
-/* Use full desktop headings and abbreviated mobile headings. */
-#fanctrlplus2-dashboard .fcp-col-head .mobile{ display:none; }
+#fanctrlplus2-dashboard .fcp-name  { width:19%; padding-right:8px; }
+#fanctrlplus2-dashboard .fcp-num   { text-align:right; padding-right:12px; font-variant-numeric:tabular-nums; }
+#fanctrlplus2-dashboard .fp-temp   { width:13%; }
+#fanctrlplus2-dashboard .fcp-src   { width:22%; padding-right:8px; }
+#fanctrlplus2-dashboard .fp-rpm    { width:16%; }
+#fanctrlplus2-dashboard .fp-pct    { width:12%; }
+#fanctrlplus2-dashboard .fcp-status{ width:12%; }
+#fanctrlplus2-dashboard .fcp-run   { width:6%; text-align:center; }
+#fanctrlplus2-dashboard tr.fcp-row .fcp-src{ opacity:.65; }
+
+/* Narrow screens: abbreviated headings, and each fan's source on a second
+   line instead of its own column. */
+#fanctrlplus2-dashboard .fcp-head .mobile{ display:none; }
 @media (max-width:1080px){
-  #fanctrlplus2-dashboard .fcp-col-head .full  { display:none; }
-  #fanctrlplus2-dashboard .fcp-col-head .mobile{ display:inline; }
-}
-
-/* Temperature column. */
-/* Keep the desktop layout on one line. */
-#fanctrlplus2-dashboard .fcp-col-temp{
-  display:inline-flex; gap:6px; align-items:baseline;
-}
-
-/* Numeric value. */
-#fanctrlplus2-dashboard .fcp-col-temp .fp-tval{
-  display: inline-block;
-  min-width: 16px;
-  text-align: center;
-}
-
-/* Unit, including legacy markup. */
-#fanctrlplus2-dashboard .fcp-col-temp{
-  display:grid;
-  grid-template-columns: 30px 55px;
-}
-
-/* Temperature source. */
-#fanctrlplus2-dashboard .fcp-col-temp .fp-origin{
-  display:inline-block;
-  min-width:55px;
-  text-align:center;
-  font-size:90%;
-  opacity:.65;
-  letter-spacing: 1px;
-}
-
-/* Preserve the source width when no source is available. */
-#fanctrlplus2-dashboard .fcp-col-temp .fp-origin-placeholder{
-  text-align:center;
-  color:inherit;
-}
-
-/* Use two rows below 1080px to prevent w18 overflow. */
-@media (max-width:1080px){
-  #fanctrlplus2-dashboard .fcp-col-temp{
-    display:block; line-height:1.1;
-  }
-  #fanctrlplus2-dashboard .fcp-col-temp .fp-tval{
-    display:inline-block;         /* Temperature row. */
-  }
-  #fanctrlplus2-dashboard .fcp-col-temp .fp-origin {
-    display:block;             /* Source row. */
-    font-size:80%;
-    opacity:.65;
-    margin-top:2px;
-    min-width:0;
-    text-align:left;
-  }
-  #fanctrlplus2-dashboard .fcp-col-temp .fp-origin-placeholder{
-    display:block;
-    min-width:0;
-    text-align:left;
-  }
+  #fanctrlplus2-dashboard .fcp-head .full  { display:none; }
+  #fanctrlplus2-dashboard .fcp-head .mobile{ display:inline; }
+  #fanctrlplus2-dashboard .fcp-line{ flex-wrap:wrap; }
+  #fanctrlplus2-dashboard tr.header .fcp-src{ display:none; }
+  #fanctrlplus2-dashboard tr.fcp-row .fcp-src{ order:1; width:100%; font-size:90%; }
+  #fanctrlplus2-dashboard .fcp-num   { padding-right:6px; }
+  #fanctrlplus2-dashboard .fcp-name  { width:26%; }
+  #fanctrlplus2-dashboard .fp-temp   { width:13%; }
+  #fanctrlplus2-dashboard .fp-rpm    { width:18%; }
+  #fanctrlplus2-dashboard .fp-pct    { width:13%; }
+  #fanctrlplus2-dashboard .fcp-status{ width:21%; }
+  #fanctrlplus2-dashboard .fcp-run   { width:9%; }
 }
 </style>
 STYLE;
@@ -193,16 +155,15 @@ $mytiles[$pluginname]['column2'] = <<<EOT
   </tr>
 
   <tr class="header">
-    <td>
-      <span class="w26">NAME</span>
-      <span class="w18 fcp-col-head">
-        <span class="full">TEMP (SOURCE)</span>
-        <span class="mobile">TEMP</span>
-      </span>
-      <span class="w18" style="text-indent:0.3rem;">RPM / PWM%</span>
-      <span class="w18">STATUS</span>
-      <span class="w18">RUN</span>
-    </td>
+    <td><div class="fcp-line">
+      <span class="fcp-cell fcp-name">NAME</span>
+      <span class="fcp-cell fcp-num fp-temp fcp-head"><span class="full">TEMP (°C)</span><span class="mobile">°C</span></span>
+      <span class="fcp-cell fcp-src">SOURCE</span>
+      <span class="fcp-cell fcp-num fp-rpm fcp-head"><span class="full">SPEED (RPM)</span><span class="mobile">RPM</span></span>
+      <span class="fcp-cell fcp-num fp-pct fcp-head"><span class="full">PWM (%)</span><span class="mobile">%</span></span>
+      <span class="fcp-cell fcp-status">STATUS</span>
+      <span class="fcp-cell fcp-run">RUN</span>
+    </div></td>
   </tr>
 
   $fan_rows
@@ -210,46 +171,29 @@ $mytiles[$pluginname]['column2'] = <<<EOT
 EOT;
 ?>
 <script>
-// Set temperature and source, including *, --, and the no-source placeholder.
-function setTempCell(label, val, origin) {
-  const tile = document.getElementById('fanctrlplus2-dashboard');
-  if (!tile) return;
+// Fill one fan's row. The server sends the source without parentheses ("CPU",
+// "Disk: Group", "Idle") and "*" as the temperature while idling.
+function setFanRow(tile, f) {
+  const key = (window.CSS && CSS.escape) ? CSS.escape(f.label) : String(f.label).replace(/"/g, '\\"');
+  const row = tile.querySelector(`tr.fcp-row[data-label="${key}"]`);
+  if (!row) return;
 
-  // Escape label characters before using them in a selector.
-  const key = (window.CSS && CSS.escape) ? CSS.escape(label) : String(label).replace(/"/g, '\\"');
-
-  const wrap = tile.querySelector(`.fcp-col-temp[data-label="${key}"]`);
-  if (!wrap) return;
-
-  const t = wrap.querySelector('.fp-tval');
-  const o = wrap.querySelector('.fp-origin');
-
-  // Temperature text.
-  let show;
-  if (val === '*') show = '*';
-  else if (val == null || val === '-' || val === '--') show = '--';
-  else show = `${val} °C`;
-  if (t) t.textContent = show;
-
-  // Source text.
-  if (!o) return;
-
-  // Normalize the source by trimming whitespace and surrounding parentheses.
-  const oriRaw = (origin ?? '').toString().trim();
-  const ori = oriRaw.replace(/^$begin:math:text$(.*)$end:math:text$$/, '$1');   // "(Idle)" -> "Idle"
-
-  const isEmptyOrigin = ori.length === 0;
-  const isIdle = /^idle$/i.test(ori);
-  const isNoTemp = (val === '*' || val === '-' || val === '--' || val == null);
-
-  if (isEmptyOrigin) {
-    o.innerHTML = `<span class="fp-origin-placeholder">-</span>`;
-  } else if (isIdle && isNoTemp) {
-    o.innerHTML = `<span class="fp-origin-placeholder">(Idle)</span>`;
-  } else {
-    const normalized = /^$begin:math:text$.*$end:math:text$$/.test(oriRaw) ? oriRaw : `(${ori})`;
-    o.textContent = normalized;
+  const temp = (f.temp_raw == null || f.temp_raw === '-' || f.temp_raw === '*') ? '--' : f.temp_raw;
+  const origin = (f.temp_origin ?? '').toString().trim() || '--';
+  const cells = {
+    '.fp-temp':   temp,
+    '.fp-origin': origin,
+    '.fp-rpm':    (f.rpm_val == null || f.rpm_val === '-') ? '--' : f.rpm_val,
+    '.fp-pct':    (f.percent == null || f.percent === '-') ? '--' : f.percent,
+  };
+  for (const [sel, text] of Object.entries(cells)) {
+    const el = row.querySelector(sel);
+    if (el) el.textContent = text;
   }
+  const src = row.querySelector('.fp-origin');
+  if (src) src.title = origin;
+  const stat = row.querySelector('.fp-status');
+  if (stat) stat.innerHTML = (f.status ?? '--');
 }
 
 function updateFanctrlplusTile() {
@@ -266,34 +210,16 @@ function updateFanctrlplusTile() {
         statusSpan.className = "fanctrlplus2-status " + (data.status === "Running" ? "green-text" : "red-text");
       }
 
-      // Row data for the current markup.
-      (data.fans || []).forEach(f => {
-        setTempCell(f.label, f.temp_raw, f.temp_origin);
-
-        const rpmWrap = tile.querySelector(`.fcp-col-rpm[data-label="${f.label}"]`);
-        const statEl  = tile.querySelector(`.fanctrlplus2-fanstatus[data-label="${f.label}"]`);
-
-        if (rpmWrap) {
-          const rpmValEl = rpmWrap.querySelector('.fp-rval');
-          const pctEl    = rpmWrap.querySelector('.fp-pct');
-
-          if (rpmValEl) rpmValEl.textContent = (f.rpm_val ?? "--");
-          if (pctEl) pctEl.textContent = (f.percent !== "-" ? f.percent : "--");
-        }
-
-        if (statEl) statEl.innerHTML = (f.status ?? "-");
-      });
+      (data.fans || []).forEach(f => setFanRow(tile, f));
     })
     .catch(() => {
       const statusSpan = tile?.querySelector(".fanctrlplus2-status");
       if (statusSpan) statusSpan.textContent = "Status: Loading...";
 
-      // Reset the current markup only.
-      tile?.querySelectorAll('.fcp-col-temp .fp-tval').forEach(n => n.textContent = '--');
-      tile?.querySelectorAll('.fcp-col-temp .fp-origin').forEach(n => n.textContent = '');
-      tile?.querySelectorAll('.fcp-col-rpm .fp-rval').forEach(n => n.textContent = '--');
-      tile?.querySelectorAll('.fcp-col-rpm .fp-pct').forEach(n => n.textContent = '--%');
-      tile?.querySelectorAll('.fanctrlplus2-fanstatus').forEach(n => n.textContent = '--');
+      // Reset every value cell.
+      tile?.querySelectorAll('tr.fcp-row').forEach(row => {
+        row.querySelectorAll('.fp-temp, .fp-origin, .fp-rpm, .fp-pct, .fp-status').forEach(n => n.textContent = '--');
+      });
     });
 }
 
