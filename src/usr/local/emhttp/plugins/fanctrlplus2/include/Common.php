@@ -394,13 +394,21 @@ function fcp_nct6687_brute_force_missing(
     return end($m[1]) === 'disabled';
   }
 
-  // Kernel bools accept 1/y/t/on (optionally quoted), or the bare name;
-  // '-' and '_' are interchangeable.
-  $set = '/^\s*options\s+nct6687\s+(?:.*\s)?msi[-_]fan[-_]brute[-_]force(?:="?(?:[1yYtT][^\s"]*|[oO][nN]))?(?:[\s"]|$)/m';
-  foreach (glob($modprobe_glob) ?: [] as $conf) {
-    if (preg_match($set, (string)@file_get_contents($conf))) return false;
+  // modprobe reads the files in name order and passes every option along, and
+  // the kernel applies them in turn, so the last setting wins. Kernel bools
+  // accept 1/y/t/on (optionally quoted), or the bare name; '-' and '_' are
+  // interchangeable.
+  $files = glob($modprobe_glob) ?: [];
+  usort($files, fn($a, $b) => strcmp(basename($a), basename($b)));
+  $last = null;
+  foreach ($files as $conf) {
+    preg_match_all('/^\s*options\s+nct6687\s+(.*)$/m', (string)@file_get_contents($conf), $lines);
+    foreach ($lines[1] as $args) {
+      preg_match_all('/(?:^|\s)msi[-_]fan[-_]brute[-_]force(?:="?([^\s"]*)"?)?(?=\s|$)/', $args, $vals);
+      foreach ($vals[1] as $val) $last = $val;
+    }
   }
-  return true;
+  return $last === null || !preg_match('/^(?:$|[1yYtT]|[oO][nN])/', $last);
 }
 
 // Find storcli binary (storcli64, storcli2, storcli) in common paths

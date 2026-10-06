@@ -56,10 +56,20 @@ foreach ([
     'options  nct6687 msi_fan_brute_force' => false,
     'options nct6687 msi_fan_brute_force=on' => false,
     'options nct6687 msi_fan_brute_force="true"' => false,
+    "options nct6687 msi_fan_brute_force=1\noptions nct6687 msi_fan_brute_force=0" => true,
+    'options nct6687 msi_fan_brute_force=0 msi_fan_brute_force=1' => false,
 ] as $line => $expected) {
     file_put_contents("$modprobe/nct6687.conf", "$line\n");
     $check("modprobe line '$line'", $expected, $sys_fan);
 }
+
+// Across files, modprobe reads them in name order, so the later file wins.
+file_put_contents("$modprobe/zz-off.conf", "options nct6687 msi_fan_brute_force=0\n");
+$check('a later file disables the option', true, $sys_fan);
+rename("$modprobe/zz-off.conf", "$modprobe/00-off.conf");
+$check('an earlier file is overridden', false, $sys_fan);
+unlink("$modprobe/00-off.conf");
+file_put_contents("$modprobe/nct6687.conf", "options nct6687 msi_fan_brute_force=1\n");
 
 // The kernel log reports the loaded value, so it overrides the modprobe files
 // (which the loop above left setting the option).
