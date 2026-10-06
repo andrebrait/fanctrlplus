@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.9.1"
+  version="1.9.2"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,32 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.9.2
+
+## What's changed
+
+- **Warning for MSI boards whose system fans ignore speed changes** (#13). On some MSI boards the nct6687 driver accepts speed changes for the system fans (`pwm3` and up) but does not apply them, so those fans stay at about 60%. The driver fixes this with its `msi_fan_brute_force` module option. The settings page now shows the workaround when a configured fan is affected and the option is off. The option's state is read from the driver itself where possible: its `fan_control_watchdog` attribute or its "MSI fan brute force mode" kernel log line, falling back to `/etc/modprobe.d`. (#15)
+- **Notification when such a fan is stuck** (#15). While an affected fan is set above 60% but reads back 60% or less for 10 seconds, the plugin sends one Unraid warning notification per fan per boot. The check runs on the fan's control interval, so with longer intervals the warning comes on the second tick.
+
+## Workaround
+
+On Unraid, run these from a terminal, then reboot:
+
+```
+mkdir -p /boot/config/modprobe.d
+echo "options nct6687 msi_fan_brute_force=1" >> /boot/config/modprobe.d/nct6687.conf
+```
+
+If `modinfo nct6687 | grep msi_fan_brute_force` prints nothing, the installed driver predates the option and needs an update from the Nuvoton NCT6687 Driver plugin. See the [driver documentation](https://github.com/Fred78290/nct6687d#loading-msi_fan_brute_force-parameter-fails).
+
+## Upgrade compatibility
+
+No configuration changes. Boards that do not use the nct6687 driver's MSI layout are unaffected.
+
+## Verification
+
+All 28 test files pass. The fan loop was run against a simulated nct6687 controller: a fan pinned at 60% produced one notification on the second 10-second tick, and a fan that followed its target produced none. The reporter of #13 confirmed the workaround fixes their fans. The detection has not yet been run on real affected hardware.
 
 ### 1.9.1
 
@@ -63,16 +89,6 @@ The export/import request in #11 remains separate and is not included in this re
 All 25 test files pass. Isolated runtime smoke checks exercised actual label/configuration endpoints and service startup against synthetic sysfs, including port moves with replacements, ambiguous identities, recovery, saves, and label deletion. Physical hardware validation is still welcome.
 
 Thanks to @mrjacobarussell for the multi-channel fix and detailed ARCTIC controller reports.
-
-### 1.8.3
-
-## What's changed
-
-- Fix the plugin's description on the **Plugins** page. Unraid builds that column from the README packaged inside the plugin, and the release was packaging the project's README, so the description was the whole thing — badges, install instructions and licence notes in a table cell. It is now a description written for that column.
-
-## Upgrade compatibility
-
-Existing configurations continue to work and need no migration. Nothing about fan control changes; this affects only the text Unraid shows for the plugin itself.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -126,16 +142,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.1-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.1/fanctrlplus2-1.9.1-noarch-1.txz</URL>
-<SHA256>250ed9532e2b4e01176f59211724f139e96b721ebe00d5e73d8c814aedc7166f</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.2-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.2/fanctrlplus2-1.9.2-noarch-1.txz</URL>
+<SHA256>33c3420873e362c1ebd792bb85750f91bb630b7206531e1a881c201916f8d00b</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.1-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.2-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -160,7 +176,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.9.1"
+echo " Version: 1.9.2"
 echo "------------------------------------------------"
 echo ""
 exit 0
