@@ -37,6 +37,46 @@ assert.strictEqual(stripUnit('5 min'), '5');
 assert.strictEqual(stripUnit('60 °C'), '60');
 assert.strictEqual(stripUnit('40%'), '40');
 
+// Typing "20" must give 20, not 50: the floor is applied when the field is
+// left, never to a partial entry (issue #17).
+const bindMatch = page.match(/function bindUnitInputs\(unitConfigs\) \{[\s\S]*?\n  \}/);
+assert(bindMatch, 'bindUnitInputs must exist');
+function fakeInput() {
+  const handlers = {};
+  const classes = new Set();
+  return {
+    value: '', title: '', handlers,
+    classList: {
+      contains: c => classes.has(c),
+      remove: c => classes.delete(c),
+      toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)),
+    },
+    addEventListener: (event, fn) => { handlers[event] = fn; },
+    setSelectionRange() {},
+  };
+}
+const input = fakeInput();
+input.title = 'Low Temp: 40°C';
+const fakeDocument = { activeElement: input, querySelectorAll: () => [input] };
+const bindUnitInputs = new Function('document', `${bindMatch[0]}; return bindUnitInputs;`)(fakeDocument);
+bindUnitInputs([{ selector: 'x', unit: ' sec', min: 5, max: 3600 }]);
+const type = text => { input.value = text; input.handlers.input(); };
+
+type('2');
+assert.strictEqual(input.value, '2 sec', 'A partial entry below the floor is left alone');
+assert(input.classList.contains('fcp-below-min'), 'A value below the floor is flagged');
+assert.match(input.title, /Minimum is 5 sec/, 'A value below the floor explains the floor');
+type('20 sec');
+assert.strictEqual(input.value, '20 sec', 'Typing 20 gives 20, not 50');
+assert(!input.classList.contains('fcp-below-min'), 'The flag clears once the floor is met');
+assert.strictEqual(input.title, 'Low Temp: 40°C', "The field's own tooltip comes back once the floor is met");
+type('99999');
+assert.strictEqual(input.value, '3600 sec', 'The ceiling still applies while typing');
+type('3');
+input.handlers.blur();
+assert.strictEqual(input.value, '5 sec', 'Leaving the field raises the value to the floor');
+assert(!input.classList.contains('fcp-below-min'), 'The flag clears after the floor is applied');
+
 // The rendered field shows seconds, converted from whatever the config holds.
 assert.match(render, /cfg_interval_seconds\(\$cfg\)/,
   'The interval field must render through the shared seconds helper');

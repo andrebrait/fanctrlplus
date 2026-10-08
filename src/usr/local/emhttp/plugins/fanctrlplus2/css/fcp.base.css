@@ -130,6 +130,12 @@
 /* Center the range separator. */
 .fcp-center { text-align: center; }
 
+/* A value under the field's floor while typing; it is raised on blur. */
+#fan-form input.fcp-below-min {
+  outline: 2px solid #e6a23c;
+  outline-offset: -2px;
+}
+
 /* Mobile: full-width interval with Run Now on the next line. */
 #fan-form .fcp-interval-input {
   width: 100%;

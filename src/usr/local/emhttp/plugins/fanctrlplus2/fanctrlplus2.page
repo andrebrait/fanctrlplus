@@ -643,24 +643,45 @@ $(function() {
   function bindUnitInputs(unitConfigs) {
     unitConfigs.forEach(({ selector, unit, min = 0, max = 100 }) => {
       document.querySelectorAll(selector).forEach(input => {
-        const enforceUnit = () => {
+        const belowMinHint = `Minimum is ${min}${unit}; a lower value is raised to it when you leave the field.`;
+        let ownTitle = input.title;  // Some fields carry their own tooltip; put it back afterwards.
+        const flagBelowMin = (on) => {
+          input.classList.toggle('fcp-below-min', on);
+          if (on && input.title !== belowMinHint) {
+            ownTitle = input.title;
+            input.title = belowMinHint;
+          } else if (!on && input.title === belowMinHint) {
+            input.title = ownTitle;
+          }
+        };
+
+        // While typing, only the ceiling applies: raising a partial entry such
+        // as the "2" of "20" to the floor would make the next digit land on
+        // the floor instead (issue #17). The floor is applied on blur.
+        const enforceUnit = (applyMin) => {
           let val = (input.value ?? '').toString().replace(/\D/g, '');
 
           // Do not add a unit when conversion produced an empty value.
           if (!val) {
             input.value = '';
+            flagBelowMin(false);
             return;
           }
 
-          val = Math.min(Math.max(parseInt(val), min), max);
+          val = Math.min(parseInt(val, 10), max);
+          if (applyMin) val = Math.max(val, min);
           input.value = val + unit;
 
-          // Move the cursor before the unit.
+          flagBelowMin(val < min);
+
+          // Move the cursor before the unit; Safari would refocus a blurred field.
+          if (document.activeElement !== input) return;
           const pos = input.value.indexOf(unit);
           input.setSelectionRange(pos, pos);
         };
 
-        input.addEventListener('input', enforceUnit);
+        input.addEventListener('input', () => enforceUnit(false));
+        input.addEventListener('blur', () => enforceUnit(true));
 
         input.addEventListener('click', () => {
           setTimeout(() => {
@@ -669,7 +690,7 @@ $(function() {
           }, 0);
         });
 
-        enforceUnit();  // Apply once during initialization.
+        enforceUnit(true);  // Apply once during initialization.
       });
     });
   }
