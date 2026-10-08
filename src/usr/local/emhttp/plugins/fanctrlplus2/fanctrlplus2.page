@@ -643,6 +643,10 @@ $(function() {
   function bindUnitInputs(unitConfigs) {
     unitConfigs.forEach(({ selector, unit, min = 0, max = 100 }) => {
       document.querySelectorAll(selector).forEach(input => {
+        // Add Fan and Add Disk Group rebind every match; only new inputs need it,
+        // and re-initializing one being typed in would apply its floor mid-entry.
+        if (input.dataset.fcpUnitBound) return;
+        input.dataset.fcpUnitBound = '1';
         const belowMinHint = `Minimum is ${min}${unit}; a lower value is raised to it when you leave the field.`;
         let ownTitle = input.title;  // Some fields carry their own tooltip; put it back afterwards.
         const flagBelowMin = (on) => {

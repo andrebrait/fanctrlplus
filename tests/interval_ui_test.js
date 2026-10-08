@@ -45,7 +45,7 @@ function fakeInput() {
   const handlers = {};
   const classes = new Set();
   return {
-    value: '', title: '', handlers,
+    value: '', title: '', handlers, dataset: {},
     classList: {
       contains: c => classes.has(c),
       remove: c => classes.delete(c),
@@ -72,6 +72,10 @@ assert(!input.classList.contains('fcp-below-min'), 'The flag clears once the flo
 assert.strictEqual(input.title, 'Low Temp: 40°C', "The field's own tooltip comes back once the floor is met");
 type('99999');
 assert.strictEqual(input.value, '3600 sec', 'The ceiling still applies while typing');
+// Adding a fan or disk group rebinds every field; one mid-entry is untouched.
+type('2');
+bindUnitInputs([{ selector: 'x', unit: ' sec', min: 5, max: 3600 }]);
+assert.strictEqual(input.value, '2 sec', 'Rebinding leaves a field being typed in alone');
 type('3');
 input.handlers.blur();
 assert.strictEqual(input.value, '5 sec', 'Leaving the field raises the value to the floor');
