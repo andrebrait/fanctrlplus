@@ -5,7 +5,8 @@ const FCP_BACKUP_MAX_FILES = 256;
 
 function fcp_config_lock(string $dir, int $mode = LOCK_EX) {
     if (is_link($dir) || (!is_dir($dir) && !@mkdir($dir, 0700, true))) throw new RuntimeException('Configuration directory is unavailable.');
-    $path = "$dir/.config.lock";
+    // In RAM, so taking the lock never writes to the flash drive (#19). Shared with array_monitor.sh.
+    $path = getenv('FCP_CONFIG_LOCK') ?: '/var/run/fanctrlplus2.config.lock';
     if (is_link($path) || (file_exists($path) && !is_file($path))) throw new RuntimeException('Unsafe configuration lock.');
     // Service daemons must never inherit the request's flock descriptor.
     $lock = @fopen($path, 'ce');
