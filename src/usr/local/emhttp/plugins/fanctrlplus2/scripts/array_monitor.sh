@@ -45,7 +45,7 @@ while true; do
         log "FanCtrlPlus not running after array start → launching"
         "$rc_script" start 9>&-
       fi
-    ) 9>"$config_lock"
+    ) 9>>"$config_lock" # append: '>' would rewrite the file on the flash drive every pass
   fi
 
   sleep "$CHECK_INTERVAL"
