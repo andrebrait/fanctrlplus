@@ -4,6 +4,7 @@ if (!is_file($module)) { fwrite(STDERR, "Configuration backup implementation is 
 require_once $module;
 $root = sys_get_temp_dir().'/fcp_backup_'.getmypid();
 mkdir($root, 0700, true);
+putenv("FCP_CONFIG_LOCK=$root/.config.lock");
 $failures = [];
 $check = function ($condition, string $message) use (&$failures) { if (!$condition) $failures[] = $message; };
 $fan = <<<'CFG'

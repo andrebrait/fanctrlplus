@@ -7,7 +7,7 @@ rc_script="/etc/rc.d/rc.${plugin}"
 pidfile="/var/run/fanctrlplus2.user_stopped"
 # Shared with the settings page; a configuration restore holds it while it
 # swaps files.
-config_lock="/boot/config/plugins/${plugin}/.config.lock"
+config_lock="/var/run/${plugin}.config.lock"
 
 last_md_state=""
 last_fanctrl_state=0
@@ -45,7 +45,7 @@ while true; do
         log "FanCtrlPlus not running after array start → launching"
         "$rc_script" start 9>&-
       fi
-    ) 9>"$config_lock"
+    ) 9>>"$config_lock" # append: '>' would rewrite the file on the flash drive every pass
   fi
 
   sleep "$CHECK_INTERVAL"

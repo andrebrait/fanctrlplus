@@ -93,14 +93,11 @@ fi
 mkdir -p /var/tmp/fanctrlplus2
 rm -f /var/tmp/fanctrlplus2/*
 pkill -f "/usr/local/emhttp/plugins/fanctrlplus2/scripts/array_monitor.sh"
+rm -f /boot/config/plugins/fanctrlplus2/.config.lock # the lock now lives in /var/run
 
+# start() launches array_monitor.sh (pgrep-guarded); do not start it again here.
 if [[ -x "$dst" ]]; then
   "$dst" restart
-fi
-
-script="/usr/local/emhttp/plugins/fanctrlplus2/scripts/array_monitor.sh"
-if [[ -x "$script" ]]; then
-  nohup "$script" >/dev/null 2>&1 &
 fi
 
 echo ""
