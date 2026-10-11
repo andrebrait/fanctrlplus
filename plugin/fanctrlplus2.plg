@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.9.4"
+  version="1.9.5"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,21 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.9.5
+
+## What's changed
+
+- **No more writes to the flash drive every 10 seconds** (#19). While the array was started, the array monitor rewrote its lock file on the USB boot drive on every pass, about 17,000 writes a day. The lock now lives in RAM at `/var/run/fanctrlplus2.config.lock`, so taking it never writes to the flash drive. (#20)
+- **Only one array monitor runs.** The installer started a second copy after the service had already started one, so two ran after every install and boot. (#20)
+
+## Upgrade compatibility
+
+No configuration changes. The installer removes the old `/boot/config/plugins/fanctrlplus2/.config.lock`.
+
+## Verification
+
+All 28 test files pass. The old monitor reset the lock file and updated its modification time on every pass. The new one leaves the file untouched and still starts the fan service. The settings page and the monitor still exclude each other through the new lock. It has not yet been checked on a real Unraid server; the flash write counter in `/sys/block/sda/stat` (field 5) should stop rising by about 12 per minute.
 
 ### 1.9.4
 
@@ -53,32 +68,6 @@ No configuration changes. Reload the dashboard after upgrading so the browser pi
 ## Verification
 
 All 28 test files pass. The widget was rendered from the real page output with Unraid's dashboard stylesheet in headless Chromium at tile widths from 340 to 780 pixels ([renders](https://github.com/andrebrait/fanctrlplus/pull/16#issuecomment-6014405931)). It has not yet been checked on a real Unraid dashboard.
-
-### 1.9.2
-
-## What's changed
-
-- **Warning for MSI boards whose system fans ignore speed changes** (#13). On some MSI boards the nct6687 driver accepts speed changes for the system fans (`pwm3` and up) but does not apply them, so those fans stay at about 60%. The driver fixes this with its `msi_fan_brute_force` module option. The settings page now shows the workaround when a configured fan is affected and the option is off. The option's state is read from the driver itself where possible: its `fan_control_watchdog` attribute or its "MSI fan brute force mode" kernel log line, falling back to `/etc/modprobe.d`. (#15)
-- **Notification when such a fan is stuck** (#15). While an affected fan is set above 60% but reads back 60% or less for 10 seconds, the plugin sends one Unraid warning notification per fan per boot. The check runs on the fan's control interval, so with longer intervals the warning comes on the second tick.
-
-## Workaround
-
-On Unraid, run these from a terminal, then reboot:
-
-```
-mkdir -p /boot/config/modprobe.d
-echo "options nct6687 msi_fan_brute_force=1" >> /boot/config/modprobe.d/nct6687.conf
-```
-
-If `modinfo nct6687 | grep msi_fan_brute_force` prints nothing, the installed driver predates the option and needs an update from the Nuvoton NCT6687 Driver plugin. See the [driver documentation](https://github.com/Fred78290/nct6687d#loading-msi_fan_brute_force-parameter-fails).
-
-## Upgrade compatibility
-
-No configuration changes. Boards that do not use the nct6687 driver's MSI layout are unaffected.
-
-## Verification
-
-All 28 test files pass. The fan loop was run against a simulated nct6687 controller: a fan pinned at 60% produced one notification on the second 10-second tick, and a fan that followed its target produced none. The reporter of #13 confirmed the workaround fixes their fans. The detection has not yet been run on real affected hardware.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -132,16 +121,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.4-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.4/fanctrlplus2-1.9.4-noarch-1.txz</URL>
-<SHA256>b2255c7bf78cd4f88e69d6d71179833485216472172b4aedc179f5b9df9f967b</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.5-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.5/fanctrlplus2-1.9.5-noarch-1.txz</URL>
+<SHA256>f4d22bf84fae24397db8fe9ede6e17ee9fddba243d39d42d89ec730153e3e0ab</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.4-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.5-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -153,20 +142,17 @@ fi
 mkdir -p /var/tmp/fanctrlplus2
 rm -f /var/tmp/fanctrlplus2/*
 pkill -f "/usr/local/emhttp/plugins/fanctrlplus2/scripts/array_monitor.sh"
+rm -f /boot/config/plugins/fanctrlplus2/.config.lock # the lock now lives in /var/run
 
+# start() launches array_monitor.sh (pgrep-guarded); do not start it again here.
 if [[ -x "$dst" ]]; then
   "$dst" restart
-fi
-
-script="/usr/local/emhttp/plugins/fanctrlplus2/scripts/array_monitor.sh"
-if [[ -x "$script" ]]; then
-  nohup "$script" >/dev/null 2>&1 &
 fi
 
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.9.4"
+echo " Version: 1.9.5"
 echo "------------------------------------------------"
 echo ""
 exit 0
