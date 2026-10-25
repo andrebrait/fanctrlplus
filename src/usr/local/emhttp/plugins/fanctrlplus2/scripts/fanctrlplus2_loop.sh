@@ -64,8 +64,11 @@ while true; do
   unread=""
   if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
     raw=$(cat "$cpu_sensor")
+    # No carry-over: a round without a usable value must not reuse the last one.
+    cpu_temp=""
     [[ "$raw" =~ ^-?[0-9]+$ ]] && cpu_temp=$(fcp_clamp_temp $((raw / 1000)))
-    [[ "$raw" =~ ^-?[0-9]+$ && -n "$cpu_temp" ]] || unread="$cpu_sensor"
+    # 0 marks an unpopulated hwmon input, as for the aux sensors.
+    [[ "$raw" =~ ^-?[0-9]+$ && "$raw" -ne 0 && -n "$cpu_temp" ]] || unread="$cpu_sensor"
     cpu_temp=${cpu_temp:-0}
 
     if (( cpu_temp <= cpu_min_temp )); then

@@ -291,14 +291,16 @@ fcp_stuck_since() {
 }
 
 # One Unraid notification per fan per boot; the flag lives on tmpfs. Without
-# a flag every tick would notify again, so no flag means no notification.
+# a flag every tick would notify again, so no flag means no notification. A
+# failed notification drops the flag, so the next tick tries again.
 fcp_notify_stuck() {
   local name="$1" target="$2" actual="$3" flag="$4"
   [[ -e "$flag" ]] && return 0
   touch "$flag" 2>/dev/null || return 0
   "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
     -s "Fan $name is not reaching its set speed" \
-    -d "Set to $(fcp_pwm_percent "$target")% but the nct6687 controller reports $(fcp_pwm_percent "$actual")%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page."
+    -d "Set to $(fcp_pwm_percent "$target")% but the nct6687 controller reports $(fcp_pwm_percent "$actual")%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page." \
+    || rm -f "$flag"
 }
 
 # ===== Configured sensors without a reading (#21) =====
@@ -316,13 +318,14 @@ fcp_missing_since() {
   return 0
 }
 
-# One Unraid notification per fan per boot; the flag lives on tmpfs, like the
-# stuck-fan one. A sensor that keeps dropping in and out warns only once.
+# One Unraid notification per fan per boot, flagged like the stuck-fan one. A
+# sensor that keeps dropping in and out warns only once.
 fcp_notify_missing() {
   local name="$1" unread="$2" flag="$3"
   [[ -e "$flag" ]] && return 0
   touch "$flag" 2>/dev/null || return 0
   "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
     -s "Fan $name has no reading from a configured sensor" \
-    -d "No reading for $fcp_missing_grace_seconds seconds from: $unread. The fan ignores these sensors while they are unread, and runs at Idle Speed when no other source has a reading."
+    -d "No reading for at least $fcp_missing_grace_seconds seconds from: $unread. The fan cannot react to these sensors while they are unread, and runs at Idle Speed when no other source has a reading." \
+    || rm -f "$flag"
 }
