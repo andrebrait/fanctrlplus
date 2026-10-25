@@ -10,7 +10,6 @@ max="${max:-255}"
 controller_enable="${controller}_enable"
 
 source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/aux_sensors.sh"
-aux_locate_bins "${aux_sensor:-}"
 
 source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/disk_group_control.sh"
 
