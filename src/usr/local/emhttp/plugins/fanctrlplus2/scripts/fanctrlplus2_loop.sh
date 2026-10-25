@@ -65,6 +65,7 @@ while true; do
   if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
     raw=$(cat "$cpu_sensor")
     [[ "$raw" =~ ^-?[0-9]+$ ]] && cpu_temp=$(fcp_clamp_temp $((raw / 1000)))
+    [[ "$raw" =~ ^-?[0-9]+$ && -n "$cpu_temp" ]] || unread="$cpu_sensor"
     cpu_temp=${cpu_temp:-0}
 
     if (( cpu_temp <= cpu_min_temp )); then

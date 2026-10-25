@@ -71,6 +71,8 @@ expect_equal 1 "$(grep -c '^-s$' "$tmp/calls")" "One missing-sensor notification
 expect_equal 1 "$(grep -c 'from: storcli:c0:roc, custom:ambient\.' "$tmp/calls")" \
   "The notification names every unread sensor."
 expect_equal 1 "$(grep -cx 'warning' "$tmp/calls")" "The missing-sensor notification is a warning."
+fcp_notify_missing HBA 'storcli:c0:roc' "$tmp/missing/flag"
+expect_equal 1 "$(grep -c '^-s$' "$tmp/calls")" "Without a missing-sensor flag file, no notification is sent, so ticks cannot repeat it."
 
 if (( failures > 0 )); then
   exit 1

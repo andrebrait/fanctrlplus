@@ -407,8 +407,9 @@ expect_equal "0" "$(aux_max_temp_reading "custom:zero,custom:broken")" \
 
 # ===== aux_unread_sensors =====
 # The sensors that gave no reading are what the missing-sensor warning names.
-readings=$(aux_temp_readings "custom:zero,$tmp/does_not_exist,,custom:broken,$tmp/temp3_input")
-expect_equal "$tmp/does_not_exist, custom:broken" "$(aux_unread_sensors <<< "$readings")" \
+# An hwmon input reading 0 lost its sensor, since discovery never offers one.
+readings=$(aux_temp_readings "custom:zero,$tmp/does_not_exist,,custom:broken,$tmp/temp1_zero_input,$tmp/temp3_input")
+expect_equal "$tmp/does_not_exist, custom:broken, $tmp/temp1_zero_input" "$(aux_unread_sensors <<< "$readings")" \
   "Every sensor without a reading is named, in order; a cold one and an empty entry are not."
 expect_equal "50" "$(aux_hottest_reading <<< "$readings")" \
   "The same readings give the hottest value, so the loop reads each sensor once."

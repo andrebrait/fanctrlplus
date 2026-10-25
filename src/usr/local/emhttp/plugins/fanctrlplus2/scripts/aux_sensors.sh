@@ -198,7 +198,7 @@ aux_hottest_reading() {
 aux_unread_sensors() {
   local line unread=""
   while IFS= read -r line; do
-    [[ -n "$line" && -z "${line##*|}" ]] && unread+="${unread:+, }${line%|*}"
+    [[ -z "${line##*|}" ]] && unread+="${unread:+, }${line%|*}"
   done
   printf '%s' "$unread"
 }
