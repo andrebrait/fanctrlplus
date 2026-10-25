@@ -369,13 +369,25 @@ chmod +x "$tmp/mget_temp"
 
 # A tool can be installed after the loop starts (plugins install in any order
 # at boot), so every reading looks for it again rather than trusting a lookup
-# made once at startup. $tmp is already on PATH, so search a fresh directory.
-late_path="$tmp/late:/usr/bin:/bin"
-expect_equal "" "$(PATH="$late_path" aux_max_temp_reading "storcli:c0:roc")" \
+# made once at startup. A host's own storcli must not answer, so the lookup
+# skips the fixed install paths and PATH holds only the test directory and awk.
+mkdir "$tmp/late" "$tmp/sys"
+ln -s "$(command -v awk)" "$tmp/sys/awk"
+late_storcli_reading() (
+  aux_find_bin() {
+    local candidate
+    for candidate in "$@"; do
+      [[ "$candidate" == /* ]] && continue
+      command -v "$candidate" && return 0
+    done
+    return 1
+  }
+  PATH="$tmp/late:$tmp/sys" aux_max_temp_reading "storcli:c0:roc"
+)
+expect_equal "" "$(late_storcli_reading)" \
   "A sensor whose tool is not installed has no reading."
-mkdir "$tmp/late"
 cp "$tmp/storcli64" "$tmp/late/storcli64"
-expect_equal "68" "$(PATH="$late_path" aux_max_temp_reading "storcli:c0:roc")" \
+expect_equal "68" "$(late_storcli_reading)" \
   "A tool installed after the first reading must be used by the next one."
 
 expect_equal "71" "$(aux_max_temp_reading "$tmp/temp3_input,mlx:0000:77:00.0,storcli:c0:roc")" \
