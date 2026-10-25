@@ -300,3 +300,29 @@ fcp_notify_stuck() {
     -s "Fan $name is not reaching its set speed" \
     -d "Set to $(fcp_pwm_percent "$target")% but the nct6687 controller reports $(fcp_pwm_percent "$actual")%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page."
 }
+
+# ===== Configured sensors without a reading (#21) =====
+# A sensor that gives no reading drops out of the fan curve, so a fan whose
+# only source is missing runs at Idle Speed and the dashboard just says Idle.
+# Seconds a sensor may stay unread before a warning: long enough for a tool
+# that the boot installs after the loop starts.
+fcp_missing_grace_seconds=60
+
+# Echoes when the current stretch with unread sensors began (the given time,
+# or the start carried over), or nothing when every sensor was read.
+fcp_missing_since() {
+  local since="$1" now="$2" unread="$3"
+  [[ -n "$unread" ]] && echo "${since:-$now}"
+  return 0
+}
+
+# One Unraid notification per fan per boot; the flag lives on tmpfs, like the
+# stuck-fan one. A sensor that keeps dropping in and out warns only once.
+fcp_notify_missing() {
+  local name="$1" unread="$2" flag="$3"
+  [[ -e "$flag" ]] && return 0
+  touch "$flag" 2>/dev/null || return 0
+  "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
+    -s "Fan $name has no reading from a configured sensor" \
+    -d "No reading for $fcp_missing_grace_seconds seconds from: $unread. The fan ignores these sensors while they are unread, and runs at Idle Speed when no other source has a reading."
+}

@@ -46,6 +46,7 @@ else
 fi
 
 stuck_since=""
+missing_since=""
 nct6687_watch=0
 fcp_nct6687_msi_channel "$controller" && nct6687_watch=1
 
@@ -59,6 +60,8 @@ prev_hist_src=$(tail -n 1 "$hist_file" 2>/dev/null | cut -d'|' -f2)
 while true; do
   # === CPU temperature ===
   cpu_pwm_val=0
+  # Configured sensors that gave no reading this round, for the warning below.
+  unread=""
   if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
     raw=$(cat "$cpu_sensor")
     [[ "$raw" =~ ^-?[0-9]+$ ]] && cpu_temp=$(fcp_clamp_temp $((raw / 1000)))
@@ -75,13 +78,17 @@ while true; do
     fi
   else
     cpu_temp="-"
+    [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" ]] && unread="$cpu_sensor"
   fi
 
   # === Aux Sensor Temperature (iterate CSV, take max) ===
   aux_pwm_val=0
   aux_temp="-"
   if [[ "${aux_enable:-0}" == "1" && -n "$aux_sensor" ]]; then
-    aux_max_valid=$(aux_max_temp_reading "$aux_sensor")
+    aux_readings=$(aux_temp_readings "$aux_sensor")
+    aux_max_valid=$(aux_hottest_reading <<< "$aux_readings")
+    aux_unread=$(aux_unread_sensors <<< "$aux_readings")
+    [[ -n "$aux_unread" ]] && unread+="${unread:+, }$aux_unread"
 
     if [[ -n "$aux_max_valid" ]]; then
       aux_temp=$aux_max_valid
@@ -198,6 +205,12 @@ while true; do
     if [[ -n "$stuck_since" ]] && (( SECONDS - stuck_since >= 10 )); then
       fcp_notify_stuck "$custom" "$prev_pwm" "$actual_pwm" "/var/tmp/${plugin}/nct6687_stuck_${custom}"
     fi
+  fi
+
+  # Configured sensors that stay unread past the grace period: warn once.
+  missing_since=$(fcp_missing_since "$missing_since" "$SECONDS" "$unread")
+  if [[ -n "$missing_since" ]] && (( SECONDS - missing_since >= fcp_missing_grace_seconds )); then
+    fcp_notify_missing "$custom" "$unread" "/var/tmp/${plugin}/sensor_missing_${custom}"
   fi
 
   sleep "$(interval_seconds)"

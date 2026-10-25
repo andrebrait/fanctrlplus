@@ -160,11 +160,10 @@ aux_read_sensor() {
   return 0
 }
 
-# Echo the hottest reading across the comma-separated sensor list, or nothing
-# when none of them could be read. A sensor that reported nothing sits the round
-# out; a sensor that reported a cold value still counts.
-aux_max_temp_reading() {
-  local sensors="$1" sensor temp best=""
+# Echo one "sensor|temperature" line per sensor in the comma-separated list,
+# with the temperature empty when the sensor could not be read.
+aux_temp_readings() {
+  local sensors="$1" sensor
   local -a sensor_list
 
   # Looked up on every round: a tool installed after the loop started (plugins
@@ -173,7 +172,17 @@ aux_max_temp_reading() {
   IFS=',' read -ra sensor_list <<< "$sensors"
   for sensor in "${sensor_list[@]}"; do
     [[ -z "$sensor" ]] && continue
-    temp=$(aux_read_sensor "$sensor")
+    printf '%s|%s\n' "$sensor" "$(aux_read_sensor "$sensor")"
+  done
+}
+
+# Echo the hottest of the aux_temp_readings lines on stdin, or nothing when
+# none of them has a reading. A sensor that reported nothing sits the round
+# out; a sensor that reported a cold value still counts.
+aux_hottest_reading() {
+  local line temp best=""
+  while IFS= read -r line; do
+    temp="${line##*|}"
     [[ "$temp" =~ ^[0-9]+$ ]] || continue
     if [[ -z "$best" ]] || (( temp > best )); then
       best=$temp
@@ -182,4 +191,20 @@ aux_max_temp_reading() {
 
   [[ -n "$best" ]] && printf '%s' "$best"
   return 0
+}
+
+# Echo the sensors among the aux_temp_readings lines on stdin that have no
+# reading, separated by ", ", or nothing when every sensor was read.
+aux_unread_sensors() {
+  local line unread=""
+  while IFS= read -r line; do
+    [[ -n "$line" && -z "${line##*|}" ]] && unread+="${unread:+, }${line%|*}"
+  done
+  printf '%s' "$unread"
+}
+
+# Echo the hottest reading across the comma-separated sensor list, or nothing
+# when none of them could be read.
+aux_max_temp_reading() {
+  aux_temp_readings "$1" | aux_hottest_reading
 }
