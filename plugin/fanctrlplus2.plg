@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.9.5"
+  version="1.9.6"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,20 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.9.6
+
+## What's changed
+
+- **Sensors read through an external tool recover after boot** (#21). The fan loop looked for `storcli`, `nvidia-smi` and `mget_temp` only once, when it started. If another plugin or boot script installed the tool a few seconds later, that sensor gave no reading until the service was restarted, and a fan with no other source stayed at Idle Speed. The loop now looks for these tools on every reading, so a late tool is used from the next reading on. (#22)
+
+## Upgrade compatibility
+
+No configuration changes.
+
+## Verification
+
+All 28 test files pass. A new test shows that a sensor whose tool is missing gives no reading, and that it gives one as soon as the tool is installed. This test fails on 1.9.5. The fix has not yet been checked on a real Unraid server with a real `storcli`.
 
 ### 1.9.5
 
@@ -49,25 +63,6 @@ No configuration changes. The server still clamps the interval to 5–3600 secon
 ## Verification
 
 All 28 test files pass. The new test fails on 1.9.3. Typing into the real input was checked in headless Chromium. It has not yet been checked on a real Unraid server.
-
-### 1.9.3
-
-## What's changed
-
-- **Dashboard widget: one value per column** (#13). The temperature cell packed the value and its source into fixed-width slots, so "40 °C" ran into the source, and a long disk-group name was cut mid-word and drawn over the RPM column on hover. The widget now has one value per column, with units in the headers: Name, Temp (°C), Source, Speed (RPM), PWM (%), Status and Run. (#16)
- - Values never spill into the next column. Long names and sources end in "…" and show in full on hover.
- - Numbers are right-aligned, and Status and Run are narrower.
- - On narrow screens the headers are abbreviated (°C, RPM, %) and each fan's source moves to a second line under the fan.
- - An idling fan's temperature shows `--` instead of `*`; the Source column says "Idle".
-- Fan names are now HTML-escaped in the widget.
-
-## Upgrade compatibility
-
-No configuration changes. Reload the dashboard after upgrading so the browser picks up the new layout.
-
-## Verification
-
-All 28 test files pass. The widget was rendered from the real page output with Unraid's dashboard stylesheet in headless Chromium at tile widths from 340 to 780 pixels ([renders](https://github.com/andrebrait/fanctrlplus/pull/16#issuecomment-6014405931)). It has not yet been checked on a real Unraid dashboard.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -121,16 +116,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.5-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.5/fanctrlplus2-1.9.5-noarch-1.txz</URL>
-<SHA256>f4d22bf84fae24397db8fe9ede6e17ee9fddba243d39d42d89ec730153e3e0ab</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.6-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.6/fanctrlplus2-1.9.6-noarch-1.txz</URL>
+<SHA256>4e9f785c1f35755ab5011c79f9dfa90083e8b76acb279b4b2e11b45c99eb7898</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.5-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.6-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -152,7 +147,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.9.5"
+echo " Version: 1.9.6"
 echo "------------------------------------------------"
 echo ""
 exit 0
