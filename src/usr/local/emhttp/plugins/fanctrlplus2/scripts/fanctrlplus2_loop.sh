@@ -28,7 +28,6 @@ if (( idle_pwm_abs > min_pwm_abs )); then
 fi
 
 source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/aux_sensors.sh"
-aux_locate_bins "${aux_sensor:-}"
 
 source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/disk_group_control.sh"
 

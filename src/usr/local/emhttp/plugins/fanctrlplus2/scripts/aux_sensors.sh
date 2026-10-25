@@ -70,7 +70,7 @@ aux_find_bin() {
 }
 
 # Locate the external tools the configured sensor list actually needs, so a
-# machine without them pays nothing. Call once before reading sensors.
+# machine without them pays nothing. Call before reading sensors.
 aux_locate_bins() {
   local sensors="${1:-}"
 
@@ -167,6 +167,9 @@ aux_max_temp_reading() {
   local sensors="$1" sensor temp best=""
   local -a sensor_list
 
+  # Looked up on every round: a tool installed after the loop started (plugins
+  # install in any order at boot) must not stay missing until a restart.
+  aux_locate_bins "$sensors"
   IFS=',' read -ra sensor_list <<< "$sensors"
   for sensor in "${sensor_list[@]}"; do
     [[ -z "$sensor" ]] && continue
