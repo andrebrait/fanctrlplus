@@ -194,13 +194,13 @@ aux_hottest_reading() {
 }
 
 # Echo the sensors among the aux_temp_readings lines on stdin that have no
-# reading, separated by ", ", or nothing when every sensor was read.
+# reading, one per line, or nothing when every sensor was read.
 aux_unread_sensors() {
-  local line unread=""
+  local line
   while IFS= read -r line; do
-    [[ -z "${line##*|}" ]] && unread+="${unread:+, }${line%|*}"
+    [[ -z "${line##*|}" ]] && printf '%s\n' "${line%|*}"
   done
-  printf '%s' "$unread"
+  return 0
 }
 
 # Echo the hottest reading across the comma-separated sensor list, or nothing

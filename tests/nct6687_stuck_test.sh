@@ -60,24 +60,39 @@ expect_equal 1 "$(grep -cx 'warning' "$tmp/calls")" "The notification is a warni
 fcp_notify_stuck HardDriveFans 255 154 "$tmp/missing/flag"
 expect_equal 1 "$(grep -c '^-s$' "$tmp/calls")" "Without a flag file, no notification is sent, so ticks cannot repeat it."
 
-# ===== fcp_missing_since / fcp_notify_missing (#21) =====
-expect_equal 100 "$(fcp_missing_since '' 100 'storcli:c0:roc')" "An unread sensor starts a stretch now."
-expect_equal 100 "$(fcp_missing_since 100 170 'storcli:c0:roc')" "A sensor still unread keeps the stretch's start."
-expect_equal '' "$(fcp_missing_since 100 170 '')" "A round with every sensor read ends the stretch."
+# ===== fcp_track_missing / fcp_notify_missing (#21) =====
+overdue() { fcp_track_missing "$@"; (( ${#fcp_missing_overdue[@]} )) && printf '%s;' "${fcp_missing_overdue[@]}"; }
+expect_equal '' "$(overdue 100 A)" "A sensor unread just now is not overdue."
+fcp_track_missing 100 A
+expect_equal '' "$(overdue 159 A)" "59 seconds unread is within the grace period."
+expect_equal 'A;' "$(overdue 160 A)" "60 seconds unread is overdue."
+# Codex's case: alternating failures must not add up for any one sensor.
+fcp_track_missing 0
+fcp_track_missing 0 A
+fcp_track_missing 30 B
+expect_equal '' "$(overdue 60 A)" "A sensor that read in between starts a new stretch."
+fcp_track_missing 60 A
+expect_equal '' "$(overdue 90 A B)" "A sensor unread again restarts its own clock."
+fcp_track_missing 90 A B
+expect_equal 'A;' "$(overdue 120 A B)" "Each sensor is overdue on its own clock."
+fcp_track_missing 200
+expect_equal '' "$(overdue 200 A)" "A round with every sensor read forgets them all."
+expect_equal '' "$(overdue 300)" "No unread sensor, nothing overdue."
+
 : > "$tmp/calls"
-fcp_notify_missing HBA 'storcli:c0:roc, custom:ambient' "$tmp/missing_flag"
-fcp_notify_missing HBA 'storcli:c0:roc' "$tmp/missing_flag"
+fcp_notify_missing HBA "$tmp/missing_flag" storcli:c0:roc custom:ambient
+fcp_notify_missing HBA "$tmp/missing_flag" storcli:c0:roc
 expect_equal 1 "$(grep -c '^-s$' "$tmp/calls")" "One missing-sensor notification per fan until the flag is cleared at boot."
 expect_equal 1 "$(grep -c 'from: storcli:c0:roc, custom:ambient\.' "$tmp/calls")" \
-  "The notification names every unread sensor."
+  "The notification names every overdue sensor."
 expect_equal 1 "$(grep -cx 'warning' "$tmp/calls")" "The missing-sensor notification is a warning."
-fcp_notify_missing HBA 'storcli:c0:roc' "$tmp/missing/flag"
+fcp_notify_missing HBA "$tmp/missing/flag" storcli:c0:roc
 expect_equal 1 "$(grep -c '^-s$' "$tmp/calls")" "Without a missing-sensor flag file, no notification is sent, so ticks cannot repeat it."
 : > "$tmp/calls"
 good_notify=$fcp_notify_bin fcp_notify_bin=false
-fcp_notify_missing HBA 'storcli:c0:roc' "$tmp/retry_flag"
+fcp_notify_missing HBA "$tmp/retry_flag" storcli:c0:roc
 fcp_notify_bin=$good_notify
-fcp_notify_missing HBA 'storcli:c0:roc' "$tmp/retry_flag"
+fcp_notify_missing HBA "$tmp/retry_flag" storcli:c0:roc
 expect_equal 1 "$(grep -c '^-s$' "$tmp/calls")" "A notification that failed to send is tried again on the next tick."
 
 if (( failures > 0 )); then

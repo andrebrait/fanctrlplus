@@ -46,7 +46,6 @@ else
 fi
 
 stuck_since=""
-missing_since=""
 nct6687_watch=0
 fcp_nct6687_msi_channel "$controller" && nct6687_watch=1
 
@@ -61,14 +60,14 @@ while true; do
   # === CPU temperature ===
   cpu_pwm_val=0
   # Configured sensors that gave no reading this round, for the warning below.
-  unread=""
+  unread=()
   if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
     raw=$(cat "$cpu_sensor")
     # No carry-over: a round without a usable value must not reuse the last one.
     cpu_temp=""
     [[ "$raw" =~ ^-?[0-9]+$ ]] && cpu_temp=$(fcp_clamp_temp $((raw / 1000)))
     # 0 marks an unpopulated hwmon input, as for the aux sensors.
-    [[ "$raw" =~ ^-?[0-9]+$ && "$raw" -ne 0 && -n "$cpu_temp" ]] || unread="$cpu_sensor"
+    [[ "$raw" =~ ^-?[0-9]+$ && "$raw" -ne 0 && -n "$cpu_temp" ]] || unread+=("$cpu_sensor")
     cpu_temp=${cpu_temp:-0}
 
     if (( cpu_temp <= cpu_min_temp )); then
@@ -82,7 +81,7 @@ while true; do
     fi
   else
     cpu_temp="-"
-    [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" ]] && unread="$cpu_sensor"
+    [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" ]] && unread+=("$cpu_sensor")
   fi
 
   # === Aux Sensor Temperature (iterate CSV, take max) ===
@@ -91,8 +90,9 @@ while true; do
   if [[ "${aux_enable:-0}" == "1" && -n "$aux_sensor" ]]; then
     aux_readings=$(aux_temp_readings "$aux_sensor")
     aux_max_valid=$(aux_hottest_reading <<< "$aux_readings")
-    aux_unread=$(aux_unread_sensors <<< "$aux_readings")
-    [[ -n "$aux_unread" ]] && unread+="${unread:+, }$aux_unread"
+    while IFS= read -r sensor; do
+      unread+=("$sensor")
+    done < <(aux_unread_sensors <<< "$aux_readings")
 
     if [[ -n "$aux_max_valid" ]]; then
       aux_temp=$aux_max_valid
@@ -211,10 +211,10 @@ while true; do
     fi
   fi
 
-  # Configured sensors that stay unread past the grace period: warn once.
-  missing_since=$(fcp_missing_since "$missing_since" "$SECONDS" "$unread")
-  if [[ -n "$missing_since" ]] && (( SECONDS - missing_since >= fcp_missing_grace_seconds )); then
-    fcp_notify_missing "$custom" "$unread" "/var/tmp/${plugin}/sensor_missing_${custom}"
+  # Configured sensors that each stay unread past the grace period: warn once.
+  fcp_track_missing "$SECONDS" "${unread[@]}"
+  if (( ${#fcp_missing_overdue[@]} )); then
+    fcp_notify_missing "$custom" "/var/tmp/${plugin}/sensor_missing_${custom}" "${fcp_missing_overdue[@]}"
   fi
 
   sleep "$(interval_seconds)"
