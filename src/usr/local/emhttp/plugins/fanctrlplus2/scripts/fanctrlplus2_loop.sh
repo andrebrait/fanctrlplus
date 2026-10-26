@@ -59,9 +59,15 @@ prev_hist_src=$(tail -n 1 "$hist_file" 2>/dev/null | cut -d'|' -f2)
 while true; do
   # === CPU temperature ===
   cpu_pwm_val=0
+  # Configured sensors that gave no reading this round, for the warning below.
+  unread=()
   if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
     raw=$(cat "$cpu_sensor")
+    # No carry-over: a round without a usable value must not reuse the last one.
+    cpu_temp=""
     [[ "$raw" =~ ^-?[0-9]+$ ]] && cpu_temp=$(fcp_clamp_temp $((raw / 1000)))
+    # 0 marks an unpopulated hwmon input, as for the aux sensors.
+    [[ "$raw" =~ ^-?[0-9]+$ && "$raw" -ne 0 && -n "$cpu_temp" ]] || unread+=("$cpu_sensor")
     cpu_temp=${cpu_temp:-0}
 
     if (( cpu_temp <= cpu_min_temp )); then
@@ -75,13 +81,18 @@ while true; do
     fi
   else
     cpu_temp="-"
+    [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" ]] && unread+=("$cpu_sensor")
   fi
 
   # === Aux Sensor Temperature (iterate CSV, take max) ===
   aux_pwm_val=0
   aux_temp="-"
   if [[ "${aux_enable:-0}" == "1" && -n "$aux_sensor" ]]; then
-    aux_max_valid=$(aux_max_temp_reading "$aux_sensor")
+    aux_readings=$(aux_temp_readings "$aux_sensor")
+    aux_max_valid=$(aux_hottest_reading <<< "$aux_readings")
+    while IFS= read -r sensor; do
+      unread+=("$sensor")
+    done < <(aux_unread_sensors <<< "$aux_readings")
 
     if [[ -n "$aux_max_valid" ]]; then
       aux_temp=$aux_max_valid
@@ -198,6 +209,12 @@ while true; do
     if [[ -n "$stuck_since" ]] && (( SECONDS - stuck_since >= 10 )); then
       fcp_notify_stuck "$custom" "$prev_pwm" "$actual_pwm" "/var/tmp/${plugin}/nct6687_stuck_${custom}"
     fi
+  fi
+
+  # Configured sensors that each stay unread past the grace period: warn once.
+  fcp_track_missing "$SECONDS" "${unread[@]}"
+  if (( ${#fcp_missing_overdue[@]} )); then
+    fcp_notify_missing "$custom" "/var/tmp/${plugin}/sensor_missing_${custom}" "${fcp_missing_overdue[@]}"
   fi
 
   sleep "$(interval_seconds)"

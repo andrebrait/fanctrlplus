@@ -291,12 +291,63 @@ fcp_stuck_since() {
 }
 
 # One Unraid notification per fan per boot; the flag lives on tmpfs. Without
-# a flag every tick would notify again, so no flag means no notification.
+# a flag every tick would notify again, so no flag means no notification. A
+# failed notification drops the flag, so the next tick tries again.
 fcp_notify_stuck() {
   local name="$1" target="$2" actual="$3" flag="$4"
   [[ -e "$flag" ]] && return 0
   touch "$flag" 2>/dev/null || return 0
   "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
     -s "Fan $name is not reaching its set speed" \
-    -d "Set to $(fcp_pwm_percent "$target")% but the nct6687 controller reports $(fcp_pwm_percent "$actual")%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page."
+    -d "Set to $(fcp_pwm_percent "$target")% but the nct6687 controller reports $(fcp_pwm_percent "$actual")%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page." \
+    || rm -f "$flag"
+}
+
+# ===== Configured sensors without a reading (#21) =====
+# A sensor that gives no reading cannot drive the fan curve, so a fan whose
+# only source is missing stays at Idle Speed (or Min Speed for an unreadable
+# CPU file, which counts as 0 °C) and looks like a cool machine.
+# Seconds a sensor may stay unread before a warning: long enough for a tool
+# that the boot installs after the loop starts.
+fcp_missing_grace_seconds=60
+
+# Sensor -> when it was first unread in its current stretch. Each sensor has
+# its own clock, so sensors failing on alternate rounds never add up to a
+# warning none of them earned.
+declare -gA fcp_missing_since=()
+fcp_missing_overdue=()
+
+# Records this round's unread sensors (the arguments after the time), forgets
+# any that read again, and sets fcp_missing_overdue to those unread for the
+# whole grace period. Call it in the loop's own shell, not in $(...): its
+# state lives in these globals.
+fcp_track_missing() {
+  local now="$1" sensor start
+  shift
+  local -A since=()
+  fcp_missing_overdue=()
+  for sensor in "$@"; do
+    start=${fcp_missing_since[$sensor]:-$now}
+    since[$sensor]=$start
+    (( now - start >= fcp_missing_grace_seconds )) && fcp_missing_overdue+=("$sensor")
+  done
+  fcp_missing_since=()
+  for sensor in "${!since[@]}"; do
+    fcp_missing_since[$sensor]=${since[$sensor]}
+  done
+}
+
+# One Unraid notification per fan per boot, flagged like the stuck-fan one,
+# naming the sensors given after the flag. A sensor that keeps dropping in
+# and out warns only once.
+fcp_notify_missing() {
+  local name="$1" flag="$2" sensors
+  shift 2
+  printf -v sensors '%s, ' "$@"
+  [[ -e "$flag" ]] && return 0
+  touch "$flag" 2>/dev/null || return 0
+  "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
+    -s "Fan $name has no reading from a configured sensor" \
+    -d "No reading for at least $fcp_missing_grace_seconds seconds from: ${sensors%, }. The fan cannot react to these sensors while they are unread, and stays at its Idle or Min Speed when no other source has a reading." \
+    || rm -f "$flag"
 }
