@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="1.9.6"
+  version="1.9.7"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,22 @@
 
 <CHANGES>
 <![CDATA[
+
+### 1.9.7
+
+## What's changed
+
+- **Warning when a configured sensor gives no reading** (#21). A sensor without a reading cannot drive the fan curve, so a fan whose only source was missing sat at its Idle or Min Speed while the dashboard looked normal. The plugin now sends one Unraid warning per fan per boot when a configured CPU or auxiliary sensor stays unread for at least 60 seconds, naming the sensors. This covers a missing file or tool, a failing or timed-out custom script, output that is not a temperature, and impossible values. Each sensor is timed on its own, so sensors failing on alternate rounds do not trigger a false warning. Disks are not included: a spun-down disk has no temperature by design. (#23)
+- **CPU sensor readings no longer carry over.** A round whose CPU reading is unusable used to reuse the previous round's temperature; it now counts as 0 °C. (#23)
+- **A notification that fails to send is retried** on the next round, for this warning and for the nct6687 stuck-fan warning. (#23)
+
+## Upgrade compatibility
+
+No configuration changes. Fan speeds behave as before, apart from an unusable CPU reading counting as 0 °C instead of the previous round's temperature.
+
+## Verification
+
+All 28 test files pass. Tests cover which sensors count as unread, the per-sensor 60-second timer, one notification per boot, and the retry after a failed send. The real loop, run with a missing CPU sensor and a missing `storcli`, sent one notification naming both after 60 seconds. It has not yet been checked on a real Unraid server.
 
 ### 1.9.6
 
@@ -48,21 +64,6 @@ No configuration changes. The installer removes the old `/boot/config/plugins/fa
 ## Verification
 
 All 28 test files pass. The old monitor reset the lock file and updated its modification time on every pass. The new one leaves the file untouched and still starts the fan service. The settings page and the monitor still exclude each other through the new lock. It has not yet been checked on a real Unraid server; the flash write counter in `/sys/block/sda/stat` (field 5) should stop rising by about 12 per minute.
-
-### 1.9.4
-
-## What's changed
-
-- **Number fields keep what you type** (#17). The Interval field has a 5-second minimum, and typing `20` gave `50`: the `2` was raised to the minimum before the `0` arrived. Now the minimum applies when you leave the field, and the maximum still applies as you type. A value below the minimum gets an orange outline and a tooltip naming it. The same applies to the percentage and temperature fields. (#18)
-- Adding a fan or a disk group no longer resets a field you are typing in. (#18)
-
-## Upgrade compatibility
-
-No configuration changes. The server still clamps the interval to 5–3600 seconds on save. Reload the settings page after upgrading so the browser picks up the new script.
-
-## Verification
-
-All 28 test files pass. The new test fails on 1.9.3. Typing into the real input was checked in headless Chromium. It has not yet been checked on a real Unraid server.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -116,16 +117,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.6-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.6/fanctrlplus2-1.9.6-noarch-1.txz</URL>
-<SHA256>4e9f785c1f35755ab5011c79f9dfa90083e8b76acb279b4b2e11b45c99eb7898</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.7-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/1.9.7/fanctrlplus2-1.9.7-noarch-1.txz</URL>
+<SHA256>5aa323531859fdacd7596c57a2bcae5c29253efc2673ee4a9acb4015ce8b04bd</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.6-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-1.9.7-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -147,7 +148,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 1.9.6"
+echo " Version: 1.9.7"
 echo "------------------------------------------------"
 echo ""
 exit 0
