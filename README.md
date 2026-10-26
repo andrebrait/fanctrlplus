@@ -29,7 +29,7 @@ Configuration is done through a user-friendly interface, with custom thresholds,
 - Control multiple PWM fans independently
 - Monitor temps from array disks, NVMe, unassigned devices, and optionally the CPU
 - Monitor auxiliary hwmon, storcli, NVIDIA GPU, and Mellanox NIC (`mget_temp`) temperature sensors, or any sensor of your own through a custom script
-- Sends one Unraid warning per fan per boot when a configured CPU or auxiliary sensor gives no reading for at least 60 seconds, since the fan cannot react to that sensor then and runs at Idle Speed if nothing else reads
+- Sends one Unraid warning per fan per boot when a configured CPU or auxiliary sensor gives no reading for at least 60 seconds, since the fan cannot react to that sensor then and, if nothing else reads, stays at its Idle or Min Speed
 - Use independent temperature ranges for multiple disk groups on one fan
 - Uses a linear control algorithm to smoothly adjust fan speed (PWM) based on the current temperature (disk or CPU) between your defined low/high values
 - Identify and label PWM controllers to match physical fans easily

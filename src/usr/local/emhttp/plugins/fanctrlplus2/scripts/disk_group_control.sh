@@ -304,8 +304,9 @@ fcp_notify_stuck() {
 }
 
 # ===== Configured sensors without a reading (#21) =====
-# A sensor that gives no reading drops out of the fan curve, so a fan whose
-# only source is missing runs at Idle Speed and the dashboard just says Idle.
+# A sensor that gives no reading cannot drive the fan curve, so a fan whose
+# only source is missing stays at Idle Speed (or Min Speed for an unreadable
+# CPU file, which counts as 0 °C) and looks like a cool machine.
 # Seconds a sensor may stay unread before a warning: long enough for a tool
 # that the boot installs after the loop starts.
 fcp_missing_grace_seconds=60
@@ -347,6 +348,6 @@ fcp_notify_missing() {
   touch "$flag" 2>/dev/null || return 0
   "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
     -s "Fan $name has no reading from a configured sensor" \
-    -d "No reading for at least $fcp_missing_grace_seconds seconds from: ${sensors%, }. The fan cannot react to these sensors while they are unread, and runs at Idle Speed when no other source has a reading." \
+    -d "No reading for at least $fcp_missing_grace_seconds seconds from: ${sensors%, }. The fan cannot react to these sensors while they are unread, and stays at its Idle or Min Speed when no other source has a reading." \
     || rm -f "$flag"
 }
