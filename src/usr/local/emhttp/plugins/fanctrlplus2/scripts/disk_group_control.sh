@@ -320,10 +320,14 @@ fcp_check_fan() {
   fi
   fcp_ok+=(controller)
   # Something else drives the fan, so its speed and RPM say nothing about us.
-  mode=$(cat "${controller}_enable" 2>/dev/null)
-  if [[ -n "$mode" && "$mode" != 1 ]]; then
-    fcp_faults+=("mode|is no longer under FanCtrl Plus 2 control|${controller}_enable changed from manual (1) to $mode, so the BIOS or another program sets the fan speed. FanCtrl Plus 2 takes the fan back at its next speed change.")
-    return
+  # An enable attribute that exists but cannot be read leaves all this unchecked.
+  if [[ -e "${controller}_enable" ]]; then
+    mode=$(cat "${controller}_enable" 2>/dev/null)
+    [[ -n "$mode" ]] || return
+    if [[ "$mode" != 1 ]]; then
+      fcp_faults+=("mode|is no longer under FanCtrl Plus 2 control|${controller}_enable changed from manual (1) to $mode, so the BIOS or another program sets the fan speed. FanCtrl Plus 2 takes the fan back at its next speed change.")
+      return
+    fi
   fi
   fcp_ok+=(mode)
   # Most drivers read back the value last written; a chip that ignores a
@@ -340,14 +344,16 @@ fcp_check_fan() {
       fcp_ok+=(speed)
     fi
   fi
-  # A fan without a tachometer always reads 0, so only a fan seen spinning
-  # can count as stopped; at a low speed it may have stopped by design.
+  # A fan without a tachometer always reads 0, so only a fan seen spinning on
+  # this controller (.spun names it) can count as stopped; at a low speed it
+  # may have stopped by design.
   rpm=$(cat "$fan_input" 2>/dev/null)
   [[ "$rpm" =~ ^[0-9]+$ ]] || return
   if (( rpm > 0 )); then
-    [[ -e "$dir/.spun" ]] || touch "$dir/.spun" 2>/dev/null
+    [[ "$(cat "$dir/.spun" 2>/dev/null)" == "$controller" ]] ||
+      printf '%s' "$controller" > "$dir/.spun" 2>/dev/null
     fcp_ok+=(stopped)
-  elif [[ -e "$dir/.spun" ]] && (( want > fcp_stopped_min_percent )); then
+  elif [[ "$(cat "$dir/.spun" 2>/dev/null)" == "$controller" ]] && (( want > fcp_stopped_min_percent )); then
     fcp_faults+=("stopped|has stopped|Set to $want% but the fan reports 0 RPM, although it was spinning earlier. It may have failed, stalled or been unplugged.")
   fi
 }
@@ -359,8 +365,9 @@ declare -gA fcp_fault_since=() fcp_clear_since=()
 # period sends one warning; once it has been fine for the grace period, one
 # notice says it recovered. A key that could not be checked restarts both
 # clocks. A warned problem's flag file holds its subject, so a loop restart
-# neither repeats the warning nor loses the recovery notice. A failed
-# notification keeps the old state, so the next round tries again.
+# neither repeats the warning nor loses the recovery notice. The flag is
+# written only once the warning is sent, so a failed or interrupted warning
+# is tried again.
 fcp_track_faults() {
   local now="$1" name="$2" dir="$3" fault key subject details flag
   local -A bad=() ok=()
@@ -376,8 +383,10 @@ fcp_track_faults() {
     flag="$dir/$key"
     [[ -e "$flag" ]] && continue
     fcp_alerts_enabled || continue
-    printf '%s' "$subject" > "$flag" 2>/dev/null || continue
-    fcp_notify -i warning -s "Fan $name $subject" -d "$details" || rm -f "$flag"
+    # Without a writable flag, every round would warn again.
+    [[ -d "$dir" && -w "$dir" ]] || continue
+    fcp_notify -i warning -s "Fan $name $subject" -d "$details" &&
+      printf '%s' "$subject" > "$flag" 2>/dev/null
   done
   for key in "${!fcp_fault_since[@]}"; do
     [[ -n "${bad[$key]:-}" ]] || unset 'fcp_fault_since[$key]'
@@ -406,10 +415,10 @@ fcp_warn_not_started() {
   mkdir -p "$dir" 2>/dev/null
   [[ -e "$dir/controller" ]] && return 0
   fcp_alerts_enabled || return 0
-  printf '%s' "$fcp_controller_subject" > "$dir/controller" 2>/dev/null || return 0
+  [[ -d "$dir" && -w "$dir" ]] || return 0
   fcp_notify -i warning -s "Fan $name $fcp_controller_subject" \
-    -d "${controller:-Its PWM controller} is missing or cannot be written, so FanCtrl Plus 2 did not start controlling this fan. The controller may be unplugged, renumbered or ambiguous, or its driver not loaded. Check the controller on the FanCtrl Plus 2 settings page, then apply." \
-    || rm -f "$dir/controller"
+    -d "${controller:-Its PWM controller} is missing or cannot be written, so FanCtrl Plus 2 did not start controlling this fan. The controller may be unplugged, renumbered or ambiguous, or its driver not loaded. Check the controller on the FanCtrl Plus 2 settings page, then apply." &&
+    printf '%s' "$fcp_controller_subject" > "$dir/controller" 2>/dev/null
 }
 
 # ===== Configured sensors without a reading (#21) =====

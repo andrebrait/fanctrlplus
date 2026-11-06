@@ -88,6 +88,9 @@ fan 120 2 0
 expect_equal 'mode;/controller' "$(check 255)" "Out of manual mode, only the lost control is reported and nothing else judged."
 fan 255 '' 1200
 expect_equal '/controller mode speed stopped' "$(check 255)" "A controller without an enable attribute has no mode to lose."
+fan 255 1 1200
+: > "$hw/pwm1_enable"
+expect_equal '/controller' "$(check 255)" "An enable attribute without a value leaves the mode and everything after it unchecked."
 fcp_check_fan "$hw/pwm9" "$hw/fan9_input" 255 0 "$spun"
 expect_equal 'controller/' "${fcp_faults[0]%%|*}/${fcp_ok[*]}" "A missing controller is reported and nothing else judged."
 
@@ -99,6 +102,9 @@ fan 102 1 0
 expect_equal '/controller mode speed' "$(check 102)" "At the default Min Speed of 40% a fan may stop by design: not judged."
 fan 255 1 ''
 expect_equal '/controller mode speed' "$(check 255)" "Without an RPM reading the fan's spinning is not judged."
+mkdir -p "$tmp/hw2" && echo 255 > "$tmp/hw2/pwm1" && echo 0 > "$tmp/hw2/fan1_input"
+fcp_check_fan "$tmp/hw2/pwm1" "$tmp/hw2/fan1_input" 255 0 "$spun"
+expect_equal '/controller mode speed' "/${fcp_ok[*]}${fcp_faults[*]}" "A fan moved to another controller does not inherit the old one's tachometer: 0 RPM is not judged."
 
 # ===== fcp_track_faults =====
 printf '#!/bin/bash\nprintf "%%s\\n" "$@" >> "%s/calls"\n' "$tmp" > "$fcp_notify_bin"
@@ -201,6 +207,18 @@ round 980 stopped
 fcp_notify_bin=$good_notify
 round 990 stopped
 expect_equal 1 "$(sent normal)" "A recovery notice that failed to send is tried again on the next round."
+: > "$tmp/calls"
+fcp_fault_since=() fcp_clear_since=()
+fcp_faults=("$speed") fcp_ok=()
+fcp_track_faults 1000 Bay "$tmp/nodir"
+fcp_track_faults 1030 Bay "$tmp/nodir"
+fcp_track_faults 1040 Bay "$tmp/nodir"
+expect_equal 0 "$(sent warning)" "Without a flag directory no warning is sent, so rounds cannot repeat it."
+round 1100 "$speed"
+round 1130 "$speed"
+rm -f "$dir/speed"
+round 1140 "$speed"
+expect_equal 2 "$(sent warning)" "A warning whose flag is missing, as after an interrupted send, is sent again."
 
 # ===== fcp_warn_not_started =====
 : > "$tmp/calls"

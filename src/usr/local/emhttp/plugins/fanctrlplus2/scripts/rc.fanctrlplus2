@@ -58,9 +58,12 @@ fanctrlplus2.start() {
     logger -t "$plugin" "Started [$custom_safe] from $cfg"
   done
 
-  # Drop the alert state of fans that no longer exist.
+  # Drop the alert state of fans no configuration names any more.
+  local -A names=()
+  while IFS= read -r name; do names[$name]=1; done \
+    < <(grep -hPo '^custom="\K[^"]+' "$cfg_path"/${plugin}_*.cfg 2>/dev/null)
   for dir in /var/tmp/$plugin/faults_*; do
-    [[ -d "$dir" && ! -f "$cfg_path/${plugin}_${dir##*/faults_}.cfg" ]] && rm -rf "$dir"
+    [[ -d "$dir" && -z "${names[${dir##*/faults_}]:-}" ]] && rm -rf "$dir"
   done
 
   # Start array_monitor.sh if it is not already running.

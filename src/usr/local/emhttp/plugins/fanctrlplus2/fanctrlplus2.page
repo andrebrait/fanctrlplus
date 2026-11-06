@@ -1374,12 +1374,18 @@ $(function() {
     $('#syslog-settings-area').load('/Settings/fanctrlplus2 #syslog-settings-area > *');
   }
 
+  // One save at a time per switch, so a quick off-on cannot land out of order.
+  var fanSwitchSaves = {};
   function saveFanSwitchState(op, cfgFile, checked) {
-    $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', {
-      op: op,
-      cfg: cfgFile,
-      enabled: checked ? 1 : 0
-    });
+    var key = op + '|' + cfgFile;
+    var post = function() {
+      return $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', {
+        op: op,
+        cfg: cfgFile,
+        enabled: checked ? 1 : 0
+      });
+    };
+    fanSwitchSaves[key] = (fanSwitchSaves[key] || $.when()).then(post, post);
   }
 
   function saveAirflowSwitchState(checked) {

@@ -260,7 +260,7 @@ switch ($op) {
           $lines = file($cfg_path, FILE_IGNORE_NEW_LINES);
           $found = false;
           foreach ($lines as &$line) {
-              if (strpos($line, "$key=") === 0) {
+              if (strpos(ltrim($line, " \t"), "$key=") === 0) {
                   $line = $key . '="' . $enabled . '"';
                   $found = true;
               }
