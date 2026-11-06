@@ -1346,9 +1346,8 @@ $(function() {
     $area.find('.switch-button-button').css('left', checked ? '12px' : '-1px');
 
     // Persist the relevant switch.
-    if ($input.hasClass('syslog-switch')) {
-      var cfgFile = $input.data('cfg');
-      saveSyslogSwitchState(cfgFile, checked);
+    if ($input.hasClass('syslog-switch') || $input.hasClass('notify-switch')) {
+      saveFanSwitchState($input.hasClass('syslog-switch') ? 'setsyslog' : 'setnotify', $input.data('cfg'), checked);
     } else if ($input.hasClass('fcp-airflow-switch')) {
       saveAirflowSwitchState(checked);
     } else if ($input.hasClass('fcp-history-switch')) {
@@ -1356,8 +1355,8 @@ $(function() {
     }
   });
 
-  // Shared change handler for the syslog and FCP Airflow/History switches.
-  $(document).on('change', '.syslog-switch, .fcp-airflow-switch, .fcp-history-switch', function() {
+  // Shared change handler for the per-fan and FCP Airflow/History switches.
+  $(document).on('change', '.syslog-switch, .notify-switch, .fcp-airflow-switch, .fcp-history-switch', function() {
     var checked = $(this).prop('checked');
     var $area = $(this).closest('.switch-area');
 
@@ -1375,12 +1374,18 @@ $(function() {
     $('#syslog-settings-area').load('/Settings/fanctrlplus2 #syslog-settings-area > *');
   }
 
-  function saveSyslogSwitchState(cfgFile, checked) {
-    $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', {
-      op: 'setsyslog',
-      cfg: cfgFile,
-      enabled: checked ? 1 : 0
-    });
+  // One save at a time per switch, so a quick off-on cannot land out of order.
+  var fanSwitchSaves = {};
+  function saveFanSwitchState(op, cfgFile, checked) {
+    var key = op + '|' + cfgFile;
+    var post = function() {
+      return $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', {
+        op: op,
+        cfg: cfgFile,
+        enabled: checked ? 1 : 0
+      });
+    };
+    fanSwitchSaves[key] = (fanSwitchSaves[key] || $.when()).then(post, post);
   }
 
   function saveAirflowSwitchState(checked) {
@@ -1890,7 +1895,7 @@ $(function() {
 
     <p><strong>Identify PWM Controller:</strong> Use this tool to help locate which physical fan is linked to each PWM controller. After identification, adding a custom label makes it easier to recognize and configure later.</p>
 
-    <p><strong>Syslog Setting:</strong> Enable or disable syslog logging for each fan individually. When enabled, changes in temperature and fan speed will be recorded in the system log. If a fan setup is already stable or updates too frequently, you can turn off its logging to reduce clutter.</p>
+    <p><strong>Syslog &amp; Alerts:</strong> Enable or disable syslog logging for each fan individually. When enabled, changes in temperature and fan speed will be recorded in the system log. If a fan setup is already stable or updates too frequently, you can turn off its logging to reduce clutter. Problem alerts send Unraid notifications when a fan has a problem; turn them off for a fan whose controller raises false alarms.</p>
 
     <p><strong>Notes:</strong></p>
     <ul>
@@ -2093,7 +2098,7 @@ $(function() {
     <!-- Syslog settings. -->
     <div class="fcp-card-480">
       <div class="title">
-        <span class="fcp-title-left"><i class="fa fa-tag fcp-icon-gap"></i>Syslog Setting</span>
+        <span class="fcp-title-left"><i class="fa fa-tag fcp-icon-gap"></i>Syslog &amp; Alerts</span>
       </div>
 
       <!-- Help -->
@@ -2113,6 +2118,7 @@ $(function() {
           </p>
           <p>This helps you track fan behavior in real time. However, if a particular fan changes frequently and generates too many log entries, you can <strong>disable logging</strong> for that fan.</p>
           <p><strong>Note:</strong> The plugin only writes to syslog when the <strong>PWM value changes by more than 5</strong> compared to the previous value — small changes are ignored to reduce log noise.</p>
+          <p><strong>Problem Alerts</strong> are also <strong>enabled by default</strong>. Fan control keeps running either way; the alerts only send Unraid notifications. A fan gets one warning when, for at least 30 seconds, its PWM controller has disappeared, the BIOS or another program has taken it over, its controller reports a speed 10 or more points away from the one set, or it reports 0 RPM while set above 40% after spinning earlier. A fan whose controller is missing when fan control starts, and a configured sensor without a reading for 60 seconds, also warn. Once the problem has stayed away for 30 seconds, a notice says so. Turn the alerts off for a fan whose controller raises false alarms, such as one with only a few speed steps.</p>
         </blockquote>
       </div>
 
@@ -2122,7 +2128,8 @@ $(function() {
             <thead>
               <tr>
                 <th class="name">Configured Fan</th>
-                <th class="switch">Syslog Switch</th>
+                <th class="switch">Syslog</th>
+                <th class="switch">Problem Alerts</th>
               </tr>
             </thead>
             <tbody>
@@ -2133,25 +2140,29 @@ $(function() {
                 if (in_array($cfg['custom'], $custom_seen, true)) continue;
                 $custom_seen[] = $cfg['custom'];
                 $custom_id = preg_replace('/[^a-zA-Z0-9_\-]/', '', $cfg['custom']);
-                $is_on = ($cfg['syslog'] ?? "1") != "0";
               ?>
               <tr class="sortable" id="syslog-row-<?= $custom_id ?>">
                 <td class="name"><?= htmlspecialchars($cfg['custom']) ?></td>
+                <?php foreach (['syslog', 'notify'] as $switch):
+                  $is_on = ($cfg[$switch] ?? "1") != "0";
+                  $switch_id = "$switch-switch-" . htmlspecialchars($cfg['custom']);
+                ?>
                 <td class="switch">
                   <span class="switch-area">
                     <div class="switch-button-background<?= $is_on ? ' checked' : '' ?>"
-                        data-for="syslog-switch-<?= htmlspecialchars($cfg['custom']) ?>">
+                        data-for="<?= $switch_id ?>">
                       <div class="switch-button-button"></div>
                     </div>
                     <input type="checkbox"
-                          id="syslog-switch-<?= htmlspecialchars($cfg['custom']) ?>"
-                          class="syslog-switch"
+                          id="<?= $switch_id ?>"
+                          class="<?= $switch ?>-switch"
                           data-cfg="<?= htmlspecialchars($cfg['file']) ?>"
                           <?= $is_on ? 'checked' : '' ?>>
                     <span class="switch-button-label on">ON</span>
                     <span class="switch-button-label off">OFF</span>
                   </span>
                 </td>
+                <?php endforeach; ?>
               </tr>
               <?php endforeach; ?>
             </tbody>

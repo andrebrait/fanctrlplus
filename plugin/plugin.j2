@@ -91,7 +91,8 @@ if [[ -f "$src" ]]; then
 fi
 
 mkdir -p /var/tmp/fanctrlplus2
-rm -f /var/tmp/fanctrlplus2/*
+# Fan alert state (faults_* directories) survives updates, so recoveries are still announced.
+find /var/tmp/fanctrlplus2 -maxdepth 1 -type f -delete
 pkill -f "/usr/local/emhttp/plugins/fanctrlplus2/scripts/array_monitor.sh"
 rm -f /boot/config/plugins/fanctrlplus2/.config.lock # the lock now lives in /var/run
 

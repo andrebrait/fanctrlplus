@@ -45,9 +45,11 @@ else
   fan_path=""
 fi
 
-stuck_since=""
 nct6687_watch=0
 fcp_nct6687_msi_channel "$controller" && nct6687_watch=1
+# Problems this fan is being warned about, one file each (fcp_track_faults).
+fault_dir="/var/tmp/${plugin}/faults_${custom}"
+mkdir -p "$fault_dir"
 
 prev_pwm=-1
 hist_file="/var/tmp/${plugin}/history_${plugin}_${custom}"
@@ -200,16 +202,11 @@ while true; do
     fi
   fi
 
-  # Fans the nct6687 MSI layout may ignore: warn once one has stayed at 60% or
-  # less for 10 seconds while set above it. The target is the last value
-  # written, which a change under 5 leaves in place.
-  if (( nct6687_watch )); then
-    actual_pwm=$(cat "$controller" 2>/dev/null)
-    stuck_since=$(fcp_stuck_since "$stuck_since" "$SECONDS" "$prev_pwm" "$actual_pwm")
-    if [[ -n "$stuck_since" ]] && (( SECONDS - stuck_since >= 10 )); then
-      fcp_notify_stuck "$custom" "$prev_pwm" "$actual_pwm" "/var/tmp/${plugin}/nct6687_stuck_${custom}"
-    fi
-  fi
+  # Warn about a lost controller, lost control, a speed the controller does
+  # not take or a fan that stopped. The target is the last value written,
+  # which a change under 5 leaves in place.
+  fcp_check_fan "$controller" "$fan_path" "$prev_pwm" "$nct6687_watch" "$fault_dir"
+  fcp_track_faults "$SECONDS" "$custom" "$fault_dir"
 
   # Configured sensors that each stay unread past the grace period: warn once.
   fcp_track_missing "$SECONDS" "${unread[@]}"

@@ -462,7 +462,7 @@ dt.containerSettingsDt {
   line-height: 1.6;
 }
 
-/* Identify PWM Controller and Syslog Setting wrapper. */
+/* Identify PWM Controller and Syslog & Alerts wrapper. */
 .fcp-block-wrap{
   display: flex;
   justify-content: center;
@@ -583,7 +583,7 @@ dt.containerSettingsDt {
 
 .fcp-airflow-switch{ display: none; }
 .fcp-history-switch{ display: none; }
-.syslog-switch{ display: none; }
+.syslog-switch, .notify-switch{ display: none; }
 .switch-button-label{ font-size: 12px; }
 .switch-button-label.on{ display: none; }
 .switch-button-background.checked ~ .switch-button-label.on{ display: inline; }

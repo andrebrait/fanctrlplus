@@ -185,17 +185,6 @@ foreach ($_POST['#file'] as $i => $file) {
     exit;
   }
 
-  $syslog_val = '1'; // Enabled by default.
-  if (file_exists($old_path)) {
-    $lines = file($old_path, FILE_IGNORE_NEW_LINES);
-    foreach ($lines as $line) {
-      if (strpos($line, 'syslog=') === 0) {
-        $syslog_val = trim(explode('=', $line, 2)[1], "\"' \t\r\n");
-        break;
-      }
-    }
-  }
-
   // Check whether another configuration uses the same custom name.
   foreach (glob("$cfgpath/{$plugin}_*.cfg") as $existing) {
     $info = parse_ini_file($existing);
@@ -278,7 +267,9 @@ foreach ($_POST['#file'] as $i => $file) {
     'interval'   => (string)max(1, (int)ceil($interval_seconds / 60)),
     'disks'      => $legacy_disks,
     'disk_group_count' => (string)$disk_group_count,
-    'syslog'     => $syslog_val,
+    // Per-fan switches set outside this form: keep them, both default on.
+    'syslog'     => (string)($previous['syslog'] ?? '1'),
+    'notify'     => (string)($previous['notify'] ?? '1'),
     'cpu_enable'    => $cpu_enable,
     'cpu_sensor'    => $cpu_sensor,
     'cpu_min_temp'  => $cpu_min_temp,

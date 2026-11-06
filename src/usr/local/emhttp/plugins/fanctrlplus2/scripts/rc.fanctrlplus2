@@ -20,6 +20,7 @@ cfg_path="/boot/config/plugins/$plugin"
 loop_script="/usr/local/emhttp/plugins/$plugin/scripts/fanctrlplus2_loop.sh"
 dashboard_updater="/usr/local/emhttp/plugins/$plugin/scripts/fanctrlplus2_dashboard_update.sh"
 pid_dir="/var/run"
+source "/usr/local/emhttp/plugins/$plugin/scripts/disk_group_control.sh"
 
 fanctrlplus2.start() {
   # Clear the user-requested stop marker.
@@ -36,12 +37,17 @@ fanctrlplus2.start() {
     service=$(grep -Po '^service="\K[^"]+' "$cfg")
     [[ "$service" != "1" ]] && continue
 
+    raw_custom=$(grep -Po '^custom="\K[^"]+' "$cfg")
+
     # Serial resolution can leave an absent/ambiguous controller unassigned.
     controller=$(grep -Po '^controller="\K[^"]+' "$cfg")
-    [[ -n "$controller" && -w "$controller" ]] || continue
+    if [[ -z "$controller" || ! -w "$controller" ]]; then
+      [[ -n "$raw_custom" ]] &&
+        fcp_warn_not_started "$cfg" "$raw_custom" "$controller" "/var/tmp/$plugin/faults_$raw_custom"
+      continue
+    fi
 
     # Sanitize the custom name before using it in a PID filename.
-    raw_custom=$(grep -Po '^custom="\K[^"]+' "$cfg")
     clean_custom=$(echo "$raw_custom" | tr -d '\r\n\t ')
     custom_safe=$(echo "$clean_custom" | tr -cd '[:alnum:]_-')
 
@@ -50,6 +56,14 @@ fanctrlplus2.start() {
     nohup "$loop_script" "$cfg" > /dev/null 2>&1 &
     echo $! > "$pid_dir/${plugin}_${custom_safe}.pid"
     logger -t "$plugin" "Started [$custom_safe] from $cfg"
+  done
+
+  # Drop the alert state of fans no configuration names any more.
+  local -A names=()
+  while IFS= read -r name; do names[$name]=1; done \
+    < <(grep -hPo '^custom="\K[^"]+' "$cfg_path"/${plugin}_*.cfg 2>/dev/null)
+  for dir in /var/tmp/$plugin/faults_*; do
+    [[ -d "$dir" && -z "${names[${dir##*/faults_}]:-}" ]] && rm -rf "$dir"
   done
 
   # Start array_monitor.sh if it is not already running.

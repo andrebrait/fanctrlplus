@@ -6,7 +6,7 @@ $failures = [];
 
 $identifyStart = strpos($page, '>Identify PWM Controller</span>');
 $generalStart = strpos($page, '>General Settings</span>');
-$syslogStart = strpos($page, '>Syslog Setting</span>');
+$syslogStart = strpos($page, '>Syslog &amp; Alerts</span>');
 
 if ($identifyStart === false || $generalStart === false || $syslogStart === false) {
   $failures[] = 'Identify, General Settings, and Syslog cards must all exist.';
