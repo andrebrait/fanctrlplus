@@ -29,7 +29,7 @@ Configuration is done through a user-friendly interface, with custom thresholds,
 - Control multiple PWM fans independently
 - Monitor temps from array disks, NVMe, unassigned devices, and optionally the CPU
 - Monitor auxiliary hwmon, storcli, NVIDIA GPU, and Mellanox NIC (`mget_temp`) temperature sensors, or any sensor of your own through a custom script
-- Sends one Unraid warning per fan per boot when a configured CPU or auxiliary sensor gives no reading for at least 60 seconds, since the fan cannot react to that sensor then and, if nothing else reads, stays at its Idle or Min Speed
+- Sends Unraid notifications when a fan has a problem, while fan control keeps running. A fan gets one warning when, for at least 30 seconds, its PWM controller disappears, the BIOS or another program takes it over, the controller reports a speed 10 or more points away from the one set, or the fan reports 0 RPM while set to 40% or more after spinning earlier. A notice follows when the problem clears. A configured CPU or auxiliary sensor without a reading for at least 60 seconds also gets one warning per fan per boot, since the fan cannot react to it and, if nothing else reads, stays at its Idle or Min Speed. Alerts are on by default and can be turned off per fan under Syslog & Alerts
 - Use independent temperature ranges for multiple disk groups on one fan
 - Uses a linear control algorithm to smoothly adjust fan speed (PWM) based on the current temperature (disk or CPU) between your defined low/high values
 - Identify and label PWM controllers to match physical fans easily
@@ -157,8 +157,8 @@ detected, the settings page shows a notice with the workaround. The option's
 loaded state is read from the driver's `fan_control_watchdog` attribute or its
 "MSI fan brute force mode" kernel log line, falling back to the modprobe
 configuration. While a fan on one of those channels is set above 60% but reads
-back 60% or less for 10 seconds, the plugin also sends one Unraid
-notification per fan per boot. On Unraid, set the option on the flash drive and
+back 60% or less for 30 seconds, the plugin also sends an Unraid warning that
+names the option (see the problem alerts above). On Unraid, set the option on the flash drive and
 reboot:
 
 ```bash

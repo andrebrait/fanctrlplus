@@ -257,8 +257,8 @@ interval_seconds() {
 # ===== MSI nct6687 stuck-fan check (#13) =====
 # On MSI boards in the driver's msi_alt1 layout, system-fan channels (pwm3 and
 # up) ignore speed changes unless the msi_fan_brute_force option is set, and
-# stay at about 60%. Reading pwmN back returns the chip's actual output, so a
-# fan driven above 60% that keeps reading back lower is caught here. Drivers
+# stay at about 60%. Reading pwmN back returns the chip's actual output, so
+# fcp_check_fan catches a fan driven above 60% that keeps reading back lower. Drivers
 # that expose fan_control_watchdog run with the option set and are skipped.
 fcp_notify_bin="${fcp_notify_bin:-/usr/local/emhttp/webGui/scripts/notify}"
 fcp_nct6687_module="${fcp_nct6687_module:-/sys/module/nct6687}"
@@ -277,30 +277,100 @@ fcp_pwm_percent() {
   echo $(( ($1 * 100 + 127) / 255 ))
 }
 
-# Echoes when the current stuck stretch began (the given time, or the start
-# carried over), or nothing when the fan is not stuck. Stuck means set above
-# 60% but reading back 60% or less: the speed a fan ignoring its writes holds.
-# The caller warns once a stretch has lasted 10 seconds, which a chip still
-# ramping up would not.
-fcp_stuck_since() {
-  local since="$1" now="$2" target="$3" actual="$4"
-  if [[ "$actual" =~ ^[0-9]+$ ]] &&
-     (( $(fcp_pwm_percent "$target") > 60 && $(fcp_pwm_percent "$actual") <= 60 )); then
-    echo "${since:-$now}"
+# ===== Fan problem alerts =====
+# Problems with one fan never stop its loop or any other fan's: they only
+# raise Unraid notifications, which the fan's "Problem Alerts" switch
+# (notify="0" in its cfg) silences. The switch is read when a notification
+# is due, so flipping it needs no restart.
+fcp_alerts_enabled() {
+  ! grep -qx 'notify="0"' "${cfg_file:-}" 2>/dev/null
+}
+
+# Seconds a problem must last before it warns: longer than a fan takes to
+# spin up or a chip takes to apply a new speed.
+fcp_fault_grace_seconds=30
+# Set to this share of full speed or more, a fan that spun before should spin.
+fcp_stopped_min_percent=40
+fcp_fan_seen_spinning=0
+fcp_faults=()
+
+# Sets fcp_faults to this round's problems with one fan, as "key|subject|
+# details" entries. The target is the PWM value last written; nct is 1 for a
+# channel fcp_nct6687_msi_channel matched. Call it in the loop's own shell:
+# fcp_fan_seen_spinning carries over between rounds.
+fcp_check_fan() {
+  local controller="$1" fan_input="$2" target="$3" nct="$4" mode actual rpm set got
+  fcp_faults=()
+  set=$(fcp_pwm_percent "$target")
+  if [[ ! -e "$controller" ]]; then
+    fcp_faults+=("controller|has lost its PWM controller|$controller no longer exists, so the fan speed cannot be set. The controller may have been unplugged or renumbered, or its driver unloaded. Check the controller on the FanCtrl Plus 2 settings page.")
+    return
+  fi
+  # Something else drives the fan, so its speed and RPM say nothing about us.
+  mode=$(cat "${controller}_enable" 2>/dev/null)
+  if [[ -n "$mode" && "$mode" != 1 ]]; then
+    fcp_faults+=("mode|is no longer under FanCtrl Plus 2 control|${controller}_enable changed from manual (1) to $mode, so the BIOS or another program sets the fan speed. FanCtrl Plus 2 takes the fan back at its next speed change.")
+    return
+  fi
+  # Most drivers read back the value last written; a chip that ignores a
+  # write, or a write that failed, reads back something else.
+  actual=$(cat "$controller" 2>/dev/null)
+  if [[ "$actual" =~ ^[0-9]+$ ]]; then
+    got=$(fcp_pwm_percent "$actual")
+    # On MSI boards the nct6687 msi_alt1 layout holds ignored fans at about 60% (#13).
+    if (( nct && set > 60 && got <= 60 )); then
+      fcp_faults+=("speed|is not reaching its set speed|Set to $set% but the nct6687 controller reports $got%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page.")
+    elif (( set - got >= 10 || got - set >= 10 )); then
+      fcp_faults+=("speed|is not reaching its set speed|Set to $set% but the controller reports $got%. The controller may be ignoring speed changes, or another program may be setting it.")
+    fi
+  fi
+  # A fan without a tachometer always reads 0, so only a fan seen spinning
+  # since the loop started can count as stopped.
+  rpm=$(cat "$fan_input" 2>/dev/null)
+  [[ "$rpm" =~ ^[0-9]+$ ]] || return
+  (( rpm > 0 )) && fcp_fan_seen_spinning=1
+  if (( rpm == 0 && fcp_fan_seen_spinning && set >= fcp_stopped_min_percent )); then
+    fcp_faults+=("stopped|has stopped|Set to $set% but the fan reports 0 RPM, although it was spinning earlier. It may have failed, stalled or been unplugged.")
   fi
 }
 
-# One Unraid notification per fan per boot; the flag lives on tmpfs. Without
-# a flag every tick would notify again, so no flag means no notification. A
-# failed notification drops the flag, so the next tick tries again.
-fcp_notify_stuck() {
-  local name="$1" target="$2" actual="$3" flag="$4"
-  [[ -e "$flag" ]] && return 0
-  touch "$flag" 2>/dev/null || return 0
-  "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
-    -s "Fan $name is not reaching its set speed" \
-    -d "Set to $(fcp_pwm_percent "$target")% but the nct6687 controller reports $(fcp_pwm_percent "$actual")%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page." \
-    || rm -f "$flag"
+# Problem key -> when it was first seen in its current stretch.
+declare -gA fcp_fault_since=()
+
+# Records this round's problems (the fcp_faults entries after the fan name
+# and its flag directory). A problem lasting the grace period sends one
+# warning; once it is gone, the fan gets one notice that it recovered. A
+# problem's flag file holds its subject while it is warned about, so a loop
+# restart neither repeats the warning nor loses the recovery notice. A failed
+# notification keeps the old state, so the next round tries again.
+fcp_track_faults() {
+  local now="$1" name="$2" dir="$3" fault key subject details flag
+  shift 3
+  local -A seen=()
+  for fault in "$@"; do
+    IFS='|' read -r key subject details <<< "$fault"
+    seen[$key]=1
+    : "${fcp_fault_since[$key]:=$now}"
+    (( now - fcp_fault_since[$key] >= fcp_fault_grace_seconds )) || continue
+    flag="$dir/$key"
+    [[ -e "$flag" ]] && continue
+    fcp_alerts_enabled || continue
+    printf '%s' "$subject" > "$flag" 2>/dev/null || continue
+    "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
+      -s "Fan $name $subject" -d "$details" || rm -f "$flag"
+  done
+  for key in "${!fcp_fault_since[@]}"; do
+    [[ -n "${seen[$key]:-}" ]] || unset 'fcp_fault_since[$key]'
+  done
+  for flag in "$dir"/*; do
+    [[ -f "$flag" && -z "${seen[${flag##*/}]:-}" ]] || continue
+    # Alerts switched off: drop the incident without a notice.
+    if fcp_alerts_enabled; then
+      "$fcp_notify_bin" -e "FanCtrl Plus 2" -i normal -l "/Settings/fanctrlplus2" \
+        -s "Fan $name has recovered" -d "This earlier warning has cleared: Fan $name $(cat "$flag")." || continue
+    fi
+    rm -f "$flag"
+  done
 }
 
 # ===== Configured sensors without a reading (#21) =====
@@ -337,14 +407,17 @@ fcp_track_missing() {
   done
 }
 
-# One Unraid notification per fan per boot, flagged like the stuck-fan one,
-# naming the sensors given after the flag. A sensor that keeps dropping in
-# and out warns only once.
+# One Unraid notification per fan per boot, naming the sensors given after
+# the flag. The flag lives on tmpfs; without one every tick would notify
+# again, so no flag means no notification. A failed notification drops the
+# flag, so the next tick tries again. A sensor that keeps dropping in and out
+# warns only once.
 fcp_notify_missing() {
   local name="$1" flag="$2" sensors
   shift 2
   printf -v sensors '%s, ' "$@"
   [[ -e "$flag" ]] && return 0
+  fcp_alerts_enabled || return 0
   touch "$flag" 2>/dev/null || return 0
   "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
     -s "Fan $name has no reading from a configured sensor" \

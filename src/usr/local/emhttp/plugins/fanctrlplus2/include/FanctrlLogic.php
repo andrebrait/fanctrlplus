@@ -35,7 +35,7 @@ header('Cache-Control: no-store, max-age=0');
 $op = $_GET['op'] ?? $_POST['op'] ?? '';
 
 // Serialize restore/export with every HTTP writer of these configuration files.
-if (in_array($op, ['savelabel','newtemp','delete','setsyslog','saveorder','start','stop','fcp_airflow_toggle','fcp_history_toggle'], true)) {
+if (in_array($op, ['savelabel','newtemp','delete','setsyslog','setnotify','saveorder','start','stop','fcp_airflow_toggle','fcp_history_toggle'], true)) {
   try { $config_lock = fcp_config_lock($cfg_dir); }
   catch (Throwable $error) { http_response_code(500); json_response(['status'=>'error','message'=>$error->getMessage()]); }
   register_shutdown_function(function () use ($config_lock) {
@@ -246,7 +246,10 @@ switch ($op) {
     echo render_disk_group_row($fan_index, $group_index, $empty_group, $disks);
     exit;
 
+  // Per-fan switches: Syslog, and Problem Alerts (read by the loop on each alert).
   case 'setsyslog':
+  case 'setnotify':
+      $key = $op === 'setsyslog' ? 'syslog' : 'notify';
       $cfg_file = basename($_POST['cfg']);
       $enabled = isset($_POST['enabled']) && $_POST['enabled'] == 1 ? 1 : 0;
 
@@ -257,13 +260,13 @@ switch ($op) {
           $lines = file($cfg_path, FILE_IGNORE_NEW_LINES);
           $found = false;
           foreach ($lines as &$line) {
-              if (strpos($line, 'syslog=') === 0) {
-                  $line = 'syslog="' . $enabled . '"';
+              if (strpos($line, "$key=") === 0) {
+                  $line = $key . '="' . $enabled . '"';
                   $found = true;
               }
           }
           if (!$found) {
-              $lines[] = 'syslog="' . $enabled . '"';
+              $lines[] = $key . '="' . $enabled . '"';
           }
           file_put_contents($cfg_path, implode("\n", $lines) . "\n");
           echo json_encode(['status' => 'ok']);
