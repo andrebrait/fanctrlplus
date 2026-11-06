@@ -205,8 +205,8 @@ while true; do
   # Warn about a lost controller, lost control, a speed the controller does
   # not take or a fan that stopped. The target is the last value written,
   # which a change under 5 leaves in place.
-  fcp_check_fan "$controller" "$fan_path" "$prev_pwm" "$nct6687_watch"
-  fcp_track_faults "$SECONDS" "$custom" "$fault_dir" "${fcp_faults[@]}"
+  fcp_check_fan "$controller" "$fan_path" "$prev_pwm" "$nct6687_watch" "$fault_dir"
+  fcp_track_faults "$SECONDS" "$custom" "$fault_dir"
 
   # Configured sensors that each stay unread past the grace period: warn once.
   fcp_track_missing "$SECONDS" "${unread[@]}"

@@ -260,7 +260,6 @@ interval_seconds() {
 # stay at about 60%. Reading pwmN back returns the chip's actual output, so
 # fcp_check_fan catches a fan driven above 60% that keeps reading back lower. Drivers
 # that expose fan_control_watchdog run with the option set and are skipped.
-fcp_notify_bin="${fcp_notify_bin:-/usr/local/emhttp/webGui/scripts/notify}"
 fcp_nct6687_module="${fcp_nct6687_module:-/sys/module/nct6687}"
 
 fcp_nct6687_msi_channel() {
@@ -280,97 +279,137 @@ fcp_pwm_percent() {
 # ===== Fan problem alerts =====
 # Problems with one fan never stop its loop or any other fan's: they only
 # raise Unraid notifications, which the fan's "Problem Alerts" switch
-# (notify="0" in its cfg) silences. The switch is read when a notification
-# is due, so flipping it needs no restart.
+# (notify=0 in its cfg) silences. The switch is read the way the loop reads
+# its cfg, when a notification is due, so flipping it needs no restart.
+fcp_notify_bin="${fcp_notify_bin:-/usr/local/emhttp/webGui/scripts/notify}"
+
 fcp_alerts_enabled() {
-  ! grep -qx 'notify="0"' "${cfg_file:-}" 2>/dev/null
+  (unset notify; source "${cfg_file:-}" >/dev/null 2>&1; [[ "${notify:-1}" != 0 ]])
 }
 
-# Seconds a problem must last before it warns: longer than a fan takes to
-# spin up or a chip takes to apply a new speed.
-fcp_fault_grace_seconds=30
-# Set to this share of full speed or more, a fan that spun before should spin.
-fcp_stopped_min_percent=40
-fcp_fan_seen_spinning=0
-fcp_faults=()
+# Sends an Unraid notification (notify's -i, -s and -d options). A hung
+# notify must not stall fan control.
+fcp_notify() {
+  timeout 30 "$fcp_notify_bin" -e "FanCtrl Plus 2" -l "/Settings/fanctrlplus2" "$@"
+}
 
-# Sets fcp_faults to this round's problems with one fan, as "key|subject|
-# details" entries. The target is the PWM value last written; nct is 1 for a
-# channel fcp_nct6687_msi_channel matched. Call it in the loop's own shell:
-# fcp_fan_seen_spinning carries over between rounds.
+# Seconds a problem must last before it warns, and must stay gone before it
+# counts as recovered: longer than a fan takes to spin up or a chip takes to
+# apply a new speed, and long enough that a flapping problem does not spam.
+fcp_fault_grace_seconds=30
+# Set above this share of full speed, a fan that spun before should spin. The
+# default Min Speed is 40%, where some fans stop by design.
+fcp_stopped_min_percent=40
+fcp_controller_subject="has lost its PWM controller"
+fcp_faults=()
+fcp_ok=()
+
+# Checks one fan, set to target (the PWM value last written; nct is 1 for a
+# channel fcp_nct6687_msi_channel matched). Sets fcp_faults to this round's
+# problems as "key|subject|details" entries, and fcp_ok to the keys seen to
+# be fine. A key in neither could not be checked this round. The fan's flag
+# directory remembers that it has a tachometer, across loop restarts.
 fcp_check_fan() {
-  local controller="$1" fan_input="$2" target="$3" nct="$4" mode actual rpm set got
+  local controller="$1" fan_input="$2" target="$3" nct="$4" dir="$5" mode actual rpm want got
   fcp_faults=()
-  set=$(fcp_pwm_percent "$target")
+  fcp_ok=()
+  want=$(fcp_pwm_percent "$target")
   if [[ ! -e "$controller" ]]; then
-    fcp_faults+=("controller|has lost its PWM controller|$controller no longer exists, so the fan speed cannot be set. The controller may have been unplugged or renumbered, or its driver unloaded. Check the controller on the FanCtrl Plus 2 settings page.")
+    fcp_faults+=("controller|$fcp_controller_subject|${controller:-Its controller} no longer exists, so the fan speed cannot be set. The controller may have been unplugged or renumbered, or its driver unloaded. Check the controller on the FanCtrl Plus 2 settings page.")
     return
   fi
+  fcp_ok+=(controller)
   # Something else drives the fan, so its speed and RPM say nothing about us.
   mode=$(cat "${controller}_enable" 2>/dev/null)
   if [[ -n "$mode" && "$mode" != 1 ]]; then
     fcp_faults+=("mode|is no longer under FanCtrl Plus 2 control|${controller}_enable changed from manual (1) to $mode, so the BIOS or another program sets the fan speed. FanCtrl Plus 2 takes the fan back at its next speed change.")
     return
   fi
+  fcp_ok+=(mode)
   # Most drivers read back the value last written; a chip that ignores a
   # write, or a write that failed, reads back something else.
   actual=$(cat "$controller" 2>/dev/null)
   if [[ "$actual" =~ ^[0-9]+$ ]]; then
     got=$(fcp_pwm_percent "$actual")
     # On MSI boards the nct6687 msi_alt1 layout holds ignored fans at about 60% (#13).
-    if (( nct && set > 60 && got <= 60 )); then
-      fcp_faults+=("speed|is not reaching its set speed|Set to $set% but the nct6687 controller reports $got%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page.")
-    elif (( set - got >= 10 || got - set >= 10 )); then
-      fcp_faults+=("speed|is not reaching its set speed|Set to $set% but the controller reports $got%. The controller may be ignoring speed changes, or another program may be setting it.")
+    if (( nct && want > 60 && got <= 60 )); then
+      fcp_faults+=("speed|is not reaching its set speed|Set to $want% but the nct6687 controller reports $got%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page.")
+    elif (( want - got >= 10 || got - want >= 10 )); then
+      fcp_faults+=("speed|is not reaching its set speed|Set to $want% but the controller reports $got%. The controller may be ignoring speed changes, or another program may be setting it.")
+    else
+      fcp_ok+=(speed)
     fi
   fi
   # A fan without a tachometer always reads 0, so only a fan seen spinning
-  # since the loop started can count as stopped.
+  # can count as stopped; at a low speed it may have stopped by design.
   rpm=$(cat "$fan_input" 2>/dev/null)
   [[ "$rpm" =~ ^[0-9]+$ ]] || return
-  (( rpm > 0 )) && fcp_fan_seen_spinning=1
-  if (( rpm == 0 && fcp_fan_seen_spinning && set >= fcp_stopped_min_percent )); then
-    fcp_faults+=("stopped|has stopped|Set to $set% but the fan reports 0 RPM, although it was spinning earlier. It may have failed, stalled or been unplugged.")
+  if (( rpm > 0 )); then
+    [[ -e "$dir/.spun" ]] || touch "$dir/.spun" 2>/dev/null
+    fcp_ok+=(stopped)
+  elif [[ -e "$dir/.spun" ]] && (( want > fcp_stopped_min_percent )); then
+    fcp_faults+=("stopped|has stopped|Set to $want% but the fan reports 0 RPM, although it was spinning earlier. It may have failed, stalled or been unplugged.")
   fi
 }
 
-# Problem key -> when it was first seen in its current stretch.
-declare -gA fcp_fault_since=()
+# Problem key -> when the current stretch of it being bad, or being fine, began.
+declare -gA fcp_fault_since=() fcp_clear_since=()
 
-# Records this round's problems (the fcp_faults entries after the fan name
-# and its flag directory). A problem lasting the grace period sends one
-# warning; once it is gone, the fan gets one notice that it recovered. A
-# problem's flag file holds its subject while it is warned about, so a loop
-# restart neither repeats the warning nor loses the recovery notice. A failed
+# Records fcp_check_fan's results for a fan. A problem lasting the grace
+# period sends one warning; once it has been fine for the grace period, one
+# notice says it recovered. A key that could not be checked restarts both
+# clocks. A warned problem's flag file holds its subject, so a loop restart
+# neither repeats the warning nor loses the recovery notice. A failed
 # notification keeps the old state, so the next round tries again.
 fcp_track_faults() {
   local now="$1" name="$2" dir="$3" fault key subject details flag
-  shift 3
-  local -A seen=()
-  for fault in "$@"; do
+  local -A bad=() ok=()
+  for key in "${fcp_ok[@]}"; do
+    ok[$key]=1
+    : "${fcp_clear_since[$key]:=$now}"
+  done
+  for fault in "${fcp_faults[@]}"; do
     IFS='|' read -r key subject details <<< "$fault"
-    seen[$key]=1
+    bad[$key]=1
     : "${fcp_fault_since[$key]:=$now}"
     (( now - fcp_fault_since[$key] >= fcp_fault_grace_seconds )) || continue
     flag="$dir/$key"
     [[ -e "$flag" ]] && continue
     fcp_alerts_enabled || continue
     printf '%s' "$subject" > "$flag" 2>/dev/null || continue
-    "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
-      -s "Fan $name $subject" -d "$details" || rm -f "$flag"
+    fcp_notify -i warning -s "Fan $name $subject" -d "$details" || rm -f "$flag"
   done
   for key in "${!fcp_fault_since[@]}"; do
-    [[ -n "${seen[$key]:-}" ]] || unset 'fcp_fault_since[$key]'
+    [[ -n "${bad[$key]:-}" ]] || unset 'fcp_fault_since[$key]'
+  done
+  for key in "${!fcp_clear_since[@]}"; do
+    [[ -n "${ok[$key]:-}" ]] || unset 'fcp_clear_since[$key]'
   done
   for flag in "$dir"/*; do
-    [[ -f "$flag" && -z "${seen[${flag##*/}]:-}" ]] || continue
+    key=${flag##*/}
+    [[ -f "$flag" && -n "${ok[$key]:-}" ]] || continue
+    (( now - fcp_clear_since[$key] >= fcp_fault_grace_seconds )) || continue
     # Alerts switched off: drop the incident without a notice.
     if fcp_alerts_enabled; then
-      "$fcp_notify_bin" -e "FanCtrl Plus 2" -i normal -l "/Settings/fanctrlplus2" \
-        -s "Fan $name has recovered" -d "This earlier warning has cleared: Fan $name $(cat "$flag")." || continue
+      fcp_notify -i normal -s "Fan $name has recovered" \
+        -d "This earlier warning has cleared: Fan $name $(cat "$flag")." || continue
     fi
     rm -f "$flag"
   done
+}
+
+# Warns once that a fan's loop could not start because its controller is
+# missing. The flag directory is the loop's own, so the loop announces the
+# recovery once the controller is back and the fan is started again.
+fcp_warn_not_started() {
+  local cfg_file="$1" name="$2" controller="$3" dir="$4"
+  mkdir -p "$dir" 2>/dev/null
+  [[ -e "$dir/controller" ]] && return 0
+  fcp_alerts_enabled || return 0
+  printf '%s' "$fcp_controller_subject" > "$dir/controller" 2>/dev/null || return 0
+  fcp_notify -i warning -s "Fan $name $fcp_controller_subject" \
+    -d "${controller:-Its PWM controller} is missing or cannot be written, so FanCtrl Plus 2 did not start controlling this fan. The controller may be unplugged, renumbered or ambiguous, or its driver not loaded. Check the controller on the FanCtrl Plus 2 settings page, then apply." \
+    || rm -f "$dir/controller"
 }
 
 # ===== Configured sensors without a reading (#21) =====
@@ -419,8 +458,7 @@ fcp_notify_missing() {
   [[ -e "$flag" ]] && return 0
   fcp_alerts_enabled || return 0
   touch "$flag" 2>/dev/null || return 0
-  "$fcp_notify_bin" -e "FanCtrl Plus 2" -i warning -l "/Settings/fanctrlplus2" \
-    -s "Fan $name has no reading from a configured sensor" \
+  fcp_notify -i warning -s "Fan $name has no reading from a configured sensor" \
     -d "No reading for at least $fcp_missing_grace_seconds seconds from: ${sensors%, }. The fan cannot react to these sensors while they are unread, and stays at its Idle or Min Speed when no other source has a reading." \
     || rm -f "$flag"
 }
