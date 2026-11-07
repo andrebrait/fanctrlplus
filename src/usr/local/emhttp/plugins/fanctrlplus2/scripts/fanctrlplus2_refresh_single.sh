@@ -102,6 +102,14 @@ if [[ ! "$max_temp" =~ ^[0-9]+$ ]]; then
   temp_origin=""
 fi
 
+# Save the curve state, emergency latch included, before touching the fan. A run
+# that cannot save it must not set the fan: its latch would die with this
+# process, and the loop would carry on from the older, unlatched snapshot.
+if ! fcp_curve_publish "$curve_state_file"; then
+  flock -u "$fcp_curve_state_fd"
+  fail "The fan's curve state could not be saved in /var/tmp/${plugin}, so this run did not set the fan. The fan loop keeps control."
+fi
+
 # Force the PWM value. The output is recorded as applied only once the write
 # succeeded; after a failed one the snapshot keeps the previous output (or none)
 # and still carries any emergency latch, so the fan loop tries again.
@@ -138,6 +146,8 @@ logger -t fanctrlplus2 "Manual Run $label Temp=${max_temp}°C $temp_origin → P
 
 echo "${max_temp} ${temp_origin}" > "/var/tmp/fanctrlplus2/temp_${plugin}_${custom}"
 
+# The latch is saved; only the applied output could not be recorded, so the loop
+# may write once more to reach the same target.
 (( publish_failed )) &&
-  fail "The fan was set to PWM=$pwm_val, but its curve state could not be saved in /var/tmp/${plugin}; the fan loop may not see it."
+  fail "The fan was set to PWM=$pwm_val, but its curve state could not be saved in /var/tmp/${plugin} afterwards."
 exit 0

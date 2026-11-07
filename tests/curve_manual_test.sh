@@ -199,11 +199,13 @@ expect_equal "1 100" "$rc $(cat "$tmp/pwm1")" "A lock that cannot even be opened
 expect_equal yes "$(said 'curve-state lock')" "The failure says it was the lock."
 rmdir "$state.lock"
 
-# ===== A snapshot that cannot be saved is reported, though the fan was set =====
+# ===== A snapshot that cannot be saved stops the run before it sets the fan =====
+# Otherwise its emergency latch would die with the process while the fan ran at
+# emergency speed, and the loop would load the older unlatched snapshot.
 fresh 0
 publish=fail
 run_manual 60000
-expect_equal "1 255" "$rc $(cat "$tmp/pwm1")" "A run whose snapshot cannot be saved fails, having set the fan."
+expect_equal "1 0" "$rc $(cat "$tmp/pwm1")" "A run whose curve state cannot be saved fails without setting the fan."
 expect_equal yes "$(said 'could not be saved')" "The failure says the state was not saved."
 expect_equal absent "$([[ -e "$state" ]] && echo present || echo absent)" "Nothing replaced the snapshot."
 publish=ok
