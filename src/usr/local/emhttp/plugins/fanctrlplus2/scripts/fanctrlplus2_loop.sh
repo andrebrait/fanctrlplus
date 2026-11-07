@@ -7,6 +7,7 @@ source "$cfg_file"
 max="${max:-255}"
 
 # Keep the old write deadband until a configuration is saved as point curves.
+# Full speed (every fail-hot result) is always written, deadband or not.
 has_custom_curve=0
 for curve_key in cpu_curve aux_curve disk_curve ${!disk_group_@}; do
   if [[ "$curve_key" == *_curve && -v "$curve_key" ]]; then has_custom_curve=1; break; fi
@@ -178,7 +179,7 @@ while true; do
   # latch the snapshot kept, tries again.
   wrote=0
   old_pwm=$prev_pwm
-  if [[ "$old_pwm" == -1 ]] || (( pwm_val != old_pwm && (has_custom_curve || pwm_val - old_pwm >= 5 || old_pwm - pwm_val >= 5) )); then
+  if [[ "$old_pwm" == -1 ]] || (( pwm_val != old_pwm && (has_custom_curve || pwm_val == 255 || pwm_val - old_pwm >= 5 || old_pwm - pwm_val >= 5) )); then
     if fcp_write_pwm "$pwm_val"; then
       wrote=1
       prev_pwm=$pwm_val

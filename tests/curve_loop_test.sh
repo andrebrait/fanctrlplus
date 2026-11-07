@@ -91,6 +91,35 @@ run_case 40 $'100\n100' 100 1
 run_case '' $'100\n103' 255 0 1
 run_case '' $'101\n101' 103 0 0 1
 
+# A source with curve settings but no curve fails hot at 255. That result must
+# reach the fan even from 253, inside the legacy five-PWM write deadband.
+export FCP_TEST_MANUAL=0 FCP_TEST_LOCK_FAIL=0
+rm -f "$tmp/temp1_input"
+printf '0\n' > "$tmp/pwm1"
+: > "$tmp/output"
+cat > "$tmp/fan.cfg" <<CFG
+custom="$custom"
+controller="$tmp/pwm1"
+pwm="253"
+max="255"
+idle="253"
+interval_sec="7"
+notify="0"
+syslog="0"
+cpu_enable="1"
+cpu_sensor="$tmp/temp1_input"
+cpu_min_temp="30"
+cpu_max_temp="40"
+cpu_curve_mode="linear"
+aux_enable="0"
+disks=""
+CFG
+BASH_ENV="$tmp/env.sh" bash "$FCP_TEST_ROOT/scripts/fanctrlplus2_loop.sh" "$tmp/fan.cfg"
+if [[ "$(cat "$tmp/output")" != $'253\n255' ]]; then
+  printf 'A fail-hot 255 must bypass the legacy write deadband.\nActual: %s\n' "$(cat "$tmp/output")" >&2
+  exit 1
+fi
+
 # ===== Scripted rounds: failures between rounds =====
 # Each line of $tmp/steps is one round, "RAW CONTROLLER SNAPSHOT": the CPU
 # sensor's content; whether the controller takes writes (ok) or refuses them
