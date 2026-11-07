@@ -29,6 +29,8 @@ $fcpBaseUrl = fcp_asset_url('css/fcp.base.css');
 $sweetAlertJsUrl = fcp_asset_url('js/sweetalert2.min.js');
 $chartJsUrl = fcp_asset_url('js/chart.min.js');
 $chartHandlerUrl = fcp_asset_url('include/chart-handler.js');
+$curveEditorUrl = fcp_asset_url('include/curve-editor.js');
+$curveEditorCssUrl = fcp_asset_url('css/curve-editor.css');
 $assetMonitorUrl = fcp_asset_url('include/asset-version.js');
 $swalLightUrl = fcp_asset_url('css/fanctrlplus2-swal2.css');
 $swalDarkUrl = fcp_asset_url('css/fanctrlplus2-swal2-dark.css');
@@ -38,9 +40,11 @@ echo <<<HTML
 <link rel="stylesheet" type="text/css" href="/webGui/styles/jquery.switchbutton.css">
 <link rel="stylesheet" href="{$sweetAlertCssUrl}">
 <link rel="stylesheet" href="{$fcpBaseUrl}">
+<link rel="stylesheet" href="{$curveEditorCssUrl}">
 <script>window.FCP_LOADED_ASSET_VERSION = "{$uiAssetVersion}";</script>
 <script src="{$sweetAlertJsUrl}"></script>
 <script src="{$chartJsUrl}"></script>
+<script src="{$curveEditorUrl}"></script>
 <script src="{$chartHandlerUrl}"></script>
 <script src="{$assetMonitorUrl}"></script>
 HTML;
@@ -519,15 +523,8 @@ $(function() {
         updateAllFanStatus();
       
         bindUnitInputs([
-          { selector: 'input[id^="pwm_percent_input_"]', unit: '%', min: 0, max: 100 },
           { selector: 'input[id^="max_percent_input_"]', unit: '%', min: 0, max: 100 },
           { selector: `#idle_percent_input_${index}`, unit: '%',  min: 0, max: 100 },
-          { selector: 'input[id^="low_temp_input_"]', unit: '°C', min: 1, max: 100 },
-          { selector: 'input[id^="high_temp_input_"]', unit: '°C', min: 1, max: 100 },
-          { selector: 'input[id^="cpu_low_temp_input_"]', unit: '°C', min: 1, max: 95 },
-          { selector: 'input[id^="cpu_high_temp_input_"]', unit: '°C', min: 1, max: 110 },
-          { selector: 'input[id^="aux_low_temp_input_"]', unit: '°C', min: 1, max: 110 },
-          { selector: 'input[id^="aux_high_temp_input_"]', unit: '°C', min: 1, max: 110 },
           { selector: 'input[id^="interval_input_"]', unit: ' sec', min: 5, max: 3600 }
         ]);
 
@@ -560,38 +557,19 @@ $(function() {
 
   // Update the input title when the displayed PWM changes.
   function updateFanSpeedDisplay(i) {
-    const $minInput = $(`#pwm_percent_input_${i}`);
     const $maxInput = $(`#max_percent_input_${i}`);
-
-    let rawMin = stripUnit($minInput.val());
-    let rawMax = stripUnit($maxInput.val());
-
-    if (!rawMin && !rawMax) return;
-
-    let minVal = parseInt(rawMin || 0);
-    let maxVal = parseInt(rawMax || 0);
-
-    minVal = Math.min(Math.max(minVal, 0), 100);
-    maxVal = Math.min(Math.max(maxVal, 0), 100);
-
-    if (rawMin) $minInput.val(`${minVal}%`);
-    if (rawMax) $maxInput.val(`${maxVal}%`);
-
-    const pwmMin = Math.round(minVal * 255 / 100);
-    const pwmMax = Math.round(maxVal * 255 / 100);
-
-    $(`#pwm_display_min_${i}`).text(rawMin ? `（${pwmMin} PWM）` : '');
-    $(`#pwm_display_max_${i}`).text(rawMax ? `（${pwmMax} PWM）` : '');
-
-    $minInput.attr('title', rawMin ? `Minimum speed: ${minVal}% = ${pwmMin} PWM` : '');
-    $maxInput.attr('title', rawMax ? `Maximum speed: ${maxVal}% = ${pwmMax} PWM` : '');
+    const rawMax = stripUnit($maxInput.val());
+    if (!rawMax) return;
+    const maxVal = Math.min(Math.max(parseInt(rawMax, 10), 0), 100);
+    $maxInput.val(`${maxVal}%`);
+    $maxInput.attr('title', `Normal cap: ${maxVal}% = ${Math.round(maxVal * 255 / 100)} PWM`);
   }
 
   function bindFanSpeedEvents() {
     $('.fan-block').each(function (i) {
-      $(`#pwm_percent_input_${i}, #max_percent_input_${i}`).off('input');
+      $(`#max_percent_input_${i}`).off('input');
       updateFanSpeedDisplay(i);
-      $(`#pwm_percent_input_${i}, #max_percent_input_${i}`).on('input', function () {
+      $(`#max_percent_input_${i}`).on('input', function () {
         updateFanSpeedDisplay(i);
         updateIdleDisplay(i);
       });
@@ -600,7 +578,6 @@ $(function() {
 
   function updateIdleDisplay(i) {
     const $idleInput = $(`#idle_percent_input_${i}`);
-    const $minInput  = $(`#pwm_percent_input_${i}`);
 
     const rawIdle = stripUnit($idleInput.val());
     if (!rawIdle) {
@@ -610,12 +587,6 @@ $(function() {
 
     let idleVal = Math.min(100, Math.max(0, parseInt(rawIdle, 10)));
 
-    // Clamp to Min when Min is set.
-    const rawMin = stripUnit($minInput.val());
-    if (rawMin) {
-      const minVal = Math.min(100, Math.max(0, parseInt(rawMin, 10)));
-      if (!Number.isNaN(minVal)) idleVal = Math.min(idleVal, minVal);
-    }
 
     $idleInput.val(`${idleVal}%`);
     const pwmIdle = Math.round(idleVal * 255 / 100);
@@ -701,15 +672,8 @@ $(function() {
 
   $(document).ready(function () {
     bindUnitInputs([
-      { selector: 'input[id^="pwm_percent_input_"]', unit: '%', min: 0, max: 100 },
       { selector: 'input[id^="max_percent_input_"]', unit: '%', min: 0, max: 100 },
       { selector: 'input[id^="idle_percent_input_"]', unit: '%',  min: 0, max: 100 },
-      { selector: 'input[id^="low_temp_input_"]', unit: '°C', min: 1, max: 100 },
-      { selector: 'input[id^="high_temp_input_"]', unit: '°C', min: 1, max: 100 },
-      { selector: 'input[id^="cpu_low_temp_input_"]', unit: '°C', min: 1, max: 95 },
-      { selector: 'input[id^="cpu_high_temp_input_"]', unit: '°C', min: 1, max: 110 },
-      { selector: 'input[id^="aux_low_temp_input_"]', unit: '°C', min: 1, max: 110 },
-      { selector: 'input[id^="aux_high_temp_input_"]', unit: '°C', min: 1, max: 110 },
       { selector: 'input[id^="interval_input_"]', unit: ' sec', min: 5, max: 3600 }
     ]);
     loadPWMOptions();
@@ -983,39 +947,32 @@ $(function() {
     });
   }
 
-  // Snapshot every disk group's name/disks/low/high in DOM order -- adding,
-  // removing, or editing a group all change this array, which is all
-  // dirty-tracking needs (it doesn't care about the group's DOM index).
+  // Disk memberships and labels are tracked here; curve JSON owns temperatures.
   function snapshotDiskGroups($block) {
     return $block.find('.disk-group-row').map(function () {
       const $row = $(this);
       return {
         name: $row.find('.disk-group-name-input').val(),
         disks: ($row.find('.disk-select').val() || []).slice().sort(),
-        low: stripUnit($row.find('.low-temp-input').val()),
-        high: stripUnit($row.find('.high-temp-input').val())
       };
     }).get();
   }
 
   function initOriginalForBlock($block) {
+    FcpCurves.refresh($block[0]);
     const original = {
       custom: $block.find('input[name^="custom["]').val(),
       service: $block.find('select[name^="service["]').val(),
       controller: $block.find('select[name^="controller["]').val(),
-      pwm_percent: stripUnit($block.find('input[name^="pwm_percent["]').val()),
       max_percent: stripUnit($block.find('input[name^="max_percent["]').val()),
       idle_percent: stripUnit($block.find('input[name^="idle_percent["]').val() || '0'),
       interval: stripUnit($block.find('input[name^="interval["]').val()),
       disk_groups: snapshotDiskGroups($block),
+      curves: $block.find('.fcp-curve-config').val(),
       cpu_enable: $block.find('select[name^="cpu_enable["]').val(),
       cpu_sensor: $block.find('select[name^="cpu_sensor["]').val(),
-      cpu_min_temp: stripUnit($block.find('input[name^="cpu_min_temp["]').val()),
-      cpu_max_temp: stripUnit($block.find('input[name^="cpu_max_temp["]').val()),
       aux_enable: $block.find('select[name^="aux_enable["]').val(),
       aux_sensor: $block.find('select[name^="aux_sensor["]').val(),
-      aux_min_temp: stripUnit($block.find('input[name^="aux_min_temp["]').val()),
-      aux_max_temp: stripUnit($block.find('input[name^="aux_max_temp["]').val())
     };
     $block.data('original', original);
   }
@@ -1030,19 +987,15 @@ $(function() {
         custom: $block.find('input[name^="custom["]').val(),
         service: $block.find('select[name^="service["]').val(),
         controller: $block.find('select[name^="controller["]').val(),
-        pwm_percent: stripUnit($block.find('input[name^="pwm_percent["]').val()),
         max_percent: stripUnit($block.find('input[name^="max_percent["]').val()),
         idle_percent: stripUnit($block.find('input[name^="idle_percent["]').val() || '0'),
         interval: stripUnit($block.find('input[name^="interval["]').val()),
         disk_groups: snapshotDiskGroups($block),
+        curves: $block.find('.fcp-curve-config').val(),
         cpu_enable: $block.find('select[name^="cpu_enable["]').val(),
         cpu_sensor: $block.find('select[name^="cpu_sensor["]').val(),
-        cpu_min_temp: stripUnit($block.find('input[name^="cpu_min_temp["]').val()),
-        cpu_max_temp: stripUnit($block.find('input[name^="cpu_max_temp["]').val()),
         aux_enable: $block.find('select[name^="aux_enable["]').val(),
         aux_sensor: $block.find('select[name^="aux_sensor["]').val(),
-        aux_min_temp: stripUnit($block.find('input[name^="aux_min_temp["]').val()),
-        aux_max_temp: stripUnit($block.find('input[name^="aux_max_temp["]').val())
       };
 
       if (JSON.stringify(original) !== JSON.stringify(current)) {
@@ -1209,8 +1162,6 @@ $(function() {
       const name = $(this).val().trim();
       const intervalField = block.find('.interval-input');
       const interval = intervalField.length ? stripUnit(intervalField.val()) : '';
-      const pwm_percent = stripUnit(block.find('input[name^="pwm_percent["]').val());
-      const max_percent = stripUnit(block.find('input[name^="max_percent["]').val());
       const pwm = block.find('.pwm-controller').val();
       
       if (name === '') {
@@ -1257,51 +1208,18 @@ $(function() {
     $('.fan-block').each(function () {
       const block = $(this);
       const name = block.find('.custom-name-input').val() || `#${$(this).index() + 1}`;
-      const pwmMin = parseInt(stripUnit(block.find('input[name^="pwm_percent["]').val()));
-      const pwmMax = parseInt(stripUnit(block.find('input[name^="max_percent["]').val()));
-      const idlePct = parseInt(stripUnit(block.find('input[name^="idle_percent["]').val()));
-      const cpuLow = parseInt(stripUnit(block.find('input[name^="cpu_min_temp["]').val()));
-      const cpuHigh = parseInt(stripUnit(block.find('input[name^="cpu_max_temp["]').val()));
-      const auxLow = parseInt(stripUnit(block.find('input[name^="aux_min_temp["]').val()));
-      const auxHigh = parseInt(stripUnit(block.find('input[name^="aux_max_temp["]').val()));
+      let curveRules;
+      try { curveRules = FcpCurves.rules(block[0]); }
+      catch (error) { alert(error.message); rangeValid = false; return false; }
+      const curveError = Object.values(curveRules).map(FcpCurves.validate).find(Boolean);
+      if (curveError) { alert(`Fan configuration "${name}": ${curveError}`); rangeValid = false; return false; }
+      FcpCurves.sync(block[0], curveRules);
+      const pwmMin = FcpCurves.floor(block[0], curveRules);
+      const pwmMax = FcpCurves.inputPwm(block.find('input[name^="max_percent["]')[0]);
+      const idlePwm = FcpCurves.inputPwm(block.find('input[name^="idle_percent["]')[0]);
 
-      let diskGroupRangeValid = true;
-      block.find('.disk-group-row').each(function () {
-        const $row = $(this);
-        const groupName = $row.find('.disk-group-name-input').val() || 'Disk Group';
-        const gLow = parseInt(stripUnit($row.find('.low-temp-input').val()));
-        const gHigh = parseInt(stripUnit($row.find('.high-temp-input').val()));
-        if (!isNaN(gLow) && !isNaN(gHigh) && gLow >= gHigh) {
-          alert(`Fan configuration "${name}", ${groupName}: Low Temp cannot exceed High Temp.`);
-          diskGroupRangeValid = false;
-          return false;
-        }
-      });
-      if (!diskGroupRangeValid) {
-        rangeValid = false;
-        return false;
-      }
-
-        if (!isNaN(cpuLow) && !isNaN(cpuHigh) && cpuLow >= cpuHigh) {
-        alert(`Fan configuration "${name}": CPU Low Temp cannot exceed High Temp.`);
-        rangeValid = false;
-        return false;
-      }
-
-      if (!isNaN(auxLow) && !isNaN(auxHigh) && auxLow >= auxHigh) {
-        alert(`Fan configuration "${name}": Aux Low Temp cannot exceed High Temp.`);
-        rangeValid = false;
-        return false;
-      }
-
-      if (!isNaN(pwmMin) && !isNaN(pwmMax) && pwmMin > pwmMax) {
-        alert(`Fan configuration "${name}": Minimum fan speed cannot exceed Maximum.`);
-        rangeValid = false;
-        return false;
-      }
-
-      if (!isNaN(idlePct) && !isNaN(pwmMin) && idlePct > pwmMin) {
-        alert(`Fan configuration "${name}": Idle Speed (%) cannot exceed Min Speed (%).`);
+      if (idlePwm > Math.min(pwmMin, pwmMax)) {
+        alert(`Fan configuration "${name}": Idle Speed cannot exceed the normal cap or the first point of a disk curve or enabled CPU/Aux rule.`);
         rangeValid = false; return false;
       }
     });
@@ -1314,13 +1232,10 @@ $(function() {
       return;
     }
 
-    $('.interval-input, .low-temp-input, .high-temp-input, .pwm-percent-input, .max-percent-input').each(function(){
+    $('.interval-input').each(function(){
       this.value = stripUnit(this.value);
     });
 
-    $('.cpu-low-temp-input, .cpu-high-temp-input').each(function(){
-      this.value = stripUnit(this.value);
-    });
 
     saveFanOrder();
     updatePwmDropdowns();
@@ -1488,10 +1403,9 @@ $(function() {
       $container.append($row);
       $row.find('.disk-select').dropdownchecklist(dropdownChecklistOptions);
       decorateDiskDropdowns($row);
-      bindUnitInputs([
-        { selector: 'input[id^="low_temp_input_"]', unit: '°C', min: 1, max: 100 },
-        { selector: 'input[id^="high_temp_input_"]', unit: '°C', min: 1, max: 100 }
-      ]);
+      const block = $container.closest('.fan-block')[0];
+      FcpCurves.sync(block, FcpCurves.rules(block));
+      FcpCurves.refresh(block);
       setApplyAllButtonState();
     });
   });
@@ -1513,6 +1427,9 @@ $(function() {
     if (!confirm(msg)) return;
 
     $row.remove();
+    const block = $container.closest('.fan-block')[0];
+    FcpCurves.sync(block, FcpCurves.rules(block));
+    FcpCurves.refresh(block);
     setApplyAllButtonState();
   });
 
@@ -1574,10 +1491,13 @@ $(function() {
     btn.style.pointerEvents = 'none';
 
     fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=refresh_single&custom=${encodeURIComponent(label)}`, {cache: 'no-store'})
-      .then(res => {
-        if (!res.ok) throw new Error("Request failed");
-        return res.text();
-      })
+      .then(res => res.text().then(body => {
+        if (res.ok) return body;
+        // A failed run answers with the reason; anything else is just a failed request.
+        let message = "Request failed";
+        try { message = JSON.parse(body).message || message; } catch (e) {}
+        throw new Error(message);
+      }))
       .then(() => {
         setTimeout(() => {
           if (icon) icon.classList.remove('fa-spin');
@@ -1671,18 +1591,6 @@ $(function() {
       label.classList.toggle('disabled', !enabled);
     });
 
-    // Fill default temperatures when CPU control is enabled with empty inputs.
-    if (enabled) {
-      const lowInput  = document.querySelector(`#cpu_low_temp_input_${index}`);
-      const highInput = document.querySelector(`#cpu_high_temp_input_${index}`);
-
-      if (lowInput && lowInput.value.trim() === '') {
-        lowInput.value = '40°C';
-      }
-      if (highInput && highInput.value.trim() === '') {
-        highInput.value = '70°C';
-      }
-    }
   };
 
   window.handleAuxEnableChange = function(selectEl, index) {
@@ -1708,17 +1616,6 @@ $(function() {
       $auxSelect.dropdownchecklist(auxDropdownChecklistOptions);
     }
 
-    if (enabled) {
-      const lowInput  = document.querySelector(`#aux_low_temp_input_${index}`);
-      const highInput = document.querySelector(`#aux_high_temp_input_${index}`);
-
-      if (lowInput && lowInput.value.trim() === '') {
-        lowInput.value = '40°C';
-      }
-      if (highInput && highInput.value.trim() === '') {
-        highInput.value = '70°C';
-      }
-    }
   };
 
   // Initialize every block and bind its change handler.
@@ -1815,7 +1712,10 @@ $(function() {
       Please proceed at your own risk.
     </p>
 
-    <p><strong>Fan Speed Range:</strong> This sets the minimum and maximum PWM duty cycle values. For example, setting the range to 40–80% means the fan will always run at least 40% speed when cool, and will not exceed 80% speed even at high temperatures.</p>
+    <p><strong>Fan curves:</strong> Click <strong>Edit fan curve</strong> to open the dedicated editor. Each disk group, CPU rule and auxiliary rule has 2–8 temperature/speed points. Temperatures must increase; speeds may increase or stay flat. Choose linear interpolation or stepped control. Outside the endpoints, speed stays at the first or last value. Existing settings become equivalent two-point linear curves.</p>
+    <p><strong>Normal Cap:</strong> Limits normal fan output without rescaling any stored points. An optional emergency threshold and speed for each rule bypass this cap. Emergency speed must be at least the last curve point’s speed.</p>
+    <p><strong>Cooling hysteresis:</strong> A 0–20°C deadband prevents repeated decreases near a boundary. Increases happen immediately on the next check. Emergency ends at its threshold minus hysteresis (strictly below the threshold with hysteresis disabled). If that release temperature is below 0°C, emergency remains active until the rule changes.</p>
+    <p><strong>Saving:</strong> <strong>Use changes</strong> returns the editor’s draft to the fan block. <strong>Cancel</strong> discards it. Click <strong>Apply All</strong> to save and update control. Idle speed must not exceed the normal cap or the first point of a disk curve or enabled CPU/Aux rule.</p>
 
     <p><strong>Interval:</strong> How often, in seconds, the plugin checks disk (and, if enabled, CPU and auxiliary) temperatures and adjusts fan speed accordingly. Shorter intervals provide more responsive cooling but may result in more frequent fan changes. Anything from 5&nbsp;seconds to 1&nbsp;hour is accepted; sub-minute intervals are meant for CPU or other fast-reacting sensors, since polling disks that often keeps them busy for little benefit.</p>  
 
@@ -1823,9 +1723,7 @@ $(function() {
 
     <p><strong>Disk Temperature Settings:</strong>  
         Controls fan speed based on the <strong>highest temperature</strong> among the selected disks.<br>
-        Below the Low Temp, the fan runs at the <strong>Min Speed %</strong>.<br>
-        Above the High Temp, it ramps up to the <strong>Max Speed %</strong>.<br>
-        Between these points, the speed increases smoothly and <strong>linearly</strong>.<br>
+        Each group has its own curve, driven by its hottest selected disk.<br>
         Only the disks selected in <strong>Include Disk(s)</strong> are monitored for this fan. Multiple fans can monitor the same disk(s), and a disk can be assigned to multiple fans.<br>
         <em>Tip:</em> If you only want to monitor CPU temperature for this fan, leave all disks unchecked.
     </p>
@@ -1842,8 +1740,7 @@ $(function() {
     </p>
 
     <p><strong>Chart:</strong> Click the <strong>Chart</strong> button in a fan block to preview the fan speed curve based on your current settings.  
-        Since <strong>v1.3.1</strong>, CPU temperature can also be used as a control source.  
-        The chart will show separate curves for <strong>Disk</strong> and <strong>CPU</strong> rules (if both are enabled) and highlight the current operating point in real time.
+        The chart shows enabled disk-group, CPU and auxiliary rules, including normal caps and emergency output, and highlights each source’s current operating point.
     </p>
 
     <p style="margin: 10px 0 6px 0; font-weight: bold;">How it works:</p>
@@ -1860,7 +1757,7 @@ $(function() {
 
       <p style="margin: 10px 0 6px 0; font-weight: bold;">Example:</p>
 
-      <p><strong>Disk rule:</strong> Low Temp = 30°C → 40%, High Temp = 50°C → 100%</p>
+      <p><strong>Two-point linear disk rule:</strong> (30°C, 40%) → (50°C, 100%), with a 100% normal cap.</p>
       <ul style="margin: 4px 0 8px 16px;">
         <li>30°C → 40%</li>
         <li>35°C → 55%</li>
@@ -1869,7 +1766,7 @@ $(function() {
         <li>50°C → 100%</li>
       </ul>
 
-      <p><strong>CPU rule:</strong> Low Temp = 50°C → 40%, High Temp = 80°C → 100%</p>
+      <p><strong>Two-point linear CPU rule:</strong> (50°C, 40%) → (80°C, 100%), with a 100% normal cap.</p>
       <ul style="margin: 4px 0 8px 16px;">
         <li>50°C → 40%</li>
         <li>60°C → 55%</li>
@@ -1905,7 +1802,7 @@ $(function() {
       It is strongly recommended to leave your CPU fan under BIOS/firmware control.  
       If you still choose to control CPU fan via FanCtrl&nbsp;Plus, monitor behavior closely and proceed at your own risk.
     </li>
-      <li>When setting low <strong>Min Speed %</strong>, always observe how your fan behaves. Some fans may stall or report 0 RPM if the PWM is too low.</li>
+      <li>When setting low curve speeds, always observe how your fan behaves. Some fans may stall or report 0 RPM if the PWM is too low.</li>
       <li>Fan response to PWM 0 varies: some fans continue spinning slowly (e.g. 100–200 RPM), while others stop completely. This is determined by hardware, not software.</li>
       <li>The temperature shown in syslog and the Dashboard tile is the <strong>highest</strong> among the selected disks, or the CPU temperature — whichever is driving the current fan speed.</li>
       <li>When the <strong>Stop</strong> button is clicked, all configured fans are set to 50% speed to prevent stalling or uncontrolled RPM spikes.</li>

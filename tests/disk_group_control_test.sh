@@ -63,6 +63,59 @@ garbage_output='ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE    
 expect_equal "" "$(disk_temp_from_smart "$garbage_output" 0)" \
   "A raw value no disk could report yields no reading."
 
+# ===== disk_temp_read: one bounded smartctl call per drive =====
+# A stand-in smartctl, picked by the device name: a drive that sleeps, one whose
+# exit status carries health bits, and one that never answers. The real
+# timeout(1) and the real library run against it.
+fakebin=$(mktemp -d)
+trap 'rm -rf "$fakebin"' EXIT
+smart_log="$fakebin/calls"
+stalled_marker="$fakebin/stalled"
+printf '%s\n' "$sata_output" > "$fakebin/sata"
+printf '%s\n' "$nvme_output" > "$fakebin/nvme"
+cat > "$fakebin/smartctl" <<'SMART'
+#!/bin/bash
+printf '%s\n' "$*" >> "$FCP_FAKE_SMART_LOG"
+case "${@: -1}" in
+  */asleep)
+    echo 'Device is in STANDBY mode, exit(2)'
+    exit 2 ;;
+  */failing)
+    cat "$FCP_FAKE_SMART_ATTRS"
+    exit 8 ;;
+  */stalled)
+    : > "$FCP_FAKE_SMART_STALLED"
+    exec sleep 1000 ;;
+  *)
+    cat "$FCP_FAKE_SMART_ATTRS" ;;
+esac
+SMART
+chmod +x "$fakebin/smartctl"
+
+# Prints the reading for DEVICE. A call that is not bounded would stall the
+# suite, so it runs under a watchdog and prints TIMED-OUT if that fires.
+read_disk() {
+  local out rc
+  out=$(env PATH="$fakebin:$PATH" FCP_FAKE_SMART_LOG="$smart_log" FCP_FAKE_SMART_STALLED="$stalled_marker" \
+    FCP_FAKE_SMART_ATTRS="$fakebin/${2:-sata}" fcp_smart_timeout="${3:-10}" \
+    timeout 30 bash -c 'source "$1"; source "$2"; disk_temp_read "$3"' _ \
+    "$root/src/usr/local/emhttp/plugins/fanctrlplus2/scripts/aux_sensors.sh" \
+    "$root/src/usr/local/emhttp/plugins/fanctrlplus2/scripts/disk_group_control.sh" "$1")
+  rc=$?
+  if (( rc == 124 )); then printf 'TIMED-OUT'; else printf '%s' "$out"; fi
+}
+
+expect_equal "32" "$(read_disk /dev/sda)" "A readable SATA drive gives its temperature."
+expect_equal "1" "$(grep -c -- ' /dev/sda$' "$smart_log")" "A readable drive is probed once, not once to see if it sleeps and again to read it."
+expect_equal "-n standby -A /dev/sda" "$(grep -- ' /dev/sda$' "$smart_log")" "The one probe must leave a sleeping drive asleep."
+expect_equal "38" "$(read_disk /dev/nvme0n1 nvme)" "An NVMe drive gives its temperature."
+expect_equal "32" "$(read_disk /dev/failing)" "A smartctl exit status that carries health bits still has a valid reading."
+expect_equal "" "$(read_disk /dev/asleep)" "A sleeping drive has no reading."
+expect_equal "1" "$(grep -c asleep "$smart_log")" "A sleeping drive is probed once, and only with -n standby."
+expect_equal "-n standby -A /dev/asleep" "$(grep asleep "$smart_log")" "A sleeping drive is never woken by a plain read."
+expect_equal "" "$(read_disk /dev/stalled sata 1)" "A drive that never answers has no reading, and the read ends by itself."
+expect_equal "present" "$([[ -e "$stalled_marker" ]] && echo present || echo absent)" "The stalled drive was really probed."
+
 disk_group_max_temp() {
   case "$1" in
     array) echo 37 ;;
@@ -84,6 +137,7 @@ disk_group_1_low=30
 disk_group_1_high=50
 disks="array,pool"
 
+sample_disk_temps
 calculate_disk_pwm
 expect_equal 216 "$disk_pwm_val" "The hottest control curve must determine disk PWM."
 expect_equal 45 "$disk_max" "The winning group's temperature must be retained."
@@ -95,6 +149,7 @@ disk_group_count=0
 disks="legacy"
 low=30
 high=40
+sample_disk_temps
 calculate_disk_pwm
 expect_equal 193 "$disk_pwm_val" "Legacy configurations must keep their single-range calculation."
 expect_equal "disk:0|36|193" "${disk_curve_readings[*]}" "Legacy configurations must expose their current curve point."
@@ -110,6 +165,42 @@ aux_pwm_val=102
 write_curve_readings "$curve_cache"
 expect_equal $'disk:0|36|193\ncpu|42|128\naux|39|102' "$(< "$curve_cache")" "The curve cache must include disk, CPU, and Aux points."
 rm -f "$curve_cache"
+
+# calculate_disk_pwm only evaluates: it must not read a drive, because it runs
+# under the curve-state lock that a stalled drive must never hold.
+disk_group_count=2
+disks="array,pool"
+disk_group_max_temp() {
+  case "$1" in
+    array) echo 37 ;;
+    pool) echo 45 ;;
+  esac
+}
+sample_disk_temps
+disk_group_max_temp() { echo "drive read during evaluation" >&2; echo 99; }
+calculate_disk_pwm 2>"$fakebin/evaluation-reads"
+expect_equal "216" "$disk_pwm_val" "Evaluation uses the temperatures sampled earlier."
+expect_equal "" "$(< "$fakebin/evaluation-reads")" "Evaluating the disk PWM must not touch a drive."
+
+# Each group's sample carries the time its read began, which the curve state
+# orders it by: taken before the drives are read, never after.
+disk_group_max_temp() {
+  fcp_stamp_now
+  printf '%s\n' "$fcp_now" >> "$fakebin/read-starts"
+  echo 40
+}
+: > "$fakebin/read-starts"
+disk_group_count=2
+sample_disk_temps
+mapfile -t read_starts < "$fakebin/read-starts"
+expect_equal 2 "${#read_starts[@]}" "Each group's drives are read once."
+expect_equal yes "$([[ "${fcp_disk_stamps[0]}" =~ ^[1-9][0-9]{9,15}$ && "${fcp_disk_stamps[1]}" =~ ^[1-9][0-9]{9,15}$ ]] && echo yes || echo no)" "Each group's sample time is a bounded number of microseconds."
+expect_equal yes "$( (( fcp_disk_stamps[0] <= read_starts[0] && fcp_disk_stamps[1] <= read_starts[1] && fcp_disk_stamps[0] <= fcp_disk_stamps[1] )) && echo yes || echo no )" "A group's sample time is taken before its drives are read."
+
+disk_group_count=0
+disks="legacy"
+sample_disk_temps
+expect_equal yes "$([[ "${fcp_disk_stamps[0]}" =~ ^[1-9][0-9]{9,15}$ ]] && echo yes || echo no)" "The legacy disk list is stamped as group 0."
 
 if (( failures > 0 )); then
   exit 1

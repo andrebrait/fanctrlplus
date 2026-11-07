@@ -93,6 +93,13 @@ fan 255 1 1200
 expect_equal '/controller' "$(check 255)" "An enable attribute without a value leaves the mode and everything after it unchecked."
 fcp_check_fan "$hw/pwm9" "$hw/fan9_input" 255 0 "$spun"
 expect_equal 'controller/' "${fcp_faults[0]%%|*}/${fcp_ok[*]}" "A missing controller is reported and nothing else judged."
+# Before any write succeeds there is no target, but presence and mode still matter.
+fan 255 2 1200
+expect_equal 'mode;/controller' "$(check '')" "Lost control is reported before the first successful write."
+fan 255 1 0
+expect_equal '/controller mode' "$(check '')" "Without a target, speed and stopped checks are skipped."
+fcp_check_fan "$hw/pwm9" "$hw/fan9_input" '' 0 "$spun"
+expect_equal 'controller/' "${fcp_faults[0]%%|*}/${fcp_ok[*]}" "A missing controller is reported before the first successful write."
 
 fan 255 1 0
 expect_equal 'stopped;/controller mode speed' "$(check 255)" "A fan that spun before and reads 0 RPM at full speed has stopped."

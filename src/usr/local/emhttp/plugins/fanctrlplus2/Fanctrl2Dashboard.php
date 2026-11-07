@@ -11,11 +11,11 @@ $status_text = $daemon_running ? "Running" : "Stopped";
 
 $fans = [];
 
-if (isset($_GET['op']) && $_GET['op'] === 'refresh' && !empty($_GET['custom'])) {
-    $custom = escapeshellarg($_GET['custom']);
-    $script = "/usr/local/emhttp/plugins/fanctrlplus2/scripts/fanctrlplus2_refresh_single.sh $custom";
-    shell_exec($script . " > /dev/null 2>&1 &");
-    echo json_encode(['ok' => 1]);
+if (isset($_GET['op']) && $_GET['op'] === 'refresh' && is_string($_GET['custom'] ?? null) && $_GET['custom'] !== '') {
+    require_once __DIR__.'/include/ManualRun.php';
+    $run = fcp_manual_run($_GET['custom']);
+    if (!$run['ok']) http_response_code(500);
+    echo json_encode($run['ok'] ? ['ok' => 1] : ['ok' => 0, 'message' => $run['message'] !== '' ? $run['message'] : 'Manual Run failed.']);
     exit;
 }
 

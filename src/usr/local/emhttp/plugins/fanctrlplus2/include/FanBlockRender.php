@@ -1,13 +1,10 @@
 <?php
 require_once __DIR__.'/Common.php';
+require_once __DIR__.'/CurveConfig.php';
 $label_file = "/boot/config/plugins/fanctrlplus2/pwm_labels.cfg";
 $pwm_labels = fcp_load_pwm_labels($label_file);
 
-// Build the list of disk groups for a fan cfg: [{name, disks:[...], low, high}, ...].
-// disk_group_count>0 -> read disk_group_{g}_* keys. Otherwise fall back to ONE group
-// synthesized from the legacy flat disks/low/high fields (pre-group configs, or a
-// brand-new never-saved fan block) -- keeps every existing config rendering exactly
-// as before until the user actually saves it in the new group shape.
+// Disk memberships, including the single group used by pre-group configurations.
 function fcp_build_disk_groups($cfg) {
   $count = isset($cfg['disk_group_count']) ? intval($cfg['disk_group_count']) : 0;
   if ($count > 0) {
@@ -16,8 +13,6 @@ function fcp_build_disk_groups($cfg) {
       $groups[] = [
         'name'  => $cfg["disk_group_{$g}_name"] ?? '',
         'disks' => array_filter(explode(',', $cfg["disk_group_{$g}_disks"] ?? '')),
-        'low'   => isset($cfg["disk_group_{$g}_low"]) && is_numeric($cfg["disk_group_{$g}_low"]) ? intval($cfg["disk_group_{$g}_low"]) : 40,
-        'high'  => isset($cfg["disk_group_{$g}_high"]) && is_numeric($cfg["disk_group_{$g}_high"]) ? intval($cfg["disk_group_{$g}_high"]) : 60,
       ];
     }
     return $groups;
@@ -25,12 +20,10 @@ function fcp_build_disk_groups($cfg) {
   return [[
     'name'  => '',
     'disks' => array_filter(explode(',', $cfg['disks'] ?? '')),
-    'low'   => isset($cfg['low']) && is_numeric($cfg['low']) ? intval($cfg['low']) : 40,
-    'high'  => isset($cfg['high']) && is_numeric($cfg['high']) ? intval($cfg['high']) : 60,
   ]];
 }
 
-// Render one disk-group row for fan $i, group $g. $grp = {name, disks:[...], low, high}.
+// Render one disk-group membership row for fan $i, group $g.
 // Single source of truth for the row markup -- both the initial page render (via
 // fcp_build_disk_groups()) and the "Add Disk Group" AJAX button (FanctrlLogic.php
 // op=newdiskgroup, an empty $grp) call this, so there is never a second template to
@@ -80,29 +73,10 @@ function render_disk_group_row($i, $g, $grp, $disks) {
         </td>
       </tr>
       <tr>
-        <td class="fcp-help-cursor" title="Fan runs at minimum speed at or below Low Temp, and maximum speed at or above High Temp for this group's hottest selected disk.">Range:</td>
+        <td>Curve:</td>
         <td>
-          <div class="fcp-range-grid">
-            <input type="text"
-                  id="low_temp_input_<?=$i?>_<?=$g?>"
-                  name="disk_group_low[<?=$i?>][<?=$g?>]"
-                  class="low-temp-input fcp-input-fullleft"
-                  inputmode="numeric"
-                  value="<?=$grp['low']?>°C"
-                  title="Low Temp: <?=$grp['low']?>°C"
-                  placeholder="Low °C">
-
-            <span class="fcp-center">~</span>
-
-            <input type="text"
-                  id="high_temp_input_<?=$i?>_<?=$g?>"
-                  name="disk_group_high[<?=$i?>][<?=$g?>]"
-                  class="high-temp-input fcp-input-fullleft"
-                  inputmode="numeric"
-                  value="<?=$grp['high']?>°C"
-                  title="High Temp: <?=$grp['high']?>°C"
-                  placeholder="High °C">
-          </div>
+          <button type="button" onclick="openFanCurveEditor(this, 'disk:<?=$g?>')">Edit fan curve</button>
+          <span class="fcp-curve-summary" data-source="disk:<?=$g?>"></span>
         </td>
       </tr>
     </table>
@@ -114,11 +88,12 @@ function render_disk_group_row($i, $g, $grp, $disks) {
 }
 
 function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors = []) {
-  // Use 40% and 100% as the PWM defaults when values are missing.
-  $pwm_raw = isset($cfg['pwm']) && is_numeric($cfg['pwm']) ? $cfg['pwm'] : 102;
+  $curve_error = '';
+  try { $curve_rules = fcp_curve_rules($cfg); }
+  catch (InvalidArgumentException $error) { $curve_rules = null; $curve_error = $error->getMessage(); }
+  // Use 100% as the normal cap when it is missing.
   $max_raw = isset($cfg['max']) && is_numeric($cfg['max']) ? $cfg['max'] : 255;
 
-  $pwm_pct = round($pwm_raw * 100 / 255) . '%';
   $max_pct = round($max_raw * 100 / 255) . '%';
 
   $disk_groups = fcp_build_disk_groups($cfg);
@@ -130,6 +105,11 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
   ?>
   <div class="fan-block" data-index="<?=$i?>" data-file="<?=htmlspecialchars($cfg['file'])?>">
     <input type="hidden" name="#file[<?=$i?>]" value="<?=htmlspecialchars($cfg['file'])?>" class="cfg-file">
+    <input type="hidden" name="curve_config[<?=$i?>]" class="fcp-curve-config"
+           value="<?=htmlspecialchars(json_encode($curve_rules), ENT_QUOTES)?>">
+    <?php if ($curve_error !== ''): ?>
+      <p role="alert"><?=htmlspecialchars("Invalid saved fan curve: $curve_error Restore a valid configuration backup before applying settings.")?></p>
+    <?php endif; ?>
 
     <fieldset class="fan-fieldset">
       <div class="fcp-fan-icon-wrap">
@@ -235,42 +215,17 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
           </td>
         </tr>
 
-        <!-- Fan Speed Range -->
         <tr>
-          <td class="fcp-help-cursor" title="Set the minimum and maximum fan speed (0–100%). % will be automatically converted to PWM. Hover to see actual values.">Speed Range:</td>
+          <td class="fcp-help-cursor" title="Limits normal output without changing curve points. Emergency cooling can bypass this cap.">Normal Cap:</td>
           <td>
-            <div class="fcp-range-grid">
-
-              <!-- Minimum. -->
-              <input type="text"
-                    id="pwm_percent_input_<?=$i?>"
-                    name="pwm_percent[<?=$i?>]"
-                    inputmode="numeric"
-                    class="fcp-input-fullleft"
-                    value="<?=$pwm_pct?>"
-                    title="Minimum speed: <?=$pwm_pct?> = <?=htmlspecialchars($pwm_raw)?> PWM"
-                    placeholder="Min %">
-
-
-              <!-- Range separator. -->
-              <span class="fcp-center">~</span>
-
-              <!-- Maximum. -->
-              <input type="text"
-                    id="max_percent_input_<?=$i?>"
-                    name="max_percent[<?=$i?>]"
-                    inputmode="numeric"
-                    class="fcp-input-fullleft"
-                    value="<?=$max_pct?>"
-                    title="Maximum speed: <?=$max_pct?> = <?=htmlspecialchars($max_raw)?> PWM"
-                    placeholder="Max %">
-            </div>
+            <input type="text" id="max_percent_input_<?=$i?>" name="max_percent[<?=$i?>]"
+                   inputmode="numeric" class="fcp-input-idle" data-pwm="<?=intval($max_raw)?>" value="<?=$max_pct?>" title="Normal output cap">
           </td>
         </tr>
 
         <tr>
           <td class="fcp-help-cursor"
-              title="Fan speed used when there is no temperature source (all HDDs are spun down and CPU monitoring is not enabled).&#10;Must be ≤ the Min value in Fan Speed Range.&#10;Default 0% = completely stopped.">
+              title="Fan speed used when no temperature source is available. Must not exceed the normal cap, disk curves’ first points, or enabled CPU/Aux rules’ first points. Default 0% may stop the fan.">
             Speed on Idle:
           </td>
           <td>
@@ -279,6 +234,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                   name="idle_percent[<?=$i?>]"
                   inputmode="numeric"
                   class="fcp-input-idle"
+                  data-pwm="<?=$idle_abs?>"
                   value="<?=$idle_pct?>"
                   title="Idle speed: <?=$idle_pct?> = <?=htmlspecialchars($idle_abs)?> PWM"
                   placeholder="Idle %">
@@ -307,11 +263,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
         <tr><td colspan="2" class="subhead">Disk Temperature Settings</td></tr>
 
-        <!-- Disk Groups: each group has its own disk selection and its own
-             Low/High temperature range. The fan reacts to whichever group's
-             computed PWM (driven by ITS hottest selected disk) is highest --
-             lets e.g. HDDs, SATA SSDs, and NVMe SSDs each get their own range
-             on the same fan. -->
+        <!-- Each group's hottest selected disk drives its own curve. -->
         <tr>
           <td colspan="2" class="fcp-groups-cell">
             <div class="disk-groups" id="disk-groups-<?=$i?>">
@@ -319,7 +271,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                 <?= render_disk_group_row($i, $g, $grp, $disks) ?>
               <?php endforeach; ?>
             </div>
-            <button type="button" class="add-disk-group-btn" data-fan-index="<?=$i?>" title="Add another disk group with its own temperature range">
+            <button type="button" class="add-disk-group-btn" data-fan-index="<?=$i?>" title="Add another disk group with its own fan curve">
               <i class="fa fa-plus"></i> Add Disk Group
             </button>
           </td>
@@ -350,33 +302,11 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
           </td>
         </tr>
 
-        <!-- CPU Temp Range -->
         <tr class="cpu-control cpu-control-<?=$i?>">
-          <td class="cpu-label fcp-help-cursor" title="Fan runs at minimum speed at or below Low Temp, and maximum speed at or above High Temp. See chart for details.">Range:</td>
+          <td>Curve:</td>
           <td>
-            <div class="fcp-range-grid">
-              <input type="text"
-                    id="cpu_low_temp_input_<?=$i?>"
-                    name="cpu_min_temp[<?=$i?>]"
-                    class="cpu-input fcp-input-fullleft"
-                    inputmode="numeric"
-                    value="<?=htmlspecialchars(($cfg['cpu_min_temp'] ?? '') . '°C')?>"
-                    title="Low Temp: <?=intval($cfg['cpu_min_temp'] ?? 50)?>°C"
-                    placeholder="Low °C"
-                    <?=($cfg['cpu_enable'] ?? '') != '1' ? 'disabled' : ''?>>
-
-              <span class="fcp-center">~</span>
-
-              <input type="text"
-                    id="cpu_high_temp_input_<?=$i?>"
-                    name="cpu_max_temp[<?=$i?>]"
-                    class="cpu-input fcp-input-fullleft"
-                    inputmode="numeric"
-                    value="<?=htmlspecialchars(($cfg['cpu_max_temp'] ?? '') . '°C')?>"
-                    title="High Temp: <?=intval($cfg['cpu_max_temp'] ?? 75)?>°C"
-                    placeholder="High °C"
-                    <?=($cfg['cpu_enable'] ?? '') != '1' ? 'disabled' : ''?>>
-            </div>
+            <button type="button" class="cpu-input" onclick="openFanCurveEditor(this, 'cpu')" <?=($cfg['cpu_enable'] ?? '') != '1' ? 'disabled' : ''?>>Edit fan curve</button>
+            <span class="fcp-curve-summary" data-source="cpu"></span>
           </td>
         </tr>
 
@@ -410,33 +340,11 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
           </td>
         </tr>
 
-        <!-- Aux Temp Range -->
         <tr class="aux-control aux-control-<?=$i?>">
-          <td class="aux-label fcp-help-cursor" title="Fan runs at minimum speed at or below Low Temp, and maximum speed at or above High Temp. See chart for details.">Range:</td>
+          <td>Curve:</td>
           <td>
-            <div class="fcp-range-grid">
-              <input type="text"
-                    id="aux_low_temp_input_<?=$i?>"
-                    name="aux_min_temp[<?=$i?>]"
-                    class="aux-input fcp-input-fullleft"
-                    inputmode="numeric"
-                    value="<?=htmlspecialchars(($cfg['aux_min_temp'] ?? '') . '°C')?>"
-                    title="Low Temp: <?=intval($cfg['aux_min_temp'] ?? 40)?>°C"
-                    placeholder="Low °C"
-                    <?=($cfg['aux_enable'] ?? '') != '1' ? 'disabled' : ''?>>
-
-              <span class="fcp-center">~</span>
-
-              <input type="text"
-                    id="aux_high_temp_input_<?=$i?>"
-                    name="aux_max_temp[<?=$i?>]"
-                    class="aux-input fcp-input-fullleft"
-                    inputmode="numeric"
-                    value="<?=htmlspecialchars(($cfg['aux_max_temp'] ?? '') . '°C')?>"
-                    title="High Temp: <?=intval($cfg['aux_max_temp'] ?? 70)?>°C"
-                    placeholder="High °C"
-                    <?=($cfg['aux_enable'] ?? '') != '1' ? 'disabled' : ''?>>
-            </div>
+            <button type="button" class="aux-input" onclick="openFanCurveEditor(this, 'aux')" <?=($cfg['aux_enable'] ?? '') != '1' ? 'disabled' : ''?>>Edit fan curve</button>
+            <span class="fcp-curve-summary" data-source="aux"></span>
           </td>
         </tr>
       </table>

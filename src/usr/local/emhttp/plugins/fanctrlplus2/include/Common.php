@@ -18,14 +18,17 @@ function fcp_ui_asset_paths(): array {
         'fonts/style.css',
         'css/sweetalert2.min.css',
         'css/fcp.base.css',
+        'css/curve-editor.css',
         'css/fanctrlplus2-swal2.css',
         'css/fanctrlplus2-swal2-dark.css',
         'js/sweetalert2.min.js',
         'js/chart.min.js',
         'include/Common.php',
         'include/FanBlockRender.php',
+        'include/CurveConfig.php',
         'include/FanctrlLogic.php',
         'include/chart-handler.js',
+        'include/curve-editor.js',
         'include/asset-version.js',
     ];
 }

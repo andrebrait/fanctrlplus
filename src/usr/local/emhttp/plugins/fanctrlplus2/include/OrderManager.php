@@ -11,7 +11,7 @@ class OrderManager {
   private static string $order_file = "/boot/config/plugins/fanctrlplus2/order.cfg";
   private static ?string $order_file_override = null;
 
-  // Test seam: point the manager at another order file.
+  // Points the manager at the order file of one configuration directory; the save endpoint uses it.
   public static function useOrderFile(?string $path): void {
     self::$order_file_override = $path;
   }

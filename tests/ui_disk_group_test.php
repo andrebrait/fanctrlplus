@@ -76,15 +76,6 @@ foreach ([
     $failures[] = "The long row label \"$retired\" must be shortened for narrow screens.";
   }
 }
-foreach ([
-  'Range:' => 3, 'Monitor:' => 2, 'Sensor(s):' => 1,
-  'Disk(s):' => 1, 'Speed Range:' => 1, 'Speed on Idle:' => 1,
-] as $label => $expected) {
-  $actual = preg_match_all('/>\s*' . preg_quote($label, '/') . '\s*<\/td>/s', $render);
-  if ($actual !== $expected) {
-    $failures[] = "Expected $expected occurrences of the label \"$label\" in the fan block, found $actual.";
-  }
-}
 
 // The widget writes an inline pixel width on the open menu, sized to its widest
 // option, which on a phone is wider than the screen and pushes the page
