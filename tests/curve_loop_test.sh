@@ -26,8 +26,24 @@ sleep() {
   [[ "$1" == 4 ]] && return 0
   cat "$FCP_TEST_TMP/pwm1" >> "$FCP_TEST_TMP/output"
   ticks=$((${ticks:-0} + 1))
-  (( ticks == 2 )) && exit 0
-  if [[ "${FCP_TEST_MANUAL:-0}" == 2 ]]; then
+  (( ticks == ${FCP_TEST_TICKS:-2} )) && exit 0
+  if [[ "${FCP_TEST_MANUAL:-0}" == 3 ]]; then
+    if (( ticks == 1 )); then
+      # Runtime storage fills: the loop's next snapshot publication fails.
+      ln -sf /dev/full "${curve_state_file}.tmp.$$"
+    else
+      # A separate Run Now process saves its state with the output pending,
+      # sets the fan to 100, then fails to record that output.
+      FCP_STATE="$curve_state_file" FCP_CTL="$controller" command bash -c '
+        source "$FCP_TEST_ROOT/scripts/curve_control.sh"
+        fcp_curve_begin "$FCP_STATE" || exit 1
+        fcp_curve_output=-1
+        fcp_curve_publish "$FCP_STATE" || exit 1
+        echo 100 > "$FCP_CTL"
+        flock -u "$fcp_curve_state_fd"'
+    fi
+    printf '40000\n' > "$FCP_TEST_TMP/temp1_input"
+  elif [[ "${FCP_TEST_MANUAL:-0}" == 2 ]]; then
     (
       # A Run Now that saved its state with the output pending, set the fan to
       # 100, then could not record that output: the fan is no longer where the
@@ -102,6 +118,9 @@ run_case 40 $'100\n104' 100
 run_case 40 $'100\n100' 100 1
 run_case '' $'100\n103' 255 0 1
 run_case '' $'101\n101' 103 0 0 1
+# Both publications fail: the loop's own (so it merges the next snapshot), and
+# Run Now's after its write. The loop must still put the fan back to emergency.
+FCP_TEST_TICKS=3 run_case 30 $'104\n104\n104' 100 3
 run_case 30 $'104\n104' 100 2
 
 # A source with curve settings but no curve fails hot at 255. That result must
