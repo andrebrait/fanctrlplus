@@ -45,6 +45,12 @@
     return Math.min(cap, pwm);
   }
 
+  function bounds(rule, padding = 5) {
+    const first = rule.points[0][0], last = rule.points.at(-1)[0];
+    const emergency = Number.isFinite(rule.emergency_temp) ? rule.emergency_temp : first;
+    return { min: Math.max(0, Math.min(first, emergency) - padding), max: Math.min(300, Math.max(last, emergency) + padding) };
+  }
+
   function floor(block, value) {
     let minimum = 255;
     for (const [source, rule] of Object.entries(value)) {
@@ -85,7 +91,7 @@
     });
   }
 
-  window.FcpCurves = { validate, evaluate, rules, sync, refresh, inputPwm, floor };
+  window.FcpCurves = { validate, evaluate, rules, sync, refresh, inputPwm, floor, bounds };
   window.openFanCurveEditor = async function (button, selected = 'disk:0') {
     const block = button.closest('.fan-block');
     let draft;
@@ -149,8 +155,7 @@
         });
         function draw() {
           const rule = current(), pts = rule.points;
-          const low = Math.max(0, pts[0][0] - 5);
-          const high = Math.min(300, Math.max(pts.at(-1)[0] + 5, rule.emergency_temp === null ? 0 : rule.emergency_temp + 5));
+          const { min: low, max: high } = bounds(rule);
           chart.options.scales.x.min = low; chart.options.scales.x.max = high;
           const color = getComputedStyle(popup).getPropertyValue('--fan-tick').trim() || getComputedStyle(popup).color;
           for (const axis of Object.values(chart.options.scales)) {

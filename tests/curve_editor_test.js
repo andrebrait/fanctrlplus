@@ -28,6 +28,14 @@ enabled.cpu = '1';
 assert.equal(curves.floor(block, floorRules), 10, 'An enabled CPU rule bounds idle speed.');
 enabled.cpu = '0'; enabled.aux = '1';
 assert.equal(curves.floor(block, floorRules), 15, 'An enabled Aux rule bounds idle speed.');
+const earlyEmergency = { ...rule, points: [[40, 76], [60, 200]], emergency_temp: 30 };
+assert.equal(typeof curves.bounds, 'function', 'The editor and preview need shared emergency-aware temperature bounds.');
+for (const padding of [1, 5]) {
+  const range = curves.bounds(earlyEmergency, padding);
+  assert.ok(range.min < 30 && range.max > 60, 'Show normal output below an early emergency threshold without clipping the last point.');
+}
+assert.equal(curves.bounds({ ...earlyEmergency, emergency_temp: 0 }).min, 0, 'The displayed temperature domain cannot go below zero.');
+assert.equal(curves.bounds({ ...earlyEmergency, emergency_temp: 300 }).max, 300, 'A threshold at the maximum temperature remains visible.');
 for (const bad of [
   { ...rule, points: [[30, 76], [30, 100]] },
   { ...rule, points: [[30, 100], [40, 76]] },

@@ -9,6 +9,9 @@ const FCP_CURVE_MAX_POINTS = 8;
 const FCP_CURVE_MAX_TEMP = 300;
 const FCP_CURVE_MAX_PWM = 255;
 const FCP_CURVE_MAX_HYSTERESIS = 20;
+const FCP_CURVE_MAX_GROUPS = 256;
+// The only configuration directory the running daemon reads (rc.fanctrlplus2 cfg_path).
+const FCP_DAEMON_CONFIG_DIR = '/boot/config/plugins/fanctrlplus2';
 const FCP_CURVE_FIELDS = ['curve', 'curve_mode', 'hysteresis', 'emergency_temp', 'emergency_pwm'];
 
 // The prefix (cpu, aux or disk_group_N) a curve cfg key belongs to, or null for any other key.
@@ -24,7 +27,7 @@ function fcp_curve_has_settings(array $cfg): bool {
 }
 
 function fcp_curve_count(array $cfg): int {
-    return max(0, min(256, (int)($cfg['disk_group_count'] ?? 0)));
+    return max(0, min(FCP_CURVE_MAX_GROUPS, (int)($cfg['disk_group_count'] ?? 0)));
 }
 
 // Every source a fan with $count disk groups has, mapped to its cfg prefix.
@@ -141,7 +144,9 @@ function fcp_curve_stored(array $cfg, string $prefix): ?array {
 
 // Normalize legacy bounds to increasing temperatures; the separate normal cap
 // still applies to the resulting curve.
+// A negative bound is refused instead: clamping it to 0 C would cool less than the old ramp.
 function fcp_curve_legacy_rule(int $low, int $high, int $pwm, int $cap): array {
+    if ($low < 0 || $high < 0) throw new InvalidArgumentException('A legacy temperature below 0 C cannot be converted without cooling less. Set it to 0 C or more.');
     $low = min(max($low, 0), FCP_CURVE_MAX_TEMP - 1);
     $high = min(max($high, $low + 1), FCP_CURVE_MAX_TEMP);
     $pwm = min(max($pwm, 0), FCP_CURVE_MAX_PWM);
@@ -270,4 +275,9 @@ function fcp_curve_verify(array $cfg): void {
     foreach ($expected as $key => $value) {
         if (!array_key_exists($key, $cfg) || $cfg[$key] !== $value) throw new InvalidArgumentException("$key does not match the fan's curves.");
     }
+}
+
+// True only for the directory the daemon runs from. Saves to any other directory must not restart it.
+function fcp_daemon_owns_config(string $cfgpath): bool {
+    return rtrim(realpath($cfgpath) ?: $cfgpath, '/') === FCP_DAEMON_CONFIG_DIR;
 }

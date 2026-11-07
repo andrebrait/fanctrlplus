@@ -93,6 +93,11 @@ $check($degenerate['disk:0']['points'] === [[60, 102], [61, 255]], 'Equal legacy
 $check($degenerate['cpu']['points'] === [[299, 102], [300, 255]], 'Bounds at the top of the temperature range must stay valid.');
 $inverted = fcp_curve_rules(['pwm' => '200', 'max' => '100', 'disk_group_count' => '1', 'disk_group_0_low' => '60', 'disk_group_0_high' => '40']);
 $check($inverted['disk:0']['points'] === [[60, 200], [61, 200]], 'An inverted legacy PWM range becomes flat stored points; the independent normal cap still applies.');
+// A legacy bound below 0 C has no exact two-point form: refuse it rather than clamp it to a cooler ramp.
+$check($rejects(fn() => fcp_curve_rules(['pwm' => '102', 'max' => '255', 'disk_group_count' => '1', 'disk_group_0_low' => '-10', 'disk_group_0_high' => '50'])), 'A negative legacy disk bound must be refused, not clamped to 0 C.');
+$check($rejects(fn() => fcp_curve_rules(['pwm' => '102', 'max' => '255', 'disk_group_count' => '0', 'low' => '-10', 'high' => '50'])), 'A negative legacy single-range bound must be refused, not clamped to 0 C.');
+$check($rejects(fn() => fcp_curve_rules(['pwm' => '102', 'max' => '255', 'disk_group_count' => '0', 'cpu_min_temp' => '-10', 'cpu_max_temp' => '50'])), 'A negative legacy CPU bound must be refused, not clamped to 0 C.');
+$check(fcp_curve_rules(['pwm' => '102', 'max' => '255', 'disk_group_count' => '1', 'disk_group_0_low' => '0', 'disk_group_0_high' => '50'])['disk:0']['points'] === [[0, 102], [50, 255]], 'A legacy lower bound of exactly 0 C must still migrate exactly.');
 
 // 4. Stored settings are all or nothing per source, and must match the fan's groups.
 $full = fcp_curve_fields($contract, 'cpu') + fcp_curve_fields($contract, 'aux') + fcp_curve_fields($contract, 'disk_group_0') + ['disk_group_count' => '1'];
@@ -172,13 +177,14 @@ $cfgDir = "$tmp/cfg";
 mkdir($cfgDir, 0700, true);
 putenv("FCP_CONFIG_DIR=$cfgDir");
 putenv("FCP_CONFIG_LOCK=$tmp/.config.lock");
+$daemonLog = "$tmp/daemon.log";
+file_put_contents("$tmp/rc_stub.sh", "#!/bin/bash\necho \"\$@\" >> " . escapeshellarg($daemonLog) . "\n");
+putenv("FCP_RC_SCRIPT=$tmp/rc_stub.sh");
 $docroot = realpath(__DIR__ . '/../src/usr/local/emhttp');
 file_put_contents("$tmp/harness.php", <<<'PHP'
 <?php
 $_SERVER['DOCUMENT_ROOT'] = $argv[2];
 $_POST = unserialize(file_get_contents($argv[1]));
-require_once $argv[2] . '/plugins/fanctrlplus2/include/OrderManager.php';
-OrderManager::useOrderFile(getenv('FCP_CONFIG_DIR') . '/order.cfg');
 require $argv[2] . '/plugins/fanctrlplus2/include/update.fanctrlplus2.php';
 PHP);
 
@@ -311,6 +317,87 @@ $reply = $save($request([
 $check(($reply['status'] ?? '') === 'error', 'A normal cap above 100% must be refused.');
 $check(file_get_contents("$cfgDir/fanctrlplus2_JBOD.cfg") === $capBefore, 'An invalid cap must not overwrite saved fan settings.');
 file_put_contents("$cfgDir/fanctrlplus2_JBOD.cfg", $capBefore);
+
+// Names are checked in preflight, so a refused save never leaves a managed file changed.
+$fixture = function () use ($cfgDir, $write, $legacyFan) {
+    $write('fanctrlplus2_JBOD.cfg', $legacyFan);
+    $write('fanctrlplus2_Two.cfg', array_replace($legacyFan, ['custom' => 'Two', 'label' => 'Two', 'disk_group_0_name' => 'Group B']));
+    $write('fanctrlplus2_spare.cfg', array_replace($legacyFan, ['custom' => 'Spare', 'label' => 'Spare']));
+    file_put_contents("$cfgDir/order.cfg", "order0=\"fanctrlplus2_JBOD.cfg\"\norder1=\"fanctrlplus2_Two.cfg\"\norder2=\"fanctrlplus2_spare.cfg\"\n");
+};
+$managed = function () use ($cfgDir): array {
+    $files = [];
+    foreach (glob("$cfgDir/*") as $path) $files[basename($path)] = file_get_contents($path);
+    ksort($files);
+    return $files;
+};
+
+// 256 disk groups is the largest fan: it saves, reloads, restores, and writes its order to the selected directory.
+$groups = [];
+$groupCurves = ['cpu' => $contract, 'aux' => $contract];
+for ($g = 0; $g < 256; $g++) {
+    $groups[$g] = ["G$g", ["d$g"], '40', '60'];
+    $groupCurves["disk:$g"] = $contract;
+}
+$fixture();
+$reply = $save($request([['file' => 'fanctrlplus2_JBOD.cfg', 'custom' => 'JBOD', 'curve' => json_encode($groupCurves), 'groups' => $groups]]));
+$check(($reply['status'] ?? '') === 'ok', 'A fan with exactly 256 disk groups must save: ' . json_encode($reply));
+$full = parse_ini_file("$cfgDir/fanctrlplus2_JBOD.cfg");
+$check(($full['disk_group_count'] ?? '') === '256' && ($full['disk_group_255_name'] ?? '') === 'G255' && count(fcp_curve_rules($full)) === 258, 'A 256-group fan must reload every group and its curve.');
+$check(!$rejects(fn() => fcp_validate_config_backup($backupOf($full))), 'A 256-group fan must restore from a backup.');
+$check(file_get_contents("$cfgDir/order.cfg") === "order0=\"fanctrlplus2_JBOD.cfg\"\n", 'The saved order must be written to the selected configuration directory.');
+
+// A 257th group is refused in preflight, so the earlier block in the same save is not written either.
+$groups[256] = ['G256', ['d256'], '40', '60'];
+$groupCurves['disk:256'] = $contract;
+$fixture();
+$before = $managed();
+$reply = $save($request([
+    ['file' => 'fanctrlplus2_Two.cfg', 'custom' => 'Two', 'curve' => $allContract],
+    ['file' => 'fanctrlplus2_JBOD.cfg', 'custom' => 'JBOD', 'curve' => json_encode($groupCurves), 'groups' => $groups],
+]));
+$check(($reply['status'] ?? '') === 'error' && ($reply['block'] ?? null) === 1 && str_contains($reply['message'] ?? '', '256'), 'A fan with 257 disk groups must be refused and name its block: ' . json_encode($reply));
+$check($managed() === $before, 'A refused 257-group save must leave every managed file unchanged.');
+
+// Every name that collides with another fan, or differs from one only in case, is refused before any file changes.
+$collisions = [
+    'a later block takes the name of a saved fan after an earlier curve changed' => [1, [
+        ['file' => 'fanctrlplus2_JBOD.cfg', 'custom' => 'JBOD', 'curve' => json_encode(['cpu' => $contract, 'aux' => $contract, 'disk:0' => $cold])],
+        ['file' => 'fanctrlplus2_Two.cfg', 'custom' => 'Spare', 'curve' => $allContract],
+    ]],
+    'two blocks share one name' => [1, [
+        ['file' => 'fanctrlplus2_JBOD.cfg', 'custom' => 'Dup', 'curve' => $allContract],
+        ['file' => 'fanctrlplus2_Two.cfg', 'custom' => 'Dup', 'curve' => $allContract],
+    ]],
+    'two blocks share one name except for case' => [1, [
+        ['file' => 'fanctrlplus2_JBOD.cfg', 'custom' => 'Dup', 'curve' => $allContract],
+        ['file' => 'fanctrlplus2_Two.cfg', 'custom' => 'dup', 'curve' => $allContract],
+    ]],
+    'a name differs from a saved fan only in case' => [0, [
+        ['file' => 'fanctrlplus2_Two.cfg', 'custom' => 'SPARE', 'curve' => $allContract],
+    ]],
+];
+foreach ($collisions as $label => [$block, $blocks]) {
+    $fixture();
+    $before = $managed();
+    $reply = $save($request($blocks));
+    $check(($reply['status'] ?? '') === 'error' && ($reply['block'] ?? null) === $block, "A save where $label must be refused and name block $block: " . json_encode($reply));
+    $check($managed() === $before, "A save where $label must leave every managed file byte-identical.");
+}
+
+// A case-only rename of the fan's own file is not a collision, and the order follows the renamed file.
+$fixture();
+$reply = $save($request([['file' => 'fanctrlplus2_Two.cfg', 'custom' => 'two', 'curve' => $allContract]]));
+$check(($reply['status'] ?? '') === 'ok' && is_file("$cfgDir/fanctrlplus2_two.cfg") && !is_file("$cfgDir/fanctrlplus2_Two.cfg"), 'Renaming a fan to its own name in another case must succeed.');
+$check(file_get_contents("$cfgDir/order.cfg") === "order0=\"fanctrlplus2_two.cfg\"\n", 'The order must follow a rename within the selected configuration directory.');
+@unlink("$cfgDir/fanctrlplus2_two.cfg");
+$fixture();
+
+// The daemon runs only from the production directory, so no scratch save may stop or restart it.
+$check(fcp_daemon_owns_config('/boot/config/plugins/fanctrlplus2'), 'The production configuration directory must keep restarting the daemon.');
+$check(fcp_daemon_owns_config('/boot/config/plugins/fanctrlplus2/') && !fcp_daemon_owns_config('/boot/config/plugins/fanctrlplus2-old'), 'The daemon directory must match exactly, ignoring a trailing slash.');
+$check(!fcp_daemon_owns_config($cfgDir), 'A scratch configuration directory must never own the daemon.');
+$check(!file_exists($daemonLog), 'Saves to a scratch configuration directory must never stop or restart the daemon.');
 
 // Export and restore carry the curve settings intact.
 $backup = fcp_export_config($cfgDir);

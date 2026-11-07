@@ -66,7 +66,34 @@ hist_file="/var/tmp/${plugin}/history_${plugin}_${custom}"
 # does not flip the attribution of an ongoing PWM tie (see history_pick_source).
 prev_hist_src=$(tail -n 1 "$hist_file" 2>/dev/null | cut -d'|' -f2)
 
+# Whether the last controller write, and the last curve-state snapshot, failed.
+# Each is logged once per stretch, not every round.
+write_failing=0
+publish_failing=0
+
 while true; do
+  # ===== Read every source first, outside the curve-state lock =====
+  # A slow or stalled sensor (a drive that does not answer smartctl, an aux
+  # tool that hangs) must not keep a manual Run from the lock. Each source is
+  # stamped with the time its read began: another run may publish a newer
+  # observation of it while this one waits, and an older sample must not undo
+  # that (see the observation time in curve_control.sh).
+  cpu_sampled=0
+  if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
+    fcp_stamp_now
+    cpu_stamp=$fcp_now
+    cpu_raw=$(cat "$cpu_sensor")
+    cpu_sampled=1
+  fi
+  aux_readings=""
+  if [[ "${aux_enable:-0}" == "1" && -n "$aux_sensor" ]]; then
+    fcp_stamp_now
+    aux_stamp=$fcp_now
+    aux_readings=$(aux_temp_readings "$aux_sensor")
+  fi
+  sample_disk_temps
+
+  # ===== Evaluate the curves and write the controller, under the lock =====
   if ! fcp_curve_begin "$curve_state_file"; then
     logger -p daemon.warning -t fanctrlplus2 "[$custom] Curve state unavailable; continuing fan control with in-memory state."
   fi
@@ -76,17 +103,10 @@ while true; do
   cpu_pwm_val=0
   # Configured sensors that gave no reading this round, for the warning below.
   unread=()
-  if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
-    raw=$(cat "$cpu_sensor")
+  if (( cpu_sampled )); then
     # No carry-over: a round without a usable value must not reuse the last one.
-    cpu_temp=""
-    [[ "$raw" =~ ^-?[0-9]+$ ]] && cpu_temp=$(fcp_clamp_temp $((raw / 1000)))
-    # 0 marks an unpopulated hwmon input, as for the aux sensors.
-    [[ "$raw" =~ ^-?[0-9]+$ && "$raw" -ne 0 && -n "$cpu_temp" ]] || unread+=("$cpu_sensor")
-    cpu_temp=${cpu_temp:-0}
-
-    fcp_curve_pwm cpu "$cpu_temp" "$cpu_min_temp" "$cpu_max_temp"
-    cpu_pwm_val=$curve_pwm
+    fcp_cpu_pwm "$cpu_raw" "$cpu_stamp"
+    (( cpu_usable )) || unread+=("$cpu_sensor")
   else
     cpu_temp="-"
     [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" ]] && unread+=("$cpu_sensor")
@@ -96,7 +116,6 @@ while true; do
   aux_pwm_val=0
   aux_temp="-"
   if [[ "${aux_enable:-0}" == "1" && -n "$aux_sensor" ]]; then
-    aux_readings=$(aux_temp_readings "$aux_sensor")
     aux_max_valid=$(aux_hottest_reading <<< "$aux_readings")
     while IFS= read -r sensor; do
       unread+=("$sensor")
@@ -105,14 +124,13 @@ while true; do
     if [[ -n "$aux_max_valid" ]]; then
       aux_temp=$aux_max_valid
 
-      fcp_curve_pwm aux "$aux_temp" "$aux_min_temp" "$aux_max_temp"
+      fcp_curve_pwm aux "$aux_temp" "$aux_min_temp" "$aux_max_temp" "$aux_stamp"
       aux_pwm_val=$curve_pwm
     fi
   fi
 
   # === Disk-temperature PWM ===
   calculate_disk_pwm
-  write_curve_readings "/var/tmp/fanctrlplus2/curves_${plugin}_${custom}"
 
   # === Use the higher PWM and record its temperature and source ===
   # Candidate "src|temp|pwm" readings for the history attribution.
@@ -154,6 +172,34 @@ while true; do
     temp_origin="(Idle)"
   fi
 
+  # Point curves apply every target; unmigrated ramps keep their write deadband.
+  # An output counts as applied only once the write succeeded: after a failed
+  # one prev_pwm stays put, so the next round, still holding any emergency
+  # latch the snapshot kept, tries again.
+  wrote=0
+  old_pwm=$prev_pwm
+  if [[ "$old_pwm" == -1 ]] || (( pwm_val != old_pwm && (has_custom_curve || pwm_val - old_pwm >= 5 || old_pwm - pwm_val >= 5) )); then
+    if fcp_write_pwm "$pwm_val"; then
+      wrote=1
+      prev_pwm=$pwm_val
+      write_failing=0
+    elif (( ! write_failing )); then
+      write_failing=1
+      logger -p daemon.warning -t fanctrlplus2 "[$custom] Could not write PWM=$pwm_val to $controller; keeping the previous output and trying again."
+    fi
+  fi
+  if (( fcp_curve_shared )); then
+    if fcp_curve_end "$curve_state_file" "$prev_pwm"; then
+      publish_failing=0
+    elif (( ! publish_failing )); then
+      publish_failing=1
+      logger -p daemon.warning -t fanctrlplus2 "[$custom] Curve state could not be saved; keeping it in memory until it can."
+    fi
+  fi
+
+  # ===== The rest of the round, outside the lock =====
+  write_curve_readings "/var/tmp/fanctrlplus2/curves_${plugin}_${custom}"
+
   # Refresh the dashboard cache on every iteration.
   echo "${max_temp} ${temp_origin}" > "/var/tmp/fanctrlplus2/temp_${plugin}_${custom}"
 
@@ -165,10 +211,8 @@ while true; do
   fi
   prev_hist_src="$hist_src"
 
-  # Point curves apply every target; unmigrated ramps keep their write deadband.
-  if [[ "$prev_pwm" == -1 ]]; then
-    [[ -f "$controller_enable" ]] && echo 1 > "$controller_enable"
-    echo "$pwm_val" > "$controller"
+  if (( wrote )); then
+    # Let the fan settle, then read its RPM back.
     sleep 4
     if [[ -n "$fan_path" && -f "$fan_path" ]]; then
       rpm=$(cat "$fan_path")
@@ -176,34 +220,20 @@ while true; do
       rpm="?"
     fi
 
-    # Always perform the initial write.
+    # The first write is always logged; later ones when syslog is on and the
+    # change is at least 5.
     label="[${custom}]"
-    logger -t fanctrlplus2 "$label Temp=${max_temp}°C $temp_origin → PWM=$pwm_val → RPM=$rpm"
-    prev_pwm=$pwm_val
-  else
-    if (( pwm_val != prev_pwm && (has_custom_curve || pwm_val - prev_pwm >= 5 || prev_pwm - pwm_val >= 5) )); then
-      [[ -f "$controller_enable" ]] && echo 1 > "$controller_enable"
-      echo "$pwm_val" > "$controller"
-      sleep 4
-      if [[ -n "$fan_path" && -f "$fan_path" ]]; then
-        rpm=$(cat "$fan_path")
-      else
-        rpm="?"
-      fi
-
-      label="[${custom}]"
-      log_enable="${syslog:-1}"
-      if [[ -z "$log_enable" || "$log_enable" == "1" ]] && (( pwm_val - prev_pwm >= 5 || prev_pwm - pwm_val >= 5 )); then
-        logger -t fanctrlplus2 "$label Temp=${max_temp}°C $temp_origin → PWM=$pwm_val → RPM=$rpm"
-      fi
-
-      prev_pwm=$pwm_val
+    log_enable="${syslog:-1}"
+    if [[ "$old_pwm" == -1 ]] || { [[ -z "$log_enable" || "$log_enable" == "1" ]] && (( pwm_val - old_pwm >= 5 || old_pwm - pwm_val >= 5 )); }; then
+      logger -t fanctrlplus2 "$label Temp=${max_temp}°C $temp_origin → PWM=$pwm_val → RPM=$rpm"
     fi
   fi
-  if (( fcp_curve_shared )); then fcp_curve_end "$curve_state_file" "$prev_pwm"; fi
 
-  # Warn about lost control, a rejected speed, or a fan that stopped.
-  fcp_check_fan "$controller" "$fan_path" "$prev_pwm" "$nct6687_watch" "$fault_dir"
+  # Warn about lost control, a rejected speed, or a fan that stopped. There is
+  # no target to compare against until a write has succeeded.
+  if (( prev_pwm >= 0 )); then
+    fcp_check_fan "$controller" "$fan_path" "$prev_pwm" "$nct6687_watch" "$fault_dir"
+  fi
   fcp_track_faults "$SECONDS" "$custom" "$fault_dir"
 
   # Configured sensors that each stay unread past the grace period: warn once.

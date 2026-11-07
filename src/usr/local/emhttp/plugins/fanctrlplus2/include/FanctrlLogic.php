@@ -26,7 +26,7 @@ $order_file = "$cfg_dir/order.cfg";
 $label_file = "$cfg_dir/pwm_labels.cfg";
 
 require_once "$docroot/plugins/$plugin/include/Common.php";
-require_once "/usr/local/emhttp/plugins/fanctrlplus2/include/OrderManager.php";
+require_once __DIR__.'/OrderManager.php';
 require_once __DIR__.'/ConfigBackup.php';
 
 header('Content-Type: application/json');
@@ -43,9 +43,14 @@ if (in_array($op, ['savelabel','newtemp','delete','setsyslog','setnotify','saveo
   });
 }
 
-if ($op === 'refresh_single' && !empty($_GET['custom'])) {
-  $custom = escapeshellarg($_GET['custom']);
-  shell_exec("/usr/local/emhttp/plugins/fanctrlplus2/scripts/fanctrlplus2_refresh_single.sh $custom > /dev/null 2>&1 &");
+if ($op === 'refresh_single' && is_string($_GET['custom'] ?? null) && $_GET['custom'] !== '') {
+  // Run Now answers with what the run actually did, so a failure shows on the page.
+  require_once __DIR__.'/ManualRun.php';
+  $run = fcp_manual_run($_GET['custom']);
+  if (!$run['ok']) {
+    http_response_code(500);
+    json_response(['status'=>'error','message'=>$run['message'] !== '' ? $run['message'] : 'Manual Run failed.']);
+  }
   exit('OK');
 }
 

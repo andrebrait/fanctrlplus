@@ -234,6 +234,20 @@ function findDatasetForOrigin(datasets, origin) {
   return datasets.find(d => d.label && d.label.includes('Disk:'));
 }
 
+function curvePreviewData(rule, normalCap) {
+  const { min, max } = window.FcpCurves.bounds(rule, 1);
+  const normalRule = { ...rule, emergency_temp: null };
+  const data = [];
+  for (let temp = min; temp <= max; temp++) {
+    // Emergency is a discontinuity even when the normal curve is linear.
+    if (temp === rule.emergency_temp && temp > min) {
+      data.push({ x: temp, y: window.FcpCurves.evaluate(normalRule, temp, normalCap) * 100 / 255 });
+    }
+    data.push({ x: temp, y: window.FcpCurves.evaluate(rule, temp, normalCap) * 100 / 255 });
+  }
+  return data;
+}
+
 window.showFanChart = function (btn) {
   const block = btn.closest('.fan-block');
   if (!block) return;
@@ -285,12 +299,7 @@ window.showFanChart = function (btn) {
   const normalCap = window.FcpCurves.inputPwm(block.querySelector('[name^="max_percent["]'));
   const ruleDataset = (sourceKey, label, color) => {
     const rule = rules[sourceKey];
-    const low = rule.points[0][0];
-    const high = Math.max(rule.points.at(-1)[0], rule.emergency_temp ?? 0);
-    const data = [];
-    for (let temp = Math.max(0, low - 1); temp <= Math.min(300, high + 1); temp++) {
-      data.push({ x: temp, y: window.FcpCurves.evaluate(rule, temp, normalCap) * 100 / 255 });
-    }
+    const data = curvePreviewData(rule, normalCap);
     return { label, sourceKey, data, borderColor: color, backgroundColor: color,
       borderWidth: 2, pointRadius: 0, pointHoverRadius: 0, fill: false, tension: 0,
       stepped: rule.mode === 'stepped' ? 'before' : false };
@@ -514,7 +523,7 @@ window.showFanChart = function (btn) {
           const currentReading = ds
             ? currentReadings.find(reading => reading.source === ds.sourceKey)
             : null;
-          percent = curvePosition?.y ?? pickPercentNearest(ds, temp);
+          percent = Number.isFinite(currentReading?.pwm) ? currentReading.pwm * 100 / 255 : (curvePosition?.y ?? pickPercentNearest(ds, temp));
           if (percent != null) {
             const pwm = currentReading?.pwm ?? Math.round(percent * 2.55);
             html = `Current: ${temp}°C (${origin}) → Fan Speed ${percent.toFixed(0)}% (PWM ${pwm}) → RPM ${rpm}`;

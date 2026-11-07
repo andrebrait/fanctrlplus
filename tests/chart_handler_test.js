@@ -22,6 +22,7 @@ const context = {
       },
 };
 vm.createContext(context);
+vm.runInContext(fs.readFileSync(`${__dirname}/../src/usr/local/emhttp/plugins/fanctrlplus2/include/curve-editor.js`, 'utf8'), context);
 vm.runInContext(source, context);
 
 (async () => {
@@ -112,6 +113,18 @@ vm.runInContext(source, context);
   }
   const held = context.buildCurrentPointDatasets([datasets[0]], [{ source: 'disk:0', temp: 37, pwm: 180 }])[0].data[0];
   if (held.y !== 180 * 100 / 255) failures.push('A live marker must show actual runtime PWM, including hysteresis, rather than a projected ramp value.');
+  const earlyEmergency = { points: [[40, 76], [60, 200]], mode: 'linear', hysteresis: 0, emergency_temp: 30, emergency_pwm: 255 };
+  if (typeof context.curvePreviewData !== 'function') {
+    failures.push('The preview must include normal output below an early emergency threshold.');
+  } else {
+    const preview = { data: context.curvePreviewData(earlyEmergency, 128) };
+    if (preview.data[0].x >= 30 || context.curvePointAtTemperature(preview, 29.5).y !== 76 * 100 / 255
+        || context.curvePointAtTemperature(preview, 30).y !== 100) {
+      failures.push('An early emergency transition must be fully visible and occur at the exact threshold.');
+    }
+    const zero = { data: context.curvePreviewData({ ...earlyEmergency, emergency_temp: 0 }, 128) };
+    if (context.curvePointAtTemperature(zero, 0).y !== 100) failures.push('An emergency threshold at zero must not show a fictitious normal region.');
+  }
 
   const missingTemperatureMarkers = context.buildCurrentPointDatasets(datasets, [
     { source: 'disk:0', temp: 37, pwm: 114 },

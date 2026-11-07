@@ -98,6 +98,16 @@ Emergency cooling depends on usable sensor readings. Existing missing-sensor
 fallbacks and warnings are unchanged: an unavailable source may fall back to Idle
 Speed or a CPU curve’s first point, rather than forcing emergency PWM.
 
+**Run Now** waits for the evaluation to finish and reports a failure (for
+example a controller that refuses the write, or curve state that cannot be
+shared with the fan loop) instead of reporting success. Each SMART read is
+bounded to 10 seconds, and sensors are read before the fan's state lock is
+taken, so a stalled drive cannot block Run Now or the other sources.
+
+A legacy configuration with a temperature range below 0°C cannot be converted
+to a curve without cooling less; the settings page shows a warning for that fan
+until the range is corrected or a valid backup is restored.
+
 ## Custom temperature sensors
 
 Any sensor the plugin does not know about can be added as a readable script with

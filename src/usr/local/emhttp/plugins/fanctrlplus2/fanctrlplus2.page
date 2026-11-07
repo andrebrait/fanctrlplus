@@ -1491,10 +1491,13 @@ $(function() {
     btn.style.pointerEvents = 'none';
 
     fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=refresh_single&custom=${encodeURIComponent(label)}`, {cache: 'no-store'})
-      .then(res => {
-        if (!res.ok) throw new Error("Request failed");
-        return res.text();
-      })
+      .then(res => res.text().then(body => {
+        if (res.ok) return body;
+        // A failed run answers with the reason; anything else is just a failed request.
+        let message = "Request failed";
+        try { message = JSON.parse(body).message || message; } catch (e) {}
+        throw new Error(message);
+      }))
       .then(() => {
         setTimeout(() => {
           if (icon) icon.classList.remove('fa-spin');

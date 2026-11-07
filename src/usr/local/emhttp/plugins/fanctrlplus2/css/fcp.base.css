@@ -383,7 +383,8 @@ dt.containerSettingsDt {
 }
 .fan-fieldset {
   margin: 0;
-  padding: 32px 16px 12px;
+  /* Reserve the fixed bottom tool stack so sensor cells cannot cover it. */
+  padding: 32px 16px 110px;
   border: 1px solid #ccc;
   border-radius: 6px;
   position: relative;

@@ -27,6 +27,9 @@ $docroot = $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
 require_once "$docroot/plugins/$plugin/include/Common.php";
 require_once __DIR__.'/CurveConfig.php';
 require_once __DIR__.'/ConfigBackup.php';
+// Order writes and renames below target the selected configuration directory, never the boot one.
+require_once "$docroot/plugins/$plugin/include/OrderManager.php";
+OrderManager::useOrderFile("$cfgpath/order.cfg");
 
 if (!is_dir($cfgpath)) {
   mkdir($cfgpath, 0777, true);
@@ -66,8 +69,13 @@ $percent_pwm = static function (int $percent, string $key, array $previous): int
   if (is_string($old) && ctype_digit($old) && (int)$old <= 255 && (int)round((int)$old * 100 / 255) === $percent) return (int)$old;
   return (int)round($percent * 255 / 100);
 };
+// Lowercased destination names claimed by earlier blocks in this save; the boot drive ignores case.
+$claimed = [];
+// Two paths name one file when they share an inode: a case-only rename, or the fan's own file.
+$same_file = static fn(string $a, string $b): bool => is_file($a) && is_file($b) && fileinode($a) === fileinode($b) && filedev($a) === filedev($b);
 foreach ($_POST['#file'] as $i => $file) {
-  $old_path = "$cfgpath/".basename($file);
+  $old_file = basename($file);
+  $old_path = "$cfgpath/$old_file";
   $previous = is_file($old_path) ? (@parse_ini_file($old_path) ?: []) : [];
   $custom = trim($_POST['custom'][$i] ?? '');
 
@@ -97,6 +105,7 @@ foreach ($_POST['#file'] as $i => $file) {
   // Disk groups are keyed by their DOM index, possibly non-contiguous (a middle group removed
   // client-side). Each one's curve rule is keyed by that same index.
   $group_names_raw = is_array($_POST['disk_group_name'][$i] ?? null) ? $_POST['disk_group_name'][$i] : [];
+  if (count($group_names_raw) > FCP_CURVE_MAX_GROUPS) $reject('A fan can have at most '.FCP_CURVE_MAX_GROUPS.' disk groups.', $i);
   try {
     $json = is_array($_POST['curve_config'] ?? null) ? ($_POST['curve_config'][$i] ?? null) : null;
     $rules = fcp_curve_post_rules($json, array_keys($group_names_raw));
@@ -126,6 +135,18 @@ foreach ($_POST['#file'] as $i => $file) {
     $reject("Idle Speed must not exceed the normal cap. (Block #".($i+1).")", $i);
   }
 
+  // Preflight owns every name collision, so a refused save never leaves an earlier block written.
+  $expected_file = $plugin.'_'.$custom.'.cfg';
+  if (isset($claimed[strtolower($expected_file)])) $reject("Custom Name \"$custom\" is used by more than one fan.", $i);
+  $claimed[strtolower($expected_file)] = true;
+  foreach (glob("$cfgpath/{$plugin}_*.cfg") as $existing) {
+    // The fan's own file is saved or renamed in place, so it never collides with itself.
+    if (basename($existing) === $old_file || $same_file($existing, $old_path)) continue;
+    if (strtolower(basename($existing)) === strtolower($expected_file)) $reject("Custom Name \"$custom\" would overwrite another saved configuration.", $i);
+    $info = parse_ini_file($existing);
+    if (isset($info['custom']) && strcasecmp(trim($info['custom']), $custom) === 0) $reject("Custom Name \"$custom\" is already used.", $i);
+  }
+
   $plans[$i] = [
     'custom' => $custom,
     'interval_seconds' => $interval_seconds,
@@ -137,7 +158,7 @@ foreach ($_POST['#file'] as $i => $file) {
   ];
 }
 
-// Save every validated block. Only the duplicate-name check can still refuse one here.
+// Save every validated block. Preflight has checked every name, so nothing here can refuse a block.
 foreach ($_POST['#file'] as $i => $file) {
   $plan = $plans[$i];
   $custom = $plan['custom'];
@@ -155,17 +176,6 @@ foreach ($_POST['#file'] as $i => $file) {
     ? (string)($previous['controller_identity'] ?? $previous['controller'] ?? '')
     : (fcp_unique_pwm_identity($controller) ?? $controller);
 
-  // Check whether another configuration uses the same custom name.
-  foreach (glob("$cfgpath/{$plugin}_*.cfg") as $existing) {
-    $info = parse_ini_file($existing);
-    if (isset($info['custom']) && trim($info['custom']) === $custom) {
-      // Ignore the current file when renaming a temporary configuration.
-      if (basename($existing) !== $old_file) {
-        $reject("Custom Name \"$custom\" is already used.");
-      }
-    }
-  }
-
   // Rename the cfg file when Custom Name changes.
   if ($old_file !== $expected_file) {
       if (file_exists($old_path)) {
@@ -178,7 +188,6 @@ foreach ($_POST['#file'] as $i => $file) {
               rename($old_path, $new_path);
           }
       }
-      require_once "$docroot/plugins/$plugin/include/OrderManager.php";
       OrderManager::replaceFileName($old_file, $expected_file);
       $rename_map[$old_file] = $expected_file;
       $old_file = $expected_file;
@@ -191,14 +200,6 @@ foreach ($_POST['#file'] as $i => $file) {
     $rename_map[$old_file] = $new_file;
   } else {
     $new_file = $old_file;
-  }
-
-  // Avoid filename collisions.
-  $basefile = pathinfo($new_file, PATHINFO_FILENAME);
-  $suffix = 1;
-  while (in_array($new_file, $used_files)) {
-    $new_file = $basefile . "_$suffix.cfg";
-    $suffix++;
   }
 
   $used_files[] = $new_file;
@@ -300,7 +301,6 @@ foreach (glob("$cfgpath/{$plugin}_*.cfg") as $cfgfile) {
 }
 
 // === Write order.cfg through OrderManager.php ===
-require_once "$docroot/plugins/fanctrlplus2/include/OrderManager.php";
 
 // The posted order is one list, whose entries may have been renamed in this
 // same save.
@@ -309,12 +309,12 @@ OrderManager::writeOrder(array_values(array_map(
   $_POST['order'] ?? []
 )));
 
-// Restart the fanctrlplus2 daemon.
-$script = "/usr/local/emhttp/plugins/$plugin/scripts/rc.fanctrlplus2";
-if (is_file($script)) {
-  exec("bash $script stop > /dev/null 2>&1");
+// Restart the daemon only from the directory it runs from. FCP_RC_SCRIPT lets tests observe a restart without touching the host.
+$script = getenv('FCP_RC_SCRIPT') ?: "/usr/local/emhttp/plugins/$plugin/scripts/rc.fanctrlplus2";
+if (fcp_daemon_owns_config($cfgpath) && is_file($script)) {
+  exec('bash '.escapeshellarg($script).' stop > /dev/null 2>&1');
   sleep(1);
-  exec("bash $script start > /dev/null 2>&1");
+  exec('bash '.escapeshellarg($script).' start > /dev/null 2>&1');
 }
 
 ob_clean();

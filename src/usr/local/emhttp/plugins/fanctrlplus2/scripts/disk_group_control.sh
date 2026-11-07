@@ -28,6 +28,25 @@ disk_temp_from_smart() {
   fcp_clamp_temp "$temp"
 }
 
+# Seconds one smartctl call may take before it is stopped (and killed two
+# seconds later if it ignores that). A drive that stalls has no reading this
+# round, as a spun-down one has none.
+fcp_smart_timeout="${fcp_smart_timeout:-10}"
+
+# Whole degrees Celsius of one drive, or nothing. One smartctl call does it
+# all: -n standby leaves a sleeping drive asleep (it prints "Device is in
+# STANDBY" instead of the attributes) and on a drive that is awake prints what
+# a plain -A would. The exit status is not looked at: smartctl sets bits for a
+# failing disk or errors in its log while the attributes are still good, and a
+# call stopped by the timeout leaves no temperature to read.
+disk_temp_read() {
+  local real_path="$1" is_nvme=0 output
+  [[ "$real_path" == /dev/nvme* ]] && is_nvme=1
+  output=$(timeout -k 2 "$fcp_smart_timeout" smartctl -n standby -A "$real_path")
+  [[ "$output" == *"Device is in STANDBY"* ]] && return 0
+  disk_temp_from_smart "$output" "$is_nvme"
+}
+
 # Reads smartctl temp for a comma-separated disk-by-id list; echoes the max
 # valid temp found (spun-down/unreadable disks skipped), or nothing if no
 # disk in the list had a valid temp. Shared by the legacy single-range path
@@ -43,13 +62,7 @@ disk_group_max_temp() {
     real_path=$(realpath "$disk_path" 2>/dev/null)
     [[ ! -b "$real_path" ]] && continue
 
-    smartctl -n standby -A "$real_path" | grep -q "Device is in STANDBY" && continue
-
-    if [[ "$real_path" == /dev/nvme* ]]; then
-      temp=$(disk_temp_from_smart "$(smartctl -A "$real_path")" 1)
-    else
-      temp=$(disk_temp_from_smart "$(smartctl -A "$real_path")" 0)
-    fi
+    temp=$(disk_temp_read "$real_path")
 
     if [[ "$temp" =~ ^[0-9]+$ ]]; then
       (( found == 0 || temp > max_valid )) && max_valid=$temp
@@ -59,6 +72,36 @@ disk_group_max_temp() {
   (( found == 1 )) && echo "$max_valid"
 }
 
+# Each disk group's hottest valid temperature (the legacy disk list is group
+# 0), keyed by group index, with nothing for a group that gave no reading, and
+# the time each group's read began (fcp_stamp_now, taken before its drives are
+# read) in fcp_disk_stamps, which the curve state orders the sample by.
+# Slow: it reads the drives. Call it before taking the curve-state lock, then
+# hand the result to calculate_disk_pwm.
+declare -gA fcp_disk_temps=() fcp_disk_stamps=()
+
+sample_disk_temps() {
+  local g dvar g_disks
+  fcp_disk_temps=()
+  fcp_disk_stamps=()
+  if [[ "${disk_group_count:-0}" -gt 0 ]]; then
+    for ((g=0; g<disk_group_count; g++)); do
+      dvar="disk_group_${g}_disks"
+      g_disks="${!dvar:-}"
+      [[ -z "$g_disks" ]] && continue
+      fcp_stamp_now
+      fcp_disk_stamps[$g]=$fcp_now
+      fcp_disk_temps[$g]=$(disk_group_max_temp "$g_disks")
+    done
+  elif [[ -n "${disks:-}" ]]; then
+    fcp_stamp_now
+    fcp_disk_stamps[0]=$fcp_now
+    fcp_disk_temps[0]=$(disk_group_max_temp "$disks")
+  fi
+}
+
+# The disk PWM from the temperatures sample_disk_temps read. Quick, and runs
+# the curve state, so it belongs inside the lock.
 calculate_disk_pwm() {
   disk_pwm_val=0
   disk_max="*"
@@ -82,10 +125,10 @@ calculate_disk_pwm() {
       [[ -z "$g_name" ]] && g_name="Group $((g + 1))"
       g_low="${!lvar:-40}"
       g_high="${!hvar:-60}"
-      g_temp=$(disk_group_max_temp "$g_disks")
+      g_temp="${fcp_disk_temps[$g]:-}"
       [[ -z "$g_temp" ]] && continue
 
-      fcp_curve_pwm "disk_group_${g}" "$g_temp" "$g_low" "$g_high"
+      fcp_curve_pwm "disk_group_${g}" "$g_temp" "$g_low" "$g_high" "${fcp_disk_stamps[$g]:-}"
       g_pwm=$curve_pwm
       disk_curve_readings+=("disk:${g}|${g_temp}|${g_pwm}")
 
@@ -99,12 +142,12 @@ calculate_disk_pwm() {
     done
   elif [[ -n "${disks:-}" ]]; then
     local disk_max_valid
-    disk_max_valid=$(disk_group_max_temp "$disks")
+    disk_max_valid="${fcp_disk_temps[0]:-}"
     if [[ -n "$disk_max_valid" ]]; then
       disk_max=$disk_max_valid
 
       # The legacy range has no curve fields of its own: this is its straight ramp.
-      fcp_curve_pwm disk "$disk_max" "${low:-40}" "${high:-60}"
+      fcp_curve_pwm disk "$disk_max" "${low:-40}" "${high:-60}" "${fcp_disk_stamps[0]:-}"
       disk_pwm_val=$curve_pwm
       disk_curve_readings+=("disk:0|${disk_max}|${disk_pwm_val}")
       disk_group_index=0
@@ -138,6 +181,15 @@ disk_temperature_origin() {
   else
     printf '(Disk)'
   fi
+}
+
+# Puts the fan's controller (the cfg's controller, and its _enable file when
+# there is one) in manual mode and writes the PWM value $1. Succeeds only when
+# the PWM write did, so a caller records an output as applied only then. The
+# mode write stays best effort, as it always was.
+fcp_write_pwm() {
+  [[ -f "$controller_enable" ]] && echo 1 > "$controller_enable"
+  echo "$1" > "$controller"
 }
 
 # ===== Fan-history recording (dashboard history widget) =====
