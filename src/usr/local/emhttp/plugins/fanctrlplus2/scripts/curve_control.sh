@@ -394,7 +394,7 @@ fcp_curve_merge() {
 # A clock rollback makes in-flight observations ambiguous. Rebase the clock but
 # preserve cooling for this round; a freshly sampled next round can release it.
 fcp_curve_load() {
-  local file="$1" key fp eff latch stamp line now merge=$fcp_curve_unpublished
+  local file="$1" key fp eff latch stamp line now merge=$fcp_curve_unpublished seen_output=0
   fcp_stamp_now
   now=$fcp_now
   fcp_curve_clock_reset=0
@@ -409,6 +409,7 @@ fcp_curve_load() {
   [[ -r "$file" ]] || return 0
   while IFS='|' read -r key fp eff latch stamp; do
     if [[ "$key" == @output ]]; then
+      seen_output=1
       if [[ "$fp" =~ ^(0|[1-9][0-9]{0,2})$ && -z "$eff$latch$stamp" ]] && (( fp <= 255 )); then
         (( merge )) && [[ "$fp" == "$fcp_curve_synced_output" ]] || fcp_curve_output=$fp
         fcp_curve_synced_output=$fp
@@ -431,6 +432,9 @@ fcp_curve_load() {
     fi
     fcp_curve_synced[$key]=$line
   done < "$file"
+  # A snapshot without a recorded output means a run left it unknown (pending):
+  # even while merging, this process must not trust its own older output.
+  (( merge && ! seen_output )) && { fcp_curve_output=-1; fcp_curve_synced_output=""; }
   return 0
 }
 

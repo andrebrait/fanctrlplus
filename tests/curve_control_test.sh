@@ -988,6 +988,29 @@ else
 fi
 rm -rf "$state_dir"
 
+# ===== A merge sees an output another run left unknown =====
+# This process applied 255 but could not publish it. A Run Now then saved its
+# state with the output pending, set the fan, and could not record the result.
+# The merge must not keep this process's 255: the fan may be elsewhere.
+state_dir=$(mktemp -d)
+state="$state_dir/state"
+forget_state
+fcp_curve_output=255
+fcp_curve_synced_output=255
+fcp_curve_unpublished=1
+printf 'cpu|x|60|1|1\n' > "$state"
+fcp_curve_begin "$state"
+expect_equal -1 "$fcp_curve_output" "A merged snapshot with no recorded output leaves the output unknown."
+fcp_curve_end "$state" -1
+fcp_curve_unpublished=1
+printf '@output|255||\ncpu|x|60|1|1\n' > "$state"
+fcp_curve_output=255
+fcp_curve_synced_output=255
+fcp_curve_begin "$state"
+expect_equal 255 "$fcp_curve_output" "An unchanged recorded output is kept through a merge."
+fcp_curve_end "$state" 255
+rm -rf "$state_dir"
+
 if (( failures > 0 )); then
   exit 1
 fi
