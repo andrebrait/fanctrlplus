@@ -17,7 +17,7 @@
 </div>
 
 **FanCtrl Plus 2** is an Unraid plugin that provides automatic fan control based on the temperatures of HDDs, NVMe drives, Unassigned Devices, and optionally the CPU.
-Each fan configuration can monitor specific drives or the CPU, define a temperature range, and scale fan speed automatically using a linear control algorithm.  
+Each fan configuration can monitor specific drives, the CPU, or auxiliary sensors and control its speed with an editable multi-point curve.
 Configuration is done through a user-friendly interface, with custom thresholds, intervals, and labels available per fan.
 
 ## ✨ Features
@@ -30,8 +30,9 @@ Configuration is done through a user-friendly interface, with custom thresholds,
 - Monitor temps from array disks, NVMe, unassigned devices, and optionally the CPU
 - Monitor auxiliary hwmon, storcli, NVIDIA GPU, and Mellanox NIC (`mget_temp`) temperature sensors, or any sensor of your own through a custom script
 - Sends Unraid notifications when a fan has a problem, while fan control keeps running. A fan gets one warning when, for at least 30 seconds, its PWM controller disappears, the BIOS or another program takes it over, the controller reports a speed 10 or more points away from the one set, or the fan reports 0 RPM while set above 40% after spinning earlier. A fan whose controller is missing when fan control starts also gets one warning. A notice follows once the problem has stayed away for 30 seconds. A configured CPU or auxiliary sensor without a reading for at least 60 seconds also gets one warning per fan per boot, since the fan cannot react to it and, if nothing else reads, stays at its Idle or Min Speed. Alerts are on by default and can be turned off per fan under Syslog & Alerts, for example for a controller with only a few speed steps that never reads back the exact speed set
-- Use independent temperature ranges for multiple disk groups on one fan
-- Uses a linear control algorithm to smoothly adjust fan speed (PWM) based on the current temperature (disk or CPU) between your defined low/high values
+- Give each disk group, CPU rule, and auxiliary rule its own 2–8 point fan curve with linear or stepped control
+- Keep absolute point speeds when changing the normal output cap; optionally override that cap at an emergency temperature
+- Configure cooling hysteresis to avoid repeated speed changes near temperature boundaries
 - Identify and label PWM controllers to match physical fans easily
 - Lays the fan configurations out side by side, wrapping to the next row, so a wide screen shows several at once and a phone shows one
 - Dashboard tile and system integration
@@ -57,6 +58,45 @@ FanCtrl Plus because both may control the same PWM devices. To migrate:
 3. Install FanCtrl Plus 2 again using the URL above.
 
 Do not reinstall or run upstream FanCtrl Plus while FanCtrl Plus 2 is installed.
+
+## Fan curves
+
+Select **Edit fan curve** beside a temperature rule to open the dedicated editor.
+Add or move points on the chart, or enter exact temperatures and PWM percentages
+in the point table. Temperatures must strictly increase; speeds may rise or stay
+flat, never decrease. Curves contain 2–8 points, with temperatures from 0–300°C.
+
+**Linear** mode interpolates between adjacent points. **Stepped** mode holds the
+previous speed until the next point’s temperature is reached. Below the first
+point and above the last point, speed stays at the respective endpoint.
+
+**Normal Cap** limits output without changing the stored curve. Each rule can
+also have an emergency temperature and speed that bypass the cap. The emergency
+speed must be at least the last curve point’s speed.
+
+**Cooling hysteresis** accepts 0–20°C. Speed increases follow a hotter reading
+immediately on the next sensor check; decreases follow a cooling deadband.
+Emergency mode releases at its threshold minus hysteresis, or strictly below
+the threshold when hysteresis is zero. A release temperature below 0°C cannot
+be reached by the plugin’s temperature readings.
+
+**Use changes** returns the draft to the fan configuration; **Cancel** discards
+it. **Apply All** saves it and updates fan control. Idle speed must not exceed
+the normal cap or the first point of a disk curve or enabled CPU/Aux rule.
+Existing valid configurations retain their original two-point linear behavior,
+with hysteresis and emergency override disabled; reading the settings page does
+not rewrite them. Backups include curve points and settings.
+
+Saving point curves applies every target change, including changes smaller than
+five PWM units. Unsaved legacy configurations retain their original five-unit
+write deadband. Use cooling hysteresis to suppress temperature-boundary jitter.
+
+Emergency control is software polling, not independent thermal protection.
+It cannot react between configured sensor checks or replace hardware/firmware
+protection. Check physical fan response and safe minimum speeds on your hardware.
+Emergency cooling depends on usable sensor readings. Existing missing-sensor
+fallbacks and warnings are unchanged: an unavailable source may fall back to Idle
+Speed or a CPU curve’s first point, rather than forcing emergency PWM.
 
 ## Custom temperature sensors
 

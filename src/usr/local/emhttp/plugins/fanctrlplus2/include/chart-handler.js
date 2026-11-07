@@ -70,8 +70,16 @@ function curvePointAtTemperature(curve, measuredTemp) {
   const low = points.reduce((current, point) => point.x < current.x ? point : current);
   const high = points.reduce((current, point) => point.x > current.x ? point : current);
   const x = Math.min(Math.max(measuredTemp, low.x), high.x);
-  const ratio = high.x === low.x ? 0 : (x - low.x) / (high.x - low.x);
-  const y = low.y + (high.y - low.y) * ratio;
+  const sorted = [...points].sort((a, b) => a.x - b.x);
+  let y = sorted[0].y;
+  for (let i = 1; i < sorted.length; i++) {
+    if (x < sorted[i].x) {
+      const a = sorted[i - 1], b = sorted[i];
+      y = curve.stepped ? a.y : a.y + (x - a.x) / (b.x - a.x) * (b.y - a.y);
+      break;
+    }
+    y = sorted[i].y;
+  }
 
   return {
     x,
@@ -101,7 +109,7 @@ function buildCurrentPointDatasets(curveDatasets, readings) {
       sourceKey: curve.sourceKey,
       data: [{
         x: position.x,
-        y: position.y,
+        y: Number.isFinite(reading?.pwm) ? reading.pwm * 100 / 255 : position.y,
         pwm: temperatureUnavailable || !Number.isFinite(reading.pwm)
           ? Math.round(position.y * 2.55)
           : reading.pwm,
@@ -244,33 +252,23 @@ window.showFanChart = function (btn) {
 
   const custom = block.querySelector('.custom-name-input')?.value || 'Unknown';
   const name = getSelectVal('[name^="custom["]') || '(Unnamed)';
-  const pwmMin = getNum('[name^="pwm_percent["]');
   const pwmMax = getNum('[name^="max_percent["]');
 
-  // Each disk group gets its own Temp -> PWM curve (own Low/High range, driven
-  // by that group's own hottest selected disk -- see fanctrlplus2_loop.sh).
+  // Each group's hottest selected disk drives its independent curve.
   const diskGroupPalette = ['#4285f4', '#8e44ad', '#16a085', '#e67e22', '#c0392b', '#2c3e50'];
   const diskGroups = [...block.querySelectorAll('.disk-group-row')].map((row, idx) => {
     const selectEl = row.querySelector('.disk-select');
     const groupIndex = Number(row.dataset.group);
-    const lowStr = (row.querySelector('.low-temp-input')?.value ?? '').replace(/[^\d.]/g, '');
-    const highStr = (row.querySelector('.high-temp-input')?.value ?? '').replace(/[^\d.]/g, '');
     return {
       name: row.querySelector('.disk-group-name-input')?.value || `Group ${idx + 1}`,
       sourceKey: `disk:${Number.isInteger(groupIndex) ? groupIndex : idx}`,
       selected: !!(selectEl && [...selectEl.selectedOptions].some(opt => opt.value)),
-      low: lowStr ? parseFloat(lowStr) : null,
-      high: highStr ? parseFloat(highStr) : null,
       color: diskGroupPalette[idx % diskGroupPalette.length],
     };
   });
 
   const cpuEnabled = getSelectVal('[name^="cpu_enable["]') === '1';
-  const cpuLow = getNum('[name^="cpu_min_temp["]');
-  const cpuHigh = getNum('[name^="cpu_max_temp["]');
   const auxEnabled = getSelectVal('[name^="aux_enable["]') === '1';
-  const auxLow = getNum('[name^="aux_min_temp["]');
-  const auxHigh = getNum('[name^="aux_max_temp["]');
   const previewReadings = selectedSensorReadings(
     cpuEnabled,
     block.querySelector('[name^="cpu_sensor["]')?.selectedOptions?.[0],
@@ -278,76 +276,33 @@ window.showFanChart = function (btn) {
     block.querySelector('[name^="aux_sensor["]')?.selectedOptions
   );
 
-  if ([pwmMin, pwmMax].some(v => v === null)) {
-    Swal.fire('⚠️ Missing input', 'Please fill in the Fan Speed Range (Min/Max %).', 'warning');
+  if (pwmMax === null) {
+    Swal.fire('Missing input', 'Please fill in the normal speed cap.', 'warning');
     return;
   }
 
-  // Interpolate curve data points.
-  const makeLinePoints = (x1, y1, x2, y2, segments = x2 - x1) => {
-  const data = [];
-  for (let i = 0; i <= segments; i++) {
-      const ratio = i / segments;
-      const x = x1 + (x2 - x1) * ratio;
-      const y = y1 + (y2 - y1) * ratio;
-      data.push({ x, y });
-  }
-  return data;
+  const rules = window.FcpCurves.rules(block);
+  const normalCap = window.FcpCurves.inputPwm(block.querySelector('[name^="max_percent["]'));
+  const ruleDataset = (sourceKey, label, color) => {
+    const rule = rules[sourceKey];
+    const low = rule.points[0][0];
+    const high = Math.max(rule.points.at(-1)[0], rule.emergency_temp ?? 0);
+    const data = [];
+    for (let temp = Math.max(0, low - 1); temp <= Math.min(300, high + 1); temp++) {
+      data.push({ x: temp, y: window.FcpCurves.evaluate(rule, temp, normalCap) * 100 / 255 });
+    }
+    return { label, sourceKey, data, borderColor: color, backgroundColor: color,
+      borderWidth: 2, pointRadius: 0, pointHoverRadius: 0, fill: false, tension: 0,
+      stepped: rule.mode === 'stepped' ? 'before' : false };
   };
 
   const datasets = [];
 
   diskGroups.forEach(g => {
-    if (!g.selected || g.low === null || g.high === null || g.low >= g.high) return;
-    const points = makeLinePoints(g.low, pwmMin, g.high, pwmMax);
-    const ds = {
-      label: `Disk: ${g.name.replace(/\)/g, ']')} Temp → PWM (%)`,
-      sourceKey: g.sourceKey,
-      data: points,
-      borderColor: g.color,
-      backgroundColor: g.color + '1a',
-      borderWidth: 2,
-      pointRadius: 0,
-      pointHoverRadius: 0,
-      fill: false,
-      tension: 0.4,
-    };
-    datasets.push(ds);
+    if (g.selected) datasets.push(ruleDataset(g.sourceKey, `Disk: ${g.name.replace(/\)/g, ']')} Temp → PWM (%)`, g.color));
   });
-
-  if (cpuEnabled && cpuLow !== null && cpuHigh !== null) {
-    const cpuPoints = makeLinePoints(cpuLow, pwmMin, cpuHigh, pwmMax);
-
-    datasets.push({
-    label: 'CPU Temp → PWM (%)',
-    sourceKey: 'cpu',
-    data: cpuPoints,
-    borderColor: '#db4437',
-    backgroundColor: 'rgba(219,68,55,0.1)',
-    borderWidth: 2,
-    pointRadius: 0,
-    pointHoverRadius: 0,
-    fill: false,
-    tension: 0.4
-    });
-  }
-
-  if (auxEnabled && auxLow !== null && auxHigh !== null) {
-    const auxPoints = makeLinePoints(auxLow, pwmMin, auxHigh, pwmMax);
-
-    datasets.push({
-    label: 'Aux Temp → PWM (%)',
-    sourceKey: 'aux',
-    data: auxPoints,
-    borderColor: '#0f9d58',
-    backgroundColor: 'rgba(15,157,88,0.1)',
-    borderWidth: 2,
-    pointRadius: 0,
-    pointHoverRadius: 0,
-    fill: false,
-    tension: 0.4
-    });
-  }
+  if (cpuEnabled) datasets.push(ruleDataset('cpu', 'CPU Temp → PWM (%)', '#db4437'));
+  if (auxEnabled) datasets.push(ruleDataset('aux', 'Aux Temp → PWM (%)', '#0f9d58'));
 
   Swal.fire({
     title: `📈 ${name}`,

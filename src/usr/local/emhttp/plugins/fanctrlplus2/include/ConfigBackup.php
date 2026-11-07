@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/CurveConfig.php';
 // Configuration files are sourced by Bash. A restore is data, never shell code.
 const FCP_BACKUP_MAX_BYTES = 2097152;
 const FCP_BACKUP_MAX_FILES = 256;
@@ -107,6 +108,8 @@ function fcp_validate_fan_config(string $text): array {
         if ($group && (strlen($m[1]) > 3 || (int)$m[1] > 255)) throw new InvalidArgumentException('Too many disk groups.');
         if (in_array($key, $boolean, true)) {
             if ($value !== '0' && $value !== '1') throw new InvalidArgumentException('Invalid configuration switch.');
+        } elseif (fcp_curve_prefix($key) !== null) {
+            continue; // Curve settings are checked as a set once every key is known.
         } elseif (in_array($key, $numeric, true) || ($group && in_array($m[2], ['low','high'], true))) {
             if ($value === '' && in_array($key, ['cpu_min_temp','cpu_max_temp','aux_min_temp','aux_max_temp'], true)) continue;
             if (!preg_match('/^(?:0|-?[1-9]\d{0,8})$/D', $value)) throw new InvalidArgumentException('Invalid numeric configuration value.');
@@ -136,6 +139,7 @@ function fcp_validate_fan_config(string $text): array {
         }
     }
     if (!isset($values['custom']) || !preg_match('/^[A-Za-z0-9_-]+$/D', $values['custom'])) throw new InvalidArgumentException('A saved fan must have a valid name.');
+    fcp_curve_verify($values);
     return $values;
 }
 

@@ -240,7 +240,7 @@ switch ($op) {
     $fan_index = intval($_REQUEST['fan_index'] ?? 0);
     $group_index = intval($_REQUEST['group_index'] ?? 0);
     $disks = list_valid_disks_by_id();
-    $empty_group = ['name' => '', 'disks' => [], 'low' => 40, 'high' => 60];
+    $empty_group = ['name' => '', 'disks' => []];
 
     header('Content-Type: text/html; charset=utf-8');
     echo render_disk_group_row($fan_index, $group_index, $empty_group, $disks);

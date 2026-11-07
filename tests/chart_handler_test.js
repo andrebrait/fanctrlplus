@@ -103,6 +103,16 @@ vm.runInContext(source, context);
     failures.push(`The in-range point was not interpolated onto its curve: ${JSON.stringify(inRangePoint)}`);
   }
 
+  const shaped = { data: [{ x: 30, y: 30 }, { x: 40, y: 35 }, { x: 50, y: 100 }] };
+  const shapedPoint = context.curvePointAtTemperature(shaped, 35);
+  if (shapedPoint.y !== 32.5) failures.push('A multi-point preview must interpolate adjacent points, not its overall endpoints.');
+  shaped.stepped = 'before';
+  if (context.curvePointAtTemperature(shaped, 39).y !== 30 || context.curvePointAtTemperature(shaped, 40).y !== 35) {
+    failures.push('A stepped preview must hold the previous speed until the exact next boundary.');
+  }
+  const held = context.buildCurrentPointDatasets([datasets[0]], [{ source: 'disk:0', temp: 37, pwm: 180 }])[0].data[0];
+  if (held.y !== 180 * 100 / 255) failures.push('A live marker must show actual runtime PWM, including hysteresis, rather than a projected ramp value.');
+
   const missingTemperatureMarkers = context.buildCurrentPointDatasets(datasets, [
     { source: 'disk:0', temp: 37, pwm: 114 },
   ]);
@@ -175,18 +185,6 @@ vm.runInContext(source, context);
     failures.push(`Measured temperatures must not expand the configured curve bounds: ${JSON.stringify(bounds)}`);
   }
 
-  if ((source.match(/pointRadius:\s*0/g) || []).length !== 3 || source.includes('makePointRadiusArray')) {
-    failures.push('Curve lines must not render decorative data-point markers.');
-  }
-  if (source.includes('pointBorderColor') || source.includes('pointBorderWidth')) {
-    failures.push('Live markers must use solid source colors without a contrasting border.');
-  }
-  if (source.includes("className = 'chart-dot'")) {
-    failures.push('The redundant crosshair dot must not be rendered.');
-  }
-  if (source.includes('activeSources') || source.includes('footerNote')) {
-    failures.push('The graph must not render a redundant active-source footer.');
-  }
 
   if (failures.length) {
     console.error(failures.join('\n'));

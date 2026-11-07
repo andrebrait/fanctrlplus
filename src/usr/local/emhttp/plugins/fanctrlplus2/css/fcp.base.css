@@ -114,22 +114,6 @@
   box-sizing: border-box;
 }
 
-/* Range row: lower input, separator, upper input. */
-.fcp-range-grid {
-  display: grid;
-  grid-template-columns: 130px 40px 130px;
-  align-items: center;
-}
-
-/* Full-width, left-aligned input. */
-#fan-form .fcp-input-fullleft {
-  width: 100%;
-  text-align: left;
-}
-
-/* Center the range separator. */
-.fcp-center { text-align: center; }
-
 /* A value under the field's floor while typing; it is raised on blur. */
 #fan-form input.fcp-below-min {
   outline: 2px solid #e6a23c;
@@ -755,16 +739,6 @@ dt.containerSettingsDt {
     overflow-x: auto;
   }
 
-  /* Let disk and CPU temperature range inputs share available space. */
-  .fcp-range-grid {
-    grid-template-columns: 1fr auto 1fr !important; /* Lower input, separator, upper input. */
-    gap: 4px !important;
-  }
-  .fcp-range-grid input[type="text"] {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
 }
 
 @media (max-width: 768px) {

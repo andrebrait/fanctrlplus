@@ -8,10 +8,14 @@ cfg_file="$cfg_path/${plugin}_$custom.cfg"
 source "$cfg_file"
 max="${max:-255}"
 controller_enable="${controller}_enable"
+curve_state_file="/var/tmp/${plugin}/curve_state_${plugin}_${custom}"
 
 source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/aux_sensors.sh"
 
 source "/usr/local/emhttp/plugins/fanctrlplus2/scripts/disk_group_control.sh"
+
+mkdir -p "/var/tmp/${plugin}"
+fcp_curve_begin "$curve_state_file" || exit 1
 
 # === CPU temperature ===
 cpu_pwm_val=0
@@ -20,15 +24,8 @@ if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
   [[ "$raw" =~ ^-?[0-9]+$ ]] && cpu_temp=$(fcp_clamp_temp $((raw / 1000)))
   cpu_temp=${cpu_temp:-0}
 
-  if (( cpu_temp <= cpu_min_temp )); then
-    cpu_pwm_val=$pwm
-  elif (( cpu_temp >= cpu_max_temp )); then
-    cpu_pwm_val=$max
-  else
-    delta=$((cpu_temp - cpu_min_temp))
-    range=$((cpu_max_temp - cpu_min_temp))
-    cpu_pwm_val=$((pwm + delta * (max - pwm) / range))
-  fi
+  fcp_curve_pwm cpu "$cpu_temp" "$cpu_min_temp" "$cpu_max_temp"
+  cpu_pwm_val=$curve_pwm
 else
   cpu_temp="-"
 fi
@@ -42,15 +39,8 @@ if [[ "${aux_enable:-0}" == "1" && -n "$aux_sensor" ]]; then
   if [[ -n "$aux_max_valid" ]]; then
     aux_temp=$aux_max_valid
 
-    if (( aux_temp <= aux_min_temp )); then
-      aux_pwm_val=$pwm
-    elif (( aux_temp >= aux_max_temp )); then
-      aux_pwm_val=$max
-    else
-      delta=$((aux_temp - aux_min_temp))
-      range=$((aux_max_temp - aux_min_temp))
-      aux_pwm_val=$((pwm + delta * (max - pwm) / range))
-    fi
+    fcp_curve_pwm aux "$aux_temp" "$aux_min_temp" "$aux_max_temp"
+    aux_pwm_val=$curve_pwm
   fi
 fi
 
@@ -84,6 +74,7 @@ fi
 # Force the PWM value.
 [[ -f "$controller_enable" ]] && echo 1 > "$controller_enable"
 echo "$pwm_val" > "$controller"
+fcp_curve_end "$curve_state_file" "$pwm_val"
 sleep 4
 
 # Read the RPM value.

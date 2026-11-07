@@ -4,6 +4,10 @@
 
 # Sourced alongside aux_sensors.sh, whose fcp_clamp_temp is used below.
 
+# Curve evaluation for every source. Loaded beside this file, so the loop,
+# the manual run and the tests reach it the same way.
+source "$(dirname "${BASH_SOURCE[0]}")/curve_control.sh"
+
 # Whole degrees Celsius from one drive's smartctl -A output, or nothing when
 # the output carries no temperature. Shared by the fan-control loop and the
 # manual run; the reading is clamped like every other source.
@@ -64,7 +68,7 @@ calculate_disk_pwm() {
 
   if [[ "${disk_group_count:-0}" -gt 0 ]]; then
     local g dvar nvar lvar hvar g_disks g_name g_low g_high
-    local g_temp g_pwm g_delta g_range
+    local g_temp g_pwm
     local disk_group_hit=0
 
     for ((g=0; g<disk_group_count; g++)); do
@@ -81,15 +85,8 @@ calculate_disk_pwm() {
       g_temp=$(disk_group_max_temp "$g_disks")
       [[ -z "$g_temp" ]] && continue
 
-      if (( g_temp <= g_low )); then
-        g_pwm=$pwm
-      elif (( g_temp >= g_high )); then
-        g_pwm=$max
-      else
-        g_delta=$((g_temp - g_low))
-        g_range=$((g_high - g_low))
-        g_pwm=$((pwm + g_delta * (max - pwm) / g_range))
-      fi
+      fcp_curve_pwm "disk_group_${g}" "$g_temp" "$g_low" "$g_high"
+      g_pwm=$curve_pwm
       disk_curve_readings+=("disk:${g}|${g_temp}|${g_pwm}")
 
       if (( disk_group_hit == 0 || g_pwm > disk_pwm_val )); then
@@ -101,20 +98,14 @@ calculate_disk_pwm() {
       fi
     done
   elif [[ -n "${disks:-}" ]]; then
-    local disk_max_valid delta range
+    local disk_max_valid
     disk_max_valid=$(disk_group_max_temp "$disks")
     if [[ -n "$disk_max_valid" ]]; then
       disk_max=$disk_max_valid
 
-      if (( disk_max <= ${low:-40} )); then
-        disk_pwm_val=$pwm
-      elif (( disk_max >= ${high:-60} )); then
-        disk_pwm_val=$max
-      else
-        delta=$((disk_max - low))
-        range=$((high - low))
-        disk_pwm_val=$((pwm + delta * (max - pwm) / range))
-      fi
+      # The legacy range has no curve fields of its own: this is its straight ramp.
+      fcp_curve_pwm disk "$disk_max" "${low:-40}" "${high:-60}"
+      disk_pwm_val=$curve_pwm
       disk_curve_readings+=("disk:0|${disk_max}|${disk_pwm_val}")
       disk_group_index=0
     fi
