@@ -27,7 +27,19 @@ sleep() {
   cat "$FCP_TEST_TMP/pwm1" >> "$FCP_TEST_TMP/output"
   ticks=$((${ticks:-0} + 1))
   (( ticks == 2 )) && exit 0
-  if [[ "${FCP_TEST_MANUAL:-0}" == 1 ]]; then
+  if [[ "${FCP_TEST_MANUAL:-0}" == 2 ]]; then
+    (
+      # A Run Now that saved its state with the output pending, set the fan to
+      # 100, then could not record that output: the fan is no longer where the
+      # loop last put it.
+      builtin source "$FCP_TEST_ROOT/scripts/curve_control.sh"
+      fcp_curve_begin "$curve_state_file"
+      fcp_curve_output=-1
+      fcp_curve_publish "$curve_state_file"
+      echo 100 > "$controller"
+      flock -u "$fcp_curve_state_fd"
+    )
+  elif [[ "${FCP_TEST_MANUAL:-0}" == 1 ]]; then
     (
       # A separate controller writer observes a transient hot reading.
       builtin source "$FCP_TEST_ROOT/scripts/curve_control.sh"
@@ -90,6 +102,7 @@ run_case 40 $'100\n104' 100
 run_case 40 $'100\n100' 100 1
 run_case '' $'100\n103' 255 0 1
 run_case '' $'101\n101' 103 0 0 1
+run_case 30 $'104\n104' 100 2
 
 # A source with curve settings but no curve fails hot at 255. That result must
 # reach the fan even from 253, inside the legacy five-PWM write deadband.

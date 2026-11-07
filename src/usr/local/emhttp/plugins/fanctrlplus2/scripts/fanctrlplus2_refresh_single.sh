@@ -104,15 +104,18 @@ fi
 
 # Save the curve state, emergency latch included, before touching the fan. A run
 # that cannot save it must not set the fan: its latch would die with this
-# process, and the loop would carry on from the older, unlatched snapshot.
+# process, and the loop would carry on from the older, unlatched snapshot. The
+# output is saved as unknown (pending), so if recording the applied output fails
+# later the loop writes its own target instead of trusting a stale one.
+fcp_curve_output=-1
 if ! fcp_curve_publish "$curve_state_file"; then
   flock -u "$fcp_curve_state_fd"
   fail "The fan's curve state could not be saved in /var/tmp/${plugin}, so this run did not set the fan. The fan loop keeps control."
 fi
 
 # Force the PWM value. The output is recorded as applied only once the write
-# succeeded; after a failed one the snapshot keeps the previous output (or none)
-# and still carries any emergency latch, so the fan loop tries again.
+# succeeded; after a failed one it stays unknown, the snapshot still carries any
+# emergency latch, and the fan loop writes again.
 if fcp_write_pwm "$pwm_val"; then
   applied=$pwm_val
   write_failed=0

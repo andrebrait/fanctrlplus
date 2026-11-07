@@ -162,7 +162,7 @@ rm -f "$tmp/pwm1"; mkdir "$tmp/pwm1"
 run_manual 40000
 expect_equal 1 "$rc" "A controller write that fails fails the run."
 expect_equal yes "$(said 'Could not write PWM=104')" "The failure names the write that failed."
-expect_equal "@output|100||" "$(grep '^@output' "$state")" "The previous applied output stays on record after a failed write."
+expect_equal "" "$(grep '^@output' "$state")" "After a failed write the output is unknown, so the loop writes its own target."
 expect_equal 1 "$(grep '^cpu|' "$state" | cut -d'|' -f4)" "The emergency latch is published, so the loop retries it."
 rmdir "$tmp/pwm1"; printf '100\n' > "$tmp/pwm1"
 run_manual 40000

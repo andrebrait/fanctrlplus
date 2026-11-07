@@ -98,8 +98,9 @@ while true; do
   if ! fcp_curve_begin "$curve_state_file"; then
     logger -p daemon.warning -t fanctrlplus2 "[$custom] Curve state unavailable; continuing fan control with in-memory state."
   fi
-  # A manual run may have changed the applied PWM since the previous tick.
-  if (( fcp_curve_shared )) && [[ "$prev_pwm" != -1 ]] && (( fcp_curve_output >= 0 )); then prev_pwm=$fcp_curve_output; fi
+  # A manual run may have changed the applied PWM since the previous tick. An
+  # unknown output (-1: a run left it pending) makes this round write its target.
+  if (( fcp_curve_shared )) && [[ "$prev_pwm" != -1 ]]; then prev_pwm=$fcp_curve_output; fi
   # === CPU temperature ===
   cpu_pwm_val=0
   # Configured sensors that gave no reading this round, for the warning below.
