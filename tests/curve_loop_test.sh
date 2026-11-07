@@ -32,15 +32,16 @@ sleep() {
       # Runtime storage fills: the loop's next snapshot publication fails.
       ln -sf /dev/full "${curve_state_file}.tmp.$$"
     else
-      # A separate Run Now process saves its state with the output pending,
-      # sets the fan to 100, then fails to record that output.
-      FCP_STATE="$curve_state_file" FCP_CTL="$controller" command bash -c '
-        source "$FCP_TEST_ROOT/scripts/curve_control.sh"
-        fcp_curve_begin "$FCP_STATE" || exit 1
-        fcp_curve_output=-1
-        fcp_curve_publish "$FCP_STATE" || exit 1
-        echo 100 > "$FCP_CTL"
-        flock -u "$fcp_curve_state_fd"'
+      # The real Run Now, reading a cool 25 °C that releases the latch: it sets
+      # the fan to 100, then its post-write snapshot publication fails.
+      mkdir -p "$FCP_TEST_TMP/cfg"
+      cp "$cfg_file" "$FCP_TEST_TMP/cfg/fanctrlplus2_$custom.cfg"
+      printf '25000\n' > "$FCP_TEST_TMP/temp1_input"
+      rc=0
+      FCP_CONFIG_DIR="$FCP_TEST_TMP/cfg" BASH_ENV="$FCP_TEST_TMP/runnow_env.sh" \
+        command bash "$FCP_TEST_ROOT/scripts/fanctrlplus2_refresh_single.sh" "$custom" \
+        2> "$FCP_TEST_TMP/runnow.err" || rc=$?
+      printf '%s %s\n' "$rc" "$(cat "$FCP_TEST_TMP/pwm1")" > "$FCP_TEST_TMP/runnow.result"
     fi
     printf '40000\n' > "$FCP_TEST_TMP/temp1_input"
   elif [[ "${FCP_TEST_MANUAL:-0}" == 2 ]]; then
@@ -67,6 +68,24 @@ sleep() {
     printf '35000\n' > "$FCP_TEST_TMP/temp1_input"
   else
     printf '40000\n' > "$FCP_TEST_TMP/temp1_input"
+  fi
+}
+SH
+# Run Now's environment: the loop's, plus a full runtime filesystem right after
+# its controller write, so only its second (post-write) publication fails.
+cat > "$tmp/runnow_env.sh" <<'SH'
+builtin source "$FCP_TEST_TMP/env.sh"
+source() {
+  case "$1" in
+    /usr/local/emhttp/plugins/fanctrlplus2/*) builtin source "$FCP_TEST_ROOT/${1#/usr/local/emhttp/plugins/fanctrlplus2/}" ;;
+    *) builtin source "$1" ;;
+  esac
+  if [[ "$1" == */disk_group_control.sh ]]; then
+    fcp_write_pwm() {
+      [[ -f "$controller_enable" ]] && echo 1 > "$controller_enable"
+      echo "$1" > "$controller" || return
+      ln -sf /dev/full "${curve_state_file}.tmp.$$"
+    }
   fi
 }
 SH
@@ -119,8 +138,15 @@ run_case 40 $'100\n100' 100 1
 run_case '' $'100\n103' 255 0 1
 run_case '' $'101\n101' 103 0 0 1
 # Both publications fail: the loop's own (so it merges the next snapshot), and
-# Run Now's after its write. The loop must still put the fan back to emergency.
+# the real Run Now's after its write. Run Now sets 100 and reports the failure;
+# the loop must then put the fan back to emergency.
+rm -f "$tmp/runnow.result"
 FCP_TEST_TICKS=3 run_case 30 $'104\n104\n104' 100 3
+if [[ "$(cat "$tmp/runnow.result" 2>/dev/null)" != "1 100" ]] || ! grep -q 'could not be saved' "$tmp/runnow.err"; then
+  printf 'Run Now must set 100 and report its failed publication.\nResult: %s\nStderr: %s\n' \
+    "$(cat "$tmp/runnow.result" 2>/dev/null)" "$(cat "$tmp/runnow.err" 2>/dev/null)" >&2
+  exit 1
+fi
 run_case 30 $'104\n104' 100 2
 
 # A source with curve settings but no curve fails hot at 255. That result must
