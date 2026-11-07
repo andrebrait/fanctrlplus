@@ -229,11 +229,11 @@ while true; do
     fi
   fi
 
-  # Warn about lost control, a rejected speed, or a fan that stopped. There is
-  # no target to compare against until a write has succeeded.
-  if (( prev_pwm >= 0 )); then
-    fcp_check_fan "$controller" "$fan_path" "$prev_pwm" "$nct6687_watch" "$fault_dir"
-  fi
+  # Warn about lost control, a rejected speed, or a fan that stopped. Until a
+  # write has succeeded only the controller and its mode can be checked.
+  check_target=""
+  (( prev_pwm >= 0 )) && check_target=$prev_pwm
+  fcp_check_fan "$controller" "$fan_path" "$check_target" "$nct6687_watch" "$fault_dir"
   fcp_track_faults "$SECONDS" "$custom" "$fault_dir"
 
   # Configured sensors that each stay unread past the grace period: warn once.

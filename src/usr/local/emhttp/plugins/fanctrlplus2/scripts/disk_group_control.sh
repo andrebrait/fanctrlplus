@@ -347,16 +347,16 @@ fcp_controller_subject="has lost its PWM controller"
 fcp_faults=()
 fcp_ok=()
 
-# Checks one fan, set to target (the PWM value last written; nct is 1 for a
-# channel fcp_nct6687_msi_channel matched). Sets fcp_faults to this round's
-# problems as "key|subject|details" entries, and fcp_ok to the keys seen to
-# be fine. A key in neither could not be checked this round. The fan's flag
-# directory remembers that it has a tachometer, across loop restarts.
+# Checks one fan, set to target (the PWM value last written, or empty before
+# any write succeeded; nct is 1 for a channel fcp_nct6687_msi_channel matched).
+# Sets fcp_faults to this round's problems as "key|subject|details" entries,
+# and fcp_ok to the keys seen to be fine. A key in neither could not be checked
+# this round. The fan's flag directory remembers that it has a tachometer,
+# across loop restarts.
 fcp_check_fan() {
   local controller="$1" fan_input="$2" target="$3" nct="$4" dir="$5" mode actual rpm want got
   fcp_faults=()
   fcp_ok=()
-  want=$(fcp_pwm_percent "$target")
   if [[ ! -e "$controller" ]]; then
     fcp_faults+=("controller|$fcp_controller_subject|${controller:-Its controller} no longer exists, so the fan speed cannot be set. The controller may have been unplugged or renumbered, or its driver unloaded. Check the controller on the FanCtrl Plus 2 settings page.")
     return
@@ -373,6 +373,9 @@ fcp_check_fan() {
     fi
   fi
   fcp_ok+=(mode)
+  # Speed and stopped compare against a written target; there is none yet.
+  [[ -n "$target" ]] || return
+  want=$(fcp_pwm_percent "$target")
   # Most drivers read back the value last written; a chip that ignores a
   # write, or a write that failed, reads back something else.
   actual=$(cat "$controller" 2>/dev/null)
