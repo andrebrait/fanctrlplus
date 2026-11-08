@@ -83,6 +83,8 @@ be reached by the plugin’s temperature readings.
 **Use changes** returns the draft to the fan configuration; **Cancel** discards
 it. **Apply All** saves it and updates fan control. Idle speed must not exceed
 the normal cap or the first point of a disk curve or enabled CPU/Aux rule.
+Disk groups are optional: remove all groups to control a fan using only its
+enabled CPU or auxiliary temperature source.
 Existing valid configurations retain their original two-point linear behavior,
 with hysteresis and emergency override disabled; reading the settings page does
 not rewrite them. Backups include curve points and settings.

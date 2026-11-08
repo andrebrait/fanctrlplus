@@ -1415,11 +1415,6 @@ $(function() {
     const fanIndex = $row.data('fan-index');
     const $container = $('#disk-groups-' + fanIndex);
 
-    if ($container.find('.disk-group-row').length <= 1) {
-      alert('Each fan needs at least one disk group. Clear its disk selection instead if you want no disk monitoring.');
-      return;
-    }
-
     const groupName = $row.find('.disk-group-name-input').val().trim();
     const msg = groupName
       ? `Are you sure you want to delete disk group "${groupName}"?`
@@ -1725,7 +1720,7 @@ $(function() {
         Controls fan speed based on the <strong>highest temperature</strong> among the selected disks.<br>
         Each group has its own curve, driven by its hottest selected disk.<br>
         Only the disks selected in <strong>Include Disk(s)</strong> are monitored for this fan. Multiple fans can monitor the same disk(s), and a disk can be assigned to multiple fans.<br>
-        <em>Tip:</em> If you only want to monitor CPU temperature for this fan, leave all disks unchecked.
+        <em>Tip:</em> Disk groups are optional. For CPU-only monitoring, remove all disk groups and enable CPU monitoring below.
     </p>
 
     <p><strong>CPU Temperature Settings:</strong>  

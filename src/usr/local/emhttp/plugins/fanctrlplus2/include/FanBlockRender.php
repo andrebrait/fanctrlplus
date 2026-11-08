@@ -17,6 +17,7 @@ function fcp_build_disk_groups($cfg) {
     }
     return $groups;
   }
+  if (empty($cfg['disks'])) return [];
   return [[
     'name'  => '',
     'disks' => array_filter(explode(',', $cfg['disks'] ?? '')),
@@ -261,7 +262,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
           </td>
         </tr>
 
-        <tr><td colspan="2" class="subhead">Disk Temperature Settings</td></tr>
+        <tr><td colspan="2" class="subhead">Disk Temperature Settings (optional)</td></tr>
 
         <!-- Each group's hottest selected disk drives its own curve. -->
         <tr>

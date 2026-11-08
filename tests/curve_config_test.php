@@ -6,6 +6,7 @@
 $include = __DIR__ . '/../src/usr/local/emhttp/plugins/fanctrlplus2/include';
 require_once "$include/ConfigBackup.php";
 require_once "$include/CurveConfig.php";
+require_once "$include/FanBlockRender.php";
 
 $failures = [];
 $check = function ($condition, string $message) use (&$failures) {
@@ -87,6 +88,8 @@ $check($custom['aux']['points'] === [[40, 60], [70, 200]], 'Blank legacy Aux bou
 $defaults = fcp_curve_rules([]);
 $check($defaults['disk:0']['points'] === [[40, 102], [60, 255]] && $defaults['cpu']['points'] === [[40, 102], [70, 255]] && $defaults['aux']['points'] === [[40, 102], [70, 255]], 'A config without legacy keys must use the documented defaults.');
 $check(array_keys($defaults) === ['cpu', 'aux', 'disk:0'], 'A config without disk groups must still offer a disk:0 source.');
+$check(fcp_build_disk_groups(['disk_group_count' => '0', 'disks' => '']) === [], 'A saved CPU-only fan must reopen without a disk group.');
+$check(count(fcp_build_disk_groups(['disks' => 'legacy-disk'])) === 1, 'Legacy disk selection must remain visible.');
 
 $degenerate = fcp_curve_rules(['pwm' => '102', 'max' => '255', 'disk_group_count' => '1', 'disk_group_0_low' => '60', 'disk_group_0_high' => '60', 'cpu_min_temp' => '300', 'cpu_max_temp' => '300']);
 $check($degenerate['disk:0']['points'] === [[60, 102], [61, 255]], 'Equal legacy bounds must become strictly increasing instead of dividing by zero.');
@@ -252,6 +255,12 @@ $check(($reply['status'] ?? '') === 'ok', 'Saving unchanged displayed percentage
 $rawSaved = parse_ini_file("$cfgDir/fanctrlplus2_Raw.cfg");
 $check($rawSaved['max'] === '100' && $rawSaved['idle'] === '76', 'Unedited raw PWM values must survive percentage display rounding.');
 
+$write('fanctrlplus2_JBOD.cfg', $legacyFan);
+$cpuOnly = ['cpu' => $with(['points' => [[40, 120], [70, 255]]]), 'aux' => $contract];
+$reply = $save($request([['file' => 'fanctrlplus2_JBOD.cfg', 'custom' => 'JBOD', 'cpu' => '1', 'idle' => '40', 'groups' => [], 'curve' => json_encode($cpuOnly)]]));
+$cpuSaved = parse_ini_file("$cfgDir/fanctrlplus2_JBOD.cfg");
+$check(($reply['status'] ?? '') === 'ok' && $cpuSaved['disk_group_count'] === '0' && $cpuSaved['disks'] === '' && $cpuSaved['pwm'] === '120', 'A CPU-only fan must save without disks or a disk curve limiting idle speed.');
+$check(fcp_build_disk_groups($cpuSaved) === [] && !$rejects(fn() => fcp_validate_config_backup($backupOf($cpuSaved))), 'A CPU-only fan must reopen and back up without disk groups.');
 $write('fanctrlplus2_JBOD.cfg', $legacyFan);
 
 // A stale pre-curve form must fail before overwriting any saved configuration.
