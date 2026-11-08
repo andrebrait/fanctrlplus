@@ -180,7 +180,14 @@ while true; do
   # latch the snapshot kept, tries again.
   wrote=0
   old_pwm=$prev_pwm
-  if [[ "$old_pwm" == -1 ]] || (( pwm_val != old_pwm && (has_custom_curve || pwm_val == 255 || pwm_val - old_pwm >= 5 || old_pwm - pwm_val >= 5) )); then
+  point_target=$has_custom_curve
+  if [[ "${disk_group_count:-0}" -eq 0 && -n "${disks:-}" && ! -v disk_curve && "$disk_max" =~ ^[0-9]+$ ]] && (( disk_pwm_val == pwm_val )); then
+    point_target=0
+    # A tied point target or an unmet emergency must bypass the legacy disk deadband.
+    if [[ "$cpu_temp" =~ ^[0-9]+$ && -v cpu_curve ]] && (( cpu_pwm_val == pwm_val || (${fcp_curve_latch[cpu]:-0} && old_pwm < cpu_pwm_val) )); then point_target=1; fi
+    if [[ "$aux_temp" =~ ^[0-9]+$ && -v aux_curve ]] && (( aux_pwm_val == pwm_val || (${fcp_curve_latch[aux]:-0} && old_pwm < aux_pwm_val) )); then point_target=1; fi
+  fi
+  if [[ "$old_pwm" == -1 ]] || (( pwm_val != old_pwm && (point_target || pwm_val == 255 || pwm_val - old_pwm >= 5 || old_pwm - pwm_val >= 5) )); then
     if fcp_write_pwm "$pwm_val"; then
       wrote=1
       prev_pwm=$pwm_val

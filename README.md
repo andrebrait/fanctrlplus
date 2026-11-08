@@ -89,9 +89,10 @@ Existing valid configurations retain their original two-point linear behavior,
 with hysteresis and emergency override disabled; reading the settings page does
 not rewrite them. Backups include curve points and settings.
 
-Saving point curves applies every target change, including changes smaller than
-five PWM units. Unsaved legacy configurations retain their original five-unit
-write deadband. Use cooling hysteresis to suppress temperature-boundary jitter.
+Point-curve targets apply every change, including changes smaller than five PWM
+units. Unsaved legacy configurations and ungrouped legacy disk targets retain
+their five-unit write deadband, including in mixed configurations. Use cooling
+hysteresis to suppress temperature-boundary jitter.
 
 Emergency control is software polling, not independent thermal protection.
 It cannot react between configured sensor checks or replace hardware/firmware

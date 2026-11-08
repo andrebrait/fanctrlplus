@@ -290,4 +290,87 @@ printf '35000 ok ok\n40000 fail ok\n40000 ok ok\n' > "$tmp/steps"
 run_steps "A failed controller write must be retried, not recorded as applied." $'100\nfail\n104' "$rule_retry"
 printf '35000 fail ok\n35000 ok ok\n' > "$tmp/steps"
 run_steps "A failed first write must leave the output unknown, so the next round writes." $'fail\n100' "$rule_retry"
+# A legacy disk remains deadbanded even alongside a lower CPU point curve.
+cat > "$tmp/mixed_env.sh" <<'SH'
+source() {
+  case "$1" in
+    /usr/local/emhttp/plugins/fanctrlplus2/*) builtin source "$FCP_TEST_ROOT/${1#/usr/local/emhttp/plugins/fanctrlplus2/}" ;;
+    *) builtin source "$1" ;;
+  esac
+  if [[ "$1" == */disk_group_control.sh ]]; then
+    sample_disk_temps() { fcp_disk_temps=(); fcp_disk_temps[0]="${disk_temp:-30}"; fcp_disk_stamps=(); }
+  fi
+  if [[ "$1" == */aux_sensors.sh ]]; then
+    aux_temp_readings() { printf 'fixture|%s\n' "$(( $(cat "$FCP_TEST_TMP/temp1_input") / 1000 ))"; }
+  fi
+}
+logger() { :; }
+sleep() {
+  [[ "$1" == 4 ]] && return 0
+  cat "$FCP_TEST_TMP/pwm1" >> "$FCP_TEST_TMP/output"
+  ticks=$((${ticks:-0} + 1))
+  (( ticks == 2 )) && exit 0
+  disk_temp=31
+  printf '40000\n' > "$FCP_TEST_TMP/temp1_input"
+}
+SH
+printf '35000\n' > "$tmp/temp1_input"
+printf '0\n' > "$tmp/pwm1"
+: > "$tmp/output"
+cat > "$tmp/fan.cfg" <<CFG
+custom="$custom"
+controller="$tmp/pwm1"
+pwm="100"
+max="130"
+idle="0"
+interval_sec="7"
+notify="0"
+syslog="0"
+cpu_enable="1"
+cpu_sensor="$tmp/temp1_input"
+cpu_curve="30:50,40:50"
+aux_enable="0"
+disk_group_count="0"
+disks="legacy"
+low="30"
+high="40"
+CFG
+BASH_ENV="$tmp/mixed_env.sh" bash "$FCP_TEST_ROOT/scripts/fanctrlplus2_loop.sh" "$tmp/fan.cfg"
+if [[ "$(cat "$tmp/output")" != $'100\n100' ]]; then
+  printf 'A legacy disk target must retain its deadband alongside a CPU curve.\nActual: %s\n' "$(cat "$tmp/output")" >&2
+  exit 1
+fi
+printf '35000\n' > "$tmp/temp1_input"
+: > "$tmp/output"
+printf 'cpu_curve="30:100,40:103"\n' >> "$tmp/fan.cfg"
+BASH_ENV="$tmp/mixed_env.sh" bash "$FCP_TEST_ROOT/scripts/fanctrlplus2_loop.sh" "$tmp/fan.cfg"
+if [[ "$(cat "$tmp/output")" != $'101\n103' ]]; then
+  printf 'A point curve tied with a legacy disk must apply its exact target.\nActual: %s\n' "$(cat "$tmp/output")" >&2
+  exit 1
+fi
+printf '35000\n' > "$tmp/temp1_input"
+: > "$tmp/output"
+printf 'cpu_curve="30:50,40:50"\ncpu_emergency_temp="40"\ncpu_emergency_pwm="102"\n' >> "$tmp/fan.cfg"
+BASH_ENV="$tmp/mixed_env.sh" bash "$FCP_TEST_ROOT/scripts/fanctrlplus2_loop.sh" "$tmp/fan.cfg"
+if [[ "$(cat "$tmp/output")" != $'100\n103' ]]; then
+  printf 'A legacy disk must not suppress an emergency increase.\nActual: %s\n' "$(cat "$tmp/output")" >&2
+  exit 1
+fi
+printf '35000\n' > "$tmp/temp1_input"
+: > "$tmp/output"
+printf 'cpu_enable="0"\naux_enable="1"\naux_sensor="fixture"\naux_curve="30:100,40:103"\n' >> "$tmp/fan.cfg"
+BASH_ENV="$tmp/mixed_env.sh" bash "$FCP_TEST_ROOT/scripts/fanctrlplus2_loop.sh" "$tmp/fan.cfg"
+if [[ "$(cat "$tmp/output")" != $'101\n103' ]]; then
+  printf 'An auxiliary point curve tied with a legacy disk must apply its exact target.\nActual: %s\n' "$(cat "$tmp/output")" >&2
+  exit 1
+fi
+printf '35000\n' > "$tmp/temp1_input"
+: > "$tmp/output"
+printf 'aux_curve="30:50,40:50"\naux_emergency_temp="40"\naux_emergency_pwm="102"\n' >> "$tmp/fan.cfg"
+BASH_ENV="$tmp/mixed_env.sh" bash "$FCP_TEST_ROOT/scripts/fanctrlplus2_loop.sh" "$tmp/fan.cfg"
+if [[ "$(cat "$tmp/output")" != $'100\n103' ]]; then
+  printf 'A legacy disk must not suppress an auxiliary emergency increase.\nActual: %s\n' "$(cat "$tmp/output")" >&2
+  exit 1
+fi
+
 printf 'curve loop tests passed\n'
