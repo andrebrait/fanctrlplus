@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="2026.11.06"
+  version="2026.11.08"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -20,60 +20,29 @@
 <CHANGES>
 <![CDATA[
 
-### 2026.11.06
+### 2026.11.08
 
-## What's changed
+## Editable fan curves
 
-- **Fan problem alerts.** The plugin now sends Unraid notifications when a fan or its controller misbehaves. Fan control keeps running for every fan either way. A fan gets one warning once a problem has lasted 30 seconds:
- - its PWM controller has disappeared (unplugged, renumbered, or driver unloaded), or was missing when fan control started;
- - the BIOS or another program has taken the fan out of manual mode;
- - the controller reports a speed 10 or more points away from the one set. On MSI boards with the nct6687 driver, the warning names the `msi_fan_brute_force` fix; this replaces the earlier stuck-fan warning;
- - the fan reports 0 RPM while set above 40%, after it was seen spinning. Fans without a tachometer, and fans at or below 40%, where some stop by design, are not judged.
+Configure each disk group, CPU temperature source, and auxiliary temperature source with a 2–8 point fan curve. Choose linear interpolation or stepped control, set cooling hysteresis, and configure an optional emergency temperature and speed that can exceed the normal output cap. Curve points retain their absolute speeds when the cap changes.
 
- Once a problem has stayed away for 30 seconds, a notice says it has recovered. (#25)
-- **Problem Alerts switch.** Each fan has a Problem Alerts switch, on by default, next to its Syslog switch. The card is renamed **Syslog & Alerts**. The switch also silences the missing-sensor warning, and takes effect without restarting fan control. (#25)
+Disk groups are optional, so a fan can use CPU or auxiliary temperature without assigning a disk. Existing valid settings are preserved as equivalent two-point curves; export a configuration backup before updating.
 
-## Version numbering
+This is software-based control, not independent thermal protection. Monitor actual fan speeds and temperatures, and leave CPU fans under BIOS or firmware control where possible.
 
-Releases are now named by date (`YYYY.MM.DD`) instead of `1.x.y`. Unraid compares plugin versions as plain strings, so `1.10.0` would have counted as older than `1.9.7`. `2026.11.06` sorts after `1.9.7`, so this update is offered as usual. (#24)
+Thanks to @fejesgabortorrent-dot for requesting and testing the feature. See #26 and #27.
 
-## Upgrade compatibility
+### pr27-test-eb28feb
 
-No configuration changes. Existing fans have Problem Alerts on. Fan speeds behave as before.
+Test build from commit `eb28feba2c5023772bf757551205601bdceba923`. Includes optional disk groups and the legacy disk deadband fix. This is not a stable release. Back up settings before installing and monitor temperatures and fan speeds.
 
-## Verification
+To roll back, install the [stable plugin manifest](https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg) and restore a pre-test settings backup. Do not uninstall: uninstalling deletes the configuration.
 
-All 28 test files pass, and Codex and CodeRabbit reviewed the change. On a real Unraid 7.3.4 server with an nct6798 controller, switching the fan out of manual mode sent the "no longer under FanCtrl Plus 2 control" warning after about 1.5 minutes. Setting it back sent the recovery notice about 2 minutes later. The stopped-fan and wrong-speed alerts were tested only against simulated hardware.
+### pr27-test-05a2777
 
-### 1.9.7
+Test build from commit `05a27777fa738bae4bcc9eed3bdcddfafd265900`: disk groups are optional for CPU or auxiliary temperature control. This is not a stable release. Back up settings before installing and monitor fan speeds and temperatures.
 
-## What's changed
-
-- **Warning when a configured sensor gives no reading** (#21). A sensor without a reading cannot drive the fan curve, so a fan whose only source was missing sat at its Idle or Min Speed while the dashboard looked normal. The plugin now sends one Unraid warning per fan per boot when a configured CPU or auxiliary sensor stays unread for at least 60 seconds, naming the sensors. This covers a missing file or tool, a failing or timed-out custom script, output that is not a temperature, and impossible values. Each sensor is timed on its own, so sensors failing on alternate rounds do not trigger a false warning. Disks are not included: a spun-down disk has no temperature by design. (#23)
-- **CPU sensor readings no longer carry over.** A round whose CPU reading is unusable used to reuse the previous round's temperature; it now counts as 0 °C. (#23)
-- **A notification that fails to send is retried** on the next round, for this warning and for the nct6687 stuck-fan warning. (#23)
-
-## Upgrade compatibility
-
-No configuration changes. Fan speeds behave as before, apart from an unusable CPU reading counting as 0 °C instead of the previous round's temperature.
-
-## Verification
-
-All 28 test files pass. Tests cover which sensors count as unread, the per-sensor 60-second timer, one notification per boot, and the retry after a failed send. The real loop, run with a missing CPU sensor and a missing `storcli`, sent one notification naming both after 60 seconds. It has not yet been checked on a real Unraid server.
-
-### 1.9.6
-
-## What's changed
-
-- **Sensors read through an external tool recover after boot** (#21). The fan loop looked for `storcli`, `nvidia-smi` and `mget_temp` only once, when it started. If another plugin or boot script installed the tool a few seconds later, that sensor gave no reading until the service was restarted, and a fan with no other source stayed at Idle Speed. The loop now looks for these tools on every reading, so a late tool is used from the next reading on. (#22)
-
-## Upgrade compatibility
-
-No configuration changes.
-
-## Verification
-
-All 28 test files pass. A new test shows that a sensor whose tool is missing gives no reading, and that it gives one as soon as the tool is installed. This test fails on 1.9.5. The fix has not yet been checked on a real Unraid server with a real `storcli`.
+To roll back, install the [stable plugin manifest](https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg) and restore a pre-test settings backup. Do not uninstall: uninstalling deletes the configuration.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -127,16 +96,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.06-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/2026.11.06/fanctrlplus2-2026.11.06-noarch-1.txz</URL>
-<SHA256>63a38186260d49c6106347a940afce55d618bb48b3b88e51d42c5ab3f99bb9bb</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.08-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/2026.11.08/fanctrlplus2-2026.11.08-noarch-1.txz</URL>
+<SHA256>864f5e210be22999bf9d7cf6467243ad81cf2fffd1a53282bd84af1bcc0614a9</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.06-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.08-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -159,7 +128,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 2026.11.06"
+echo " Version: 2026.11.08"
 echo "------------------------------------------------"
 echo ""
 exit 0
