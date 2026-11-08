@@ -225,8 +225,15 @@ function updateFanctrlplusTile() {
 
 // Run a single fan immediately.
 function refreshSingleFan(custom) {
-  fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=refresh_single&custom=${encodeURIComponent(custom)}`, {cache: 'no-store'})
-    .then(() => setTimeout(updateFanctrlplusTile, 2000)); // Refresh after two seconds.
+  return fetch(`/plugins/fanctrlplus2/include/FanctrlLogic.php?op=refresh_single&custom=${encodeURIComponent(custom)}`, {cache: 'no-store'})
+    .then(res => res.text().then(body => {
+      if (!res.ok) {
+        let message = 'Request failed';
+        try { message = JSON.parse(body).message || message; } catch (_) {}
+        throw new Error(message);
+      }
+      updateFanctrlplusTile();
+    }));
 }
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -238,17 +245,20 @@ document.addEventListener("DOMContentLoaded", function () {
     dashboard.addEventListener("click", function(e) {
       const btn = e.target.closest('.fanctrlplus2-refresh');
       if (!btn) return;
+      if (btn.classList.contains('fa-spin')) return;
 
       const label = btn.getAttribute('data-label');
       btn.style.color = '#aaa';
       btn.classList.add('fa-spin');
 
-      refreshSingleFan(label);
-
-      setTimeout(() => {
-        btn.style.color = 'var(--blue-800)';
-        btn.classList.remove('fa-spin');
-      }, 1800);
+      btn.style.pointerEvents = 'none';
+      refreshSingleFan(label)
+        .catch(err => alert('Manual Run failed: ' + err.message))
+        .finally(() => {
+          btn.style.color = 'var(--blue-800)';
+          btn.classList.remove('fa-spin');
+          btn.style.pointerEvents = '';
+        });
 
       e.preventDefault();
       e.stopPropagation();

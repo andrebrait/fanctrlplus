@@ -1,0 +1,48 @@
+/* Override the house modal's fixed identification-dialog width in both themes. */
+.swal2-popup.fcp-curve-modal { width: min(1100px, 96vw) !important; max-width: 96vw; padding: 24px; }
+.swal2-popup.fcp-curve-modal table.fcp-curve-points { margin: 0 !important; border-collapse: collapse !important; }
+.swal2-popup.fcp-curve-modal input:focus-visible,
+.swal2-popup.fcp-curve-modal select:focus-visible,
+.swal2-popup.fcp-curve-modal button:focus-visible { outline: 2px solid #4285f4 !important; outline-offset: 2px; }
+.fcp-curve-editor input[type="checkbox"] { width: auto; min-height: auto; }
+.fcp-curve-editor button { color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 3px; }
+.fcp-curve-editor button:disabled, .fcp-curve-editor input:disabled { opacity: .5; }
+.fcp-curve-editor option { color: CanvasText; background: Canvas; }
+
+.fcp-curve-modal .swal2-html-container {
+  margin: 16px 24px 0;
+  text-align: left;
+  color: inherit;
+  overflow: visible;
+}
+.fcp-curve-editor { font-size: 14px; }
+.fcp-curve-editor p { line-height: 1.5; }
+.fcp-curve-editor h3 { font-size: 15px; margin: 0 0 12px; }
+.fcp-curve-settings { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; margin: 16px 0; }
+.fcp-curve-editor label { display: grid; gap: 8px; font-weight: 600; }
+.fcp-curve-editor input[type="number"] { width: 96px; }
+.fcp-curve-editor input, .fcp-curve-editor select, .fcp-curve-editor button { font: inherit; min-height: 36px; box-sizing: border-box; }
+.fcp-curve-editor input:focus-visible, .fcp-curve-editor select:focus-visible, .fcp-curve-editor button:focus-visible { outline: 2px solid #4285f4; outline-offset: 2px; }
+.fcp-curve-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; }
+.fcp-curve-chart { position: relative; min-width: 0; }
+.fcp-curve-chart canvas { width: 100% !important; height: 360px !important; touch-action: none; }
+.fcp-curve-help { font-size: 12px; opacity: .85; margin: 12px 0; }
+.fcp-curve-points { width: 100%; border-collapse: collapse; }
+.fcp-curve-points th { text-align: left; font-size: 12px; padding: 0 4px 8px; white-space: nowrap; }
+.fcp-curve-points td { padding: 4px; border-top: 1px solid rgba(127,127,127,.35); }
+.fcp-curve-points td input[type="number"] { width: 100%; min-width: 0; }
+.fcp-curve-points td button { min-width: 36px; }
+.fcp-curve-editor [data-ce="count"] { float: right; font-weight: normal; }
+.fcp-curve-editor [data-ce="add"] { width: 100%; margin-top: 12px; }
+.fcp-curve-limits { display: grid; grid-template-columns: 1fr 1.5fr; gap: 24px; border-top: 1px solid rgba(127,127,127,.35); margin-top: 20px; padding-top: 20px; }
+.fcp-curve-limits > div + div { border-left: 3px solid #e99b36; padding-left: 16px; }
+.fcp-curve-editor .fcp-curve-toggle { display: flex; align-items: center; gap: 8px; }
+.fcp-curve-editor [data-ce="error"] { min-height: 20px; font-weight: 600; }
+.fcp-curve-summary { display: block; font-size: 12px; margin-top: 4px; }
+@media (max-width: 760px) {
+  .fcp-curve-modal .swal2-html-container { margin: 12px 8px 0; }
+  .fcp-curve-workspace, .fcp-curve-limits { grid-template-columns: minmax(0, 1fr); }
+  .fcp-curve-chart canvas { height: 260px !important; }
+  .fcp-curve-settings label:first-child { max-width: 100%; }
+  .fcp-curve-settings select { max-width: 100%; }
+}
