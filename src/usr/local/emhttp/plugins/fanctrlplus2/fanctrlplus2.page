@@ -78,11 +78,13 @@ if (!is_dir($cfg_dir)) {
 $cfg_files = glob("$cfg_dir/{$plugin}_*.cfg");
 
 if (empty($cfg_files)) {
-  $temp_file = "$cfg_dir/{$plugin}_temp_0.cfg";
-  if (!file_exists($temp_file)) {
+  // Two switched-off examples (Fan 1, Fan 2) show that each fan header gets its own block.
+  foreach ([0, 1] as $example) {
+    $temp_file = "$cfg_dir/{$plugin}_temp_$example.cfg";
+    if (!file_exists($temp_file)) {
 file_put_contents($temp_file, <<<INI
 custom=""
-service="1"
+service="0"
 controller=""
 pwm="102"
 max="255"
@@ -97,6 +99,7 @@ cpu_min_temp=""
 cpu_max_temp=""
 INI
 );
+    }
   }
   // Reload the configuration-file list.
   $cfg_files = glob("$cfg_dir/{$plugin}_*.cfg");

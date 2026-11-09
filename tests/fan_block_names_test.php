@@ -20,6 +20,7 @@ $check(str_contains($css, '.fcp-fan-number::after { content: counter(fcp-fan); }
 
 $page = file_get_contents("$sourceRoot/fanctrlplus2.page");
 $check(str_contains($page, "addFan({ example: 1 }).then(() => addFan({ example: 1 }))"), 'An empty page must show two example blocks, one after the other.');
+$check(preg_match('/foreach \(\[0, 1\] as \$example\)[\s\S]*?_temp_\$example\.cfg[\s\S]*?service="0"/', $page) === 1, 'A fresh install must write two switched-off example blocks.');
 $check(str_contains($page, 'title="Add a block for another fan header, ex.'), 'Add Fan must say what it adds, with an example.');
 $check(!str_contains($page, 'Custom Name'), 'The page must not call the field Custom Name any more.');
 
