@@ -543,3 +543,146 @@ fcp_notify_missing() {
     -d "No reading for at least $fcp_missing_grace_seconds seconds from: ${sensors%, }. The fan cannot react to these sensors while they are unread, and stays at its Idle or Min Speed when no other source has a reading." \
     || rm -f "$flag"
 }
+
+# ===== Configured sensors that never change =====
+# Some firmware fills a temperature register with a fixed value instead of a
+# measurement; ACPI thermal zones reading 27.8 °C (3010 deci-kelvin) are a
+# common case. Such a sensor reads, so the missing-sensor warning above never
+# sees it, but a fan curve on it never moves. A CPU or aux sensor of a fan is
+# taken for one when its reading has not changed by even one degree for
+# fcp_frozen_window_seconds of this loop's own readings, while another source
+# of the same fan moved by fcp_frozen_swing degrees or more in that time. The
+# window is long enough for a room's ambient temperature to drift by a degree
+# over a day and spans several readings at the longest interval; the swing
+# keeps a steady sensor in a steady machine from counting. The conclusion is
+# only shown and, by the fan's "Frozen Sensors" switch (frozen_notify=0 in its
+# cfg), notified: fan control is unchanged.
+fcp_frozen_window_seconds=21600
+fcp_frozen_swing=10
+
+# Source -> "VALUE|SINCE|LAST": the reading of its current unchanged stretch,
+# when that began, and when it was last read. "SOURCE>OTHER" -> "LO|HI": how
+# far another source of the fan moved during that stretch.
+declare -gA fcp_frozen_run=() fcp_frozen_range=()
+# This round's conclusions, "SOURCE|VALUE|SINCE|LAST|OTHER|LO|HI".
+fcp_frozen_found=()
+
+# Records one round of readings and sets fcp_frozen_found. The arguments after
+# the time and the gap are "SOURCE|TEMP|WATCHED" readings: every source that
+# gave one (cpu, each aux sensor, disk:<group>), WATCHED being 1 for the
+# sensors that can be judged (CPU and aux). A source read again only after
+# more than gap seconds starts over: the loop was not running in between. Call
+# it in the loop's own shell, not in $(...): its state lives in these globals.
+fcp_track_frozen() {
+  local now="$1" gap="$2" reading src temp watched other value since last lo hi key best span
+  shift 2
+  local -A temps=() judged=()
+  fcp_frozen_found=()
+  for reading in "$@"; do
+    IFS='|' read -r src temp watched <<< "$reading"
+    [[ "$temp" =~ ^[0-9]+$ ]] || continue
+    temps[$src]=$temp
+    [[ "$watched" == 1 ]] && judged[$src]=1
+  done
+  for src in "${!judged[@]}"; do
+    temp=${temps[$src]}
+    IFS='|' read -r value since last <<< "${fcp_frozen_run[$src]:-}"
+    if [[ "$value" != "$temp" ]] || (( now - last > gap )); then
+      value=$temp since=$now
+      for key in "${!fcp_frozen_range[@]}"; do
+        [[ "$key" == "$src>"* ]] && unset 'fcp_frozen_range[$key]'
+      done
+    fi
+    fcp_frozen_run[$src]="$value|$since|$now"
+    best=""
+    for other in "${!temps[@]}"; do
+      [[ "$other" == "$src" ]] && continue
+      IFS='|' read -r lo hi <<< "${fcp_frozen_range[$src>$other]:-}"
+      temp=${temps[$other]}
+      [[ -z "$lo" ]] || (( temp < lo )) && lo=$temp
+      [[ -z "$hi" ]] || (( temp > hi )) && hi=$temp
+      fcp_frozen_range[$src>$other]="$lo|$hi"
+    done
+    (( now - since >= fcp_frozen_window_seconds )) || continue
+    # The source that moved the most is the one named.
+    span=$(( fcp_frozen_swing - 1 ))
+    for key in "${!fcp_frozen_range[@]}"; do
+      [[ "$key" == "$src>"* ]] || continue
+      IFS='|' read -r lo hi <<< "${fcp_frozen_range[$key]}"
+      (( hi - lo > span )) || continue
+      span=$(( hi - lo ))
+      best="${key#"$src>"}|$lo|$hi"
+    done
+    [[ -n "$best" ]] && fcp_frozen_found+=("$src|$value|$since|$now|$best")
+  done
+  # A source not read for longer than the gap starts over anyway.
+  for src in "${!fcp_frozen_run[@]}"; do
+    IFS='|' read -r value since last <<< "${fcp_frozen_run[$src]}"
+    (( now - last > gap )) || continue
+    unset 'fcp_frozen_run[$src]'
+    for key in "${!fcp_frozen_range[@]}"; do
+      [[ "$key" == "$src>"* ]] && unset 'fcp_frozen_range[$key]'
+    done
+  done
+}
+
+# The tracking survives a loop restart (applying settings restarts every
+# loop) in a RAM file: "run|SOURCE|VALUE|SINCE|LAST" and "range|SOURCE>OTHER|LO|HI".
+fcp_frozen_save() {
+  local file="$1" key tmp="${1}.tmp.$$"
+  {
+    for key in "${!fcp_frozen_run[@]}"; do printf 'run|%s|%s\n' "$key" "${fcp_frozen_run[$key]}"; done
+    for key in "${!fcp_frozen_range[@]}"; do printf 'range|%s|%s\n' "$key" "${fcp_frozen_range[$key]}"; done
+  } > "$tmp" 2>/dev/null && mv -f "$tmp" "$file" 2>/dev/null
+}
+
+fcp_frozen_load() {
+  local file="$1" kind key rest
+  fcp_frozen_run=()
+  fcp_frozen_range=()
+  [[ -f "$file" ]] || return 0
+  while IFS='|' read -r kind key rest; do
+    case "$kind" in
+      run)   [[ "$rest" =~ ^[0-9]+\|[0-9]+\|[0-9]+$ ]] && fcp_frozen_run[$key]=$rest ;;
+      range) [[ "$rest" =~ ^[0-9]+\|[0-9]+$ ]] && fcp_frozen_range[$key]=$rest ;;
+    esac
+  done < "$file"
+}
+
+# The conclusions, one fcp_frozen_found entry per line, for the settings page.
+fcp_frozen_publish() {
+  local file="$1" tmp="${1}.tmp.$$"
+  { (( ${#fcp_frozen_found[@]} )) && printf '%s\n' "${fcp_frozen_found[@]}"; } > "$tmp" 2>/dev/null
+  mv -f "$tmp" "$file" 2>/dev/null
+}
+
+# A source key as a notification names it.
+fcp_frozen_label() {
+  case "$1" in
+    cpu)    printf 'the CPU sensor %s' "${cpu_sensor:-}" ;;
+    disk:*) history_source_label "$1" ;;
+    *)      printf '%s' "$1" ;;
+  esac
+}
+
+fcp_frozen_alerts_enabled() {
+  (unset frozen_notify; source "${cfg_file:-}" >/dev/null 2>&1; [[ "${frozen_notify:-1}" != 0 ]])
+}
+
+# One Unraid warning per sensor per boot. The flag file on tmpfs lists the
+# sensors already warned about; a failed notification leaves a sensor out,
+# so the next round tries again.
+fcp_notify_frozen() {
+  local name="$1" flag="$2" found src value since last other lo hi hours
+  shift 2
+  for found in "$@"; do
+    IFS='|' read -r src value since last other lo hi <<< "$found"
+    grep -qxF -- "$src" "$flag" 2>/dev/null && continue
+    fcp_frozen_alerts_enabled || return 0
+    touch "$flag" 2>/dev/null || return 0
+    hours=$(( (last - since) / 3600 ))
+    fcp_notify -i warning -s "Fan $name has a temperature sensor that does not change" \
+      -d "$(fcp_frozen_label "$src") has read $value °C for $hours hours while $(fcp_frozen_label "$other") varied $lo–$hi °C. It may report a fixed value rather than a measurement. Fan control is unchanged." &&
+      printf '%s\n' "$src" >> "$flag"
+  done
+}

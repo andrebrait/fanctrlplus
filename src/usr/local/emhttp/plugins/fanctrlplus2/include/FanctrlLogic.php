@@ -35,7 +35,7 @@ header('Cache-Control: no-store, max-age=0');
 $op = $_GET['op'] ?? $_POST['op'] ?? '';
 
 // Serialize restore/export with every HTTP writer of these configuration files.
-if (in_array($op, ['savelabel','newtemp','delete','setsyslog','setnotify','saveorder','start','stop','fcp_airflow_toggle','fcp_history_toggle'], true)) {
+if (in_array($op, ['savelabel','newtemp','delete','setsyslog','setnotify','setfrozennotify','saveorder','start','stop','fcp_airflow_toggle','fcp_history_toggle'], true)) {
   try { $config_lock = fcp_config_lock($cfg_dir); }
   catch (Throwable $error) { http_response_code(500); json_response(['status'=>'error','message'=>$error->getMessage()]); }
   register_shutdown_function(function () use ($config_lock) {
@@ -271,10 +271,12 @@ switch ($op) {
     echo render_disk_group_row($fan_index, $group_index, $empty_group, $disks);
     exit;
 
-  // Per-fan switches: Syslog, and Problem Alerts (read by the loop on each alert).
+  // Per-fan switches: Syslog, Problem Alerts and Frozen Sensors alerts (the
+  // alert switches are read by the loop on each alert).
   case 'setsyslog':
   case 'setnotify':
-      $key = $op === 'setsyslog' ? 'syslog' : 'notify';
+  case 'setfrozennotify':
+      $key = ['setsyslog' => 'syslog', 'setnotify' => 'notify', 'setfrozennotify' => 'frozen_notify'][$op];
       $cfg_file = basename($_POST['cfg']);
       $enabled = isset($_POST['enabled']) && $_POST['enabled'] == 1 ? 1 : 0;
 

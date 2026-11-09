@@ -63,6 +63,38 @@ function fcp_parse_history_line(string $line): ?array {
     ];
 }
 
+// Sensors a fan's loop found reading the same for hours while another of the
+// fan's sources moved (fcp_track_frozen in disk_group_control.sh), keyed by
+// source: cpu, or an aux sensor. Each line is
+// "SOURCE|VALUE|SINCE|LAST|OTHER|LO|HI". A conclusion the loop has not
+// renewed for $stale seconds is left out: the loop is no longer running.
+function fcp_frozen_sensors(string $file, int $stale, ?int $now = null): array {
+    $now = $now ?? time();
+    $found = [];
+    foreach (is_file($file) ? (file($file, FILE_IGNORE_NEW_LINES) ?: []) : [] as $line) {
+        $parts = explode('|', $line);
+        if (count($parts) !== 7) continue;
+        [$src, $value, $since, $last, $other, $lo, $hi] = $parts;
+        if ($src === '' || $other === '') continue;
+        foreach ([$value, $since, $last, $lo, $hi] as $number) {
+            if (!ctype_digit($number)) continue 2;
+        }
+        if ($now - (int)$last > $stale) continue;
+        $found[$src] = [
+            'value' => (int)$value, 'since' => (int)$since, 'last' => (int)$last,
+            'other' => $other, 'lo' => (int)$lo, 'hi' => (int)$hi,
+        ];
+    }
+    return $found;
+}
+
+// The state the settings page shows beside the sensor. $other is how the
+// page names the source that moved.
+function fcp_frozen_text(array $frozen, string $other): string {
+    $hours = intdiv($frozen['last'] - $frozen['since'], 3600);
+    return "Unchanged at {$frozen['value']} °C for $hours h while $other varied {$frozen['lo']}–{$frozen['hi']} °C: may be a fixed placeholder.";
+}
+
 // =============================
 // Migrate hwmonX configuration and label paths.
 // =============================

@@ -68,6 +68,11 @@ hist_file="/var/tmp/${plugin}/history_${plugin}_${custom}"
 # does not flip the attribution of an ongoing PWM tie (see history_pick_source).
 prev_hist_src=$(tail -n 1 "$hist_file" 2>/dev/null | cut -d'|' -f2)
 
+# Sensors that have read the same for hours (fcp_track_frozen), carried over
+# from before a restart.
+frozen_state="/var/tmp/${plugin}/frozen_state_${custom}"
+fcp_frozen_load "$frozen_state"
+
 # Whether the last controller write, and the last curve-state snapshot, failed.
 # Each is logged once per stretch, not every round.
 write_failing=0
@@ -259,6 +264,24 @@ while true; do
   fcp_track_missing "$SECONDS" "${unread[@]}"
   if (( ${#fcp_missing_overdue[@]} )); then
     fcp_notify_missing "$custom" "/var/tmp/${plugin}/sensor_missing_${custom}" "${fcp_missing_overdue[@]}"
+  fi
+
+  # Sensors that read the same for hours while another source of this fan
+  # moved: shown on the settings page, and warned about once if switched on.
+  frozen_readings=()
+  (( cpu_sampled && cpu_usable )) && frozen_readings+=("cpu|$cpu_temp|1")
+  while IFS= read -r reading; do
+    [[ -n "$reading" ]] && frozen_readings+=("$reading|1")
+  done <<< "$aux_readings"
+  for g in "${!fcp_disk_temps[@]}"; do
+    frozen_readings+=("disk:$g|${fcp_disk_temps[$g]}|0")
+  done
+  printf -v frozen_now '%(%s)T' -1
+  fcp_track_frozen "$frozen_now" $(( 2 * $(interval_seconds) + 60 )) "${frozen_readings[@]}"
+  fcp_frozen_save "$frozen_state"
+  fcp_frozen_publish "/var/tmp/${plugin}/frozen_${custom}"
+  if (( ${#fcp_frozen_found[@]} )); then
+    fcp_notify_frozen "$custom" "/var/tmp/${plugin}/sensor_frozen_${custom}" "${fcp_frozen_found[@]}"
   fi
 
   sleep "$(interval_seconds)"
