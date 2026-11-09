@@ -431,6 +431,7 @@ function fcp_no_pwm_notice(array $pwms, string $system_temp_dir = FCP_SYSTEM_TEM
   return '<div class="fcp-asset-update-notice fcp-no-pwm-notice"><span>'
     . '<strong>No PWM controllers found.</strong> The driver for the mainboard\'s fan and sensor chip is probably not loaded, so its fan headers cannot be offered here. '
     . 'To find and load it, ' . $steps
+    . ' If Detect finds no fan chip, the built-in drivers may not support it, and a driver plugin from Apps is needed: ex. the Nuvoton NCT6687 Driver for many MSI boards.'
     . '</span></div>';
 }
 
