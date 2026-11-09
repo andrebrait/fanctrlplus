@@ -59,6 +59,17 @@ FanCtrl Plus because both may control the same PWM devices. To migrate:
 
 Do not reinstall or run upstream FanCtrl Plus while FanCtrl Plus 2 is installed.
 
+## No PWM controllers listed
+
+Fan headers appear only once the driver for the mainboard's fan and sensor
+chip (for example `nct6775` or `it87`) is loaded. Unraid loads the drivers
+saved by the Dynamix System Temperature plugin; a saved list that holds only
+`coretemp` leaves the fan headers out. When no PWM controller is found, the
+settings page says so and points to **Settings → System Temp**: click
+**Detect**, then **Save** and **Load drivers**, and reload the page. If that
+plugin is not installed, install it from Apps first. FanCtrl Plus 2 itself
+does not load drivers or probe hardware ports.
+
 ## Fan curves
 
 Select **Edit fan curve** beside a temperature rule to open the dedicated editor.
@@ -199,17 +210,6 @@ Clearing a label also removes its dormant USB identity entry, so it cannot
 reappear after serial ambiguity is resolved.
 The identity identifies the controller's header, not the physical fan attached
 to it; replacing the fan does not change the saved assignment.
-
-## No PWM controllers listed
-
-Fan headers appear only once the driver for the mainboard's fan and sensor
-chip (for example `nct6775` or `it87`) is loaded. Unraid loads the drivers
-saved by the Dynamix System Temperature plugin; a saved list that holds only
-`coretemp` leaves the fan headers out. When no PWM controller is found, the
-settings page says so and points to **Settings → System Temp**: click
-**Detect**, then **Save** and **Load drivers**, and reload the page. If that
-plugin is not installed, install it from Apps first. FanCtrl Plus 2 itself
-does not load drivers or probe hardware ports.
 
 ## MSI boards with the nct6687 driver
 

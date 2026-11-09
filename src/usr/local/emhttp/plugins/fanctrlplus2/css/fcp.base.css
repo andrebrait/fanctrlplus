@@ -280,13 +280,14 @@
   box-sizing: border-box;
 }
 .fcp-asset-update-notice[hidden] { display: none !important; }
+.fcp-no-pwm-notice { justify-content: flex-start; }
 .fcp-asset-update-notice button {
   flex: none;
   width: auto;
   margin: 0;
   white-space: nowrap;
 }
-.fcp-nct6687-notice, .fcp-no-pwm-notice { justify-content: flex-start; }
+.fcp-nct6687-notice { justify-content: flex-start; }
 .fcp-nct6687-notice code.fcp-cmd { display: block; margin: 4px 0; user-select: all; }
 
 /* ===== Sort toggle ===== */
