@@ -139,6 +139,12 @@ function currentPointTooltipTitle(item) {
   return `${item.parsed.x}°C`;
 }
 
+// Tooltip name of a curve line: its dataset label without the " → PWM (%)" suffix, so a disk
+// group keeps its name ("Disk: NVMe Temp") like its current-reading marker does ("Disk: NVMe").
+function curveTooltipLabel(datasetLabel) {
+  return String(datasetLabel || '').replace(/\s+→.*$/, '');
+}
+
 function currentPointTooltipFilter(item, _index, items) {
   return !items.some(candidate => candidate.dataset.currentReading) || item.dataset.currentReading;
 }
@@ -427,7 +433,7 @@ window.showFanChart = function (btn) {
                     }
                     return `${ctx.dataset.currentLabel} current → Fan Speed = ${percent.toFixed(0)}% (PWM ${ctx.raw.pwm})`;
                   }
-                  const label = ctx.dataset.label.includes('Disk') ? 'Disk Temp' : ctx.dataset.label.includes('Aux') ? 'Aux Temp' : 'CPU Temp';
+                  const label = curveTooltipLabel(ctx.dataset.label);
                   const pwm = Math.round(percent * 2.55);
                   return `${label} → Fan Speed = ${percent.toFixed(0)}% (PWM ${pwm})`;
                 }
