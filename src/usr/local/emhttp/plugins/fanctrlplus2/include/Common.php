@@ -92,7 +92,7 @@ function fcp_frozen_sensors(string $file, int $stale, ?int $now = null): array {
 // page names the source that moved.
 function fcp_frozen_text(array $frozen, string $other): string {
     $hours = intdiv($frozen['last'] - $frozen['since'], 3600);
-    return "Unchanged at {$frozen['value']} °C for $hours h while $other varied {$frozen['lo']}–{$frozen['hi']} °C: may be a fixed placeholder.";
+    return "Unchanged at {$frozen['value']} °C for $hours h while $other varied {$frozen['lo']}–{$frozen['hi']} °C: may be a fixed placeholder. Pick another sensor for this fan, ex. the CPU package or a board System sensor.";
 }
 
 // =============================

@@ -682,7 +682,7 @@ fcp_notify_frozen() {
     touch "$flag" 2>/dev/null || return 0
     hours=$(( (last - since) / 3600 ))
     fcp_notify -i warning -s "Fan $name has a temperature sensor that does not change" \
-      -d "$(fcp_frozen_label "$src") has read $value °C for $hours hours while $(fcp_frozen_label "$other") varied $lo–$hi °C. It may report a fixed value rather than a measurement. Fan control is unchanged." &&
+      -d "$(fcp_frozen_label "$src") has read $value °C for $hours hours while $(fcp_frozen_label "$other") varied $lo–$hi °C. It may report a fixed value rather than a measurement. Fan control is unchanged; pick another sensor for this fan, ex. the CPU package or a board System sensor." &&
       printf '%s\n' "$src" >> "$flag"
   done
 }

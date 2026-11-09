@@ -26,7 +26,7 @@ $frozen = fcp_frozen_sensors("$root/frozen_Bay", 540, $now);
 $check(array_keys($frozen) === [$acpi, 'cpu'], 'Only well-formed conclusions the loop renewed recently are shown, got '.json_encode(array_keys($frozen)));
 $check(($frozen[$acpi]['lo'] ?? null) === 48 && ($frozen[$acpi]['hi'] ?? null) === 71 && ($frozen[$acpi]['other'] ?? '') === 'cpu', 'A conclusion keeps the source that moved and its range.');
 $check(fcp_frozen_sensors("$root/none", 540, $now) === [], 'A fan without a published file has no conclusion.');
-$check(fcp_frozen_text($frozen[$acpi], 'CPU') === 'Unchanged at 27 °C for 6 h while CPU varied 48–71 °C: may be a fixed placeholder.',
+$check(fcp_frozen_text($frozen[$acpi], 'CPU') === 'Unchanged at 27 °C for 6 h while CPU varied 48–71 °C: may be a fixed placeholder. Pick another sensor for this fan, ex. the CPU package or a board System sensor.',
     'The state says what was seen, for how long, and against what.');
 
 $cfg = ['file' => 'fanctrlplus2_Bay.cfg', 'custom' => 'Bay', 'cpu_enable' => '1', 'aux_enable' => '1',
@@ -35,9 +35,9 @@ $cfg = ['file' => 'fanctrlplus2_Bay.cfg', 'custom' => 'Bay', 'cpu_enable' => '1'
 $cpu = ['/sys/class/hwmon/hwmon4/temp1_input' => 'coretemp - Package id 0 (55°C)'];
 $aux = ['acpitz' => [['path' => $acpi, 'label' => 'acpitz - temp1 (27.8°C)']], 'Custom Sensors' => [['path' => 'custom:ambient', 'label' => 'ambient (24°C)']]];
 $block = render_fan_block($cfg, 0, [], [], [], $cpu, $aux, $frozen);
-$check(str_contains($block, '<span class="fcp-sensor-state" role="status">Unchanged at 41 °C for 6 h while Disk: NVMe varied 30–42 °C: may be a fixed placeholder.</span>'),
+$check(str_contains($block, '<span class="fcp-sensor-state" role="status">Unchanged at 41 °C for 6 h while Disk: NVMe varied 30–42 °C: may be a fixed placeholder. Pick another sensor for this fan, ex. the CPU package or a board System sensor.</span>'),
     'The CPU sensor shows its state, naming the disk group that moved.');
-$check(str_contains($block, '<span class="fcp-sensor-state" role="status">acpitz - temp1: Unchanged at 27 °C for 6 h while CPU varied 48–71 °C: may be a fixed placeholder.</span>'),
+$check(str_contains($block, '<span class="fcp-sensor-state" role="status">acpitz - temp1: Unchanged at 27 °C for 6 h while CPU varied 48–71 °C: may be a fixed placeholder. Pick another sensor for this fan, ex. the CPU package or a board System sensor.</span>'),
     'An aux sensor shows its state, named as the list names it.');
 $check(substr_count($block, 'fcp-sensor-state') === 2, 'A sensor without a conclusion shows nothing.');
 $check(!str_contains(render_fan_block($cfg, 0, [], [], [], $cpu, $aux, []), 'fcp-sensor-state'), 'No conclusions, no state.');
