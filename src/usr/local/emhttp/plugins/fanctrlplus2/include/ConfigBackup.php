@@ -100,7 +100,7 @@ function fcp_backup_assignments(string $text): array {
 
 function fcp_validate_fan_config(string $text): array {
     $values = fcp_backup_assignments($text);
-    $boolean = ['service','syslog','notify','log_enable','cpu_enable','aux_enable'];
+    $boolean = ['service','syslog','notify','frozen_notify','log_enable','cpu_enable','aux_enable'];
     $numeric = ['pwm','max','idle','idle_percent','low','high','interval','interval_sec','disk_group_count','cpu_min_temp','cpu_max_temp','aux_min_temp','aux_max_temp'];
     $string = ['custom','label','controller','controller_identity','fan','disks','cpu_sensor','aux_sensor'];
     foreach ($values as $key=>$value) {
