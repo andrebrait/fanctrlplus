@@ -200,6 +200,17 @@ reappear after serial ambiguity is resolved.
 The identity identifies the controller's header, not the physical fan attached
 to it; replacing the fan does not change the saved assignment.
 
+## No PWM controllers listed
+
+Fan headers appear only once the driver for the mainboard's fan and sensor
+chip (for example `nct6775` or `it87`) is loaded. Unraid loads the drivers
+saved by the Dynamix System Temperature plugin; a saved list that holds only
+`coretemp` leaves the fan headers out. When no PWM controller is found, the
+settings page says so and points to **Settings → System Temp**: click
+**Detect**, then **Save** and **Load drivers**, and reload the page. If that
+plugin is not installed, install it from Apps first. FanCtrl Plus 2 itself
+does not load drivers or probe hardware ports.
+
 ## MSI boards with the nct6687 driver
 
 On some MSI boards the nct6687 driver accepts speed changes for the system

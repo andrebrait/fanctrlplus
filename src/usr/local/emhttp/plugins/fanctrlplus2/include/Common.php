@@ -414,6 +414,26 @@ function fcp_nct6687_brute_force_missing(
   return $last === null || !preg_match('/^(?:$|[1yYtT]|[oO][nN])/', $last);
 }
 
+// Shown on the settings page when no PWM controller is found at all. Most
+// often the driver of the mainboard's Super I/O chip (nct6775, it87 and the
+// like) is not loaded: Unraid loads only the drivers the Dynamix System
+// Temperature plugin saved in its list, and a list holding only coretemp
+// leaves the fan headers out. The plugin's Detect button finds the driver;
+// nothing is loaded or probed from here.
+const FCP_SYSTEM_TEMP_DIR = '/usr/local/emhttp/plugins/dynamix.system.temp';
+
+function fcp_no_pwm_notice(array $pwms, string $system_temp_dir = FCP_SYSTEM_TEMP_DIR): string {
+  if ($pwms) return '';
+  $steps = 'open <a href="/Settings/TempSettings">Settings → System Temp</a>, click <strong>Detect</strong>, then <strong>Save</strong> and <strong>Load drivers</strong>, and reload this page.';
+  if (!is_dir($system_temp_dir)) {
+    $steps = 'install <strong>Dynamix System Temperature</strong> from Apps first, then open Settings → System Temp, click <strong>Detect</strong>, then <strong>Save</strong> and <strong>Load drivers</strong>, and reload this page.';
+  }
+  return '<div class="fcp-asset-update-notice fcp-no-pwm-notice"><span>'
+    . '<strong>No PWM controllers found.</strong> The driver for the mainboard\'s fan and sensor chip is probably not loaded, so its fan headers cannot be offered here. '
+    . 'To find and load it, ' . $steps
+    . '</span></div>';
+}
+
 // Find storcli binary (storcli64, storcli2, storcli) in common paths
 function find_storcli(): ?string {
   $candidates = [
