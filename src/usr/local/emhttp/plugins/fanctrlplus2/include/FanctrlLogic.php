@@ -202,9 +202,11 @@ switch ($op) {
     }
 
     $temp_file = "$cfg_dir/{$plugin}_temp_$index_cfg.cfg";
+    // The examples shown on an empty page start switched off.
+    $service = ($_REQUEST['example'] ?? '') === '1' ? '0' : '1';
     file_put_contents($temp_file, <<<INI
     custom=""
-    service="1"
+    service="$service"
     controller=""
     pwm="102"
     max="255"

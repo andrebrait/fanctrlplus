@@ -494,17 +494,18 @@ $(function() {
     });
   };
 
+  // With no fans at all, show two switched-off example blocks: one block per
+  // fan header is the idea a first look at an empty page should get across.
   window.ensureAtLeastOneFanBlock = function () {
-    const realBlocks = $('.fan-block');
-    if (realBlocks.length === 0) {
-      addFan();
+    if ($('.fan-block').length === 0) {
+      addFan({ example: 1 }).then(() => addFan({ example: 1 }));
     }
   };
 
-  window.addFan = function () {
+  window.addFan = function (options = {}) {
     const index = $('.fan-block').length;
 
-    $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', { op: 'newtemp', index: index }, function (html) {
+    return $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', { op: 'newtemp', index: index, example: options.example ? 1 : 0 }, function (html) {
       const $html = $(html);
       $('#fan-area').append($html);
 
@@ -1166,12 +1167,12 @@ $(function() {
       
       if (name === '') {
         valid = false;
-        errorMsg = 'Custom Name is required.';
+        errorMsg = 'Fan name is required, ex. HDDBayFan.';
         return false;
       }
       if (!/^[A-Za-z0-9_]+$/.test(name)) {
         valid = false;
-        errorMsg = 'Custom Name can only contain letters, numbers, and underscores.';
+        errorMsg = 'Fan name can only contain letters, numbers, and underscores.';
         return false;
       }
 
@@ -1183,13 +1184,13 @@ $(function() {
 
       if (/temp_/i.test(name)) {
         valid = false;
-        errorMsg = 'Custom Name cannot contain "temp_".';
+        errorMsg = 'Fan name cannot contain "temp_".';
         return false;
       }
       
       if (namesSeen.has(name)) {
         valid = false;
-        errorMsg = `Custom Name "${name}" is already used.`;
+        errorMsg = `Fan name "${name}" is already used.`;
         duplicateFound = true;
         return false;
       }
@@ -1479,7 +1480,7 @@ $(function() {
 
     const label = btn.getAttribute('data-label');
     if (!label) {
-      alert("Custom Name is not configured, cannot refresh!");
+      alert("Fan name is not set, cannot refresh. Enter one first, ex. HDDBayFan.");
       return;
     }
 
@@ -1665,7 +1666,7 @@ $(function() {
   </div>
 
   <div class="fcp-actions">
-    <button type="button" onclick="addFan()">➕ Add Fan</button>
+    <button type="button" onclick="addFan()" title="Add a block for another fan header, ex. a rear fan that follows the CPU while the front fans follow the disks.">➕ Add Fan</button>
     <button type="button" id="apply-btn">Apply All</button>
     <button type="button" id="toggle-daemon" onclick="toggleDaemon()" disabled>Loading...</button>
   </div>
@@ -1687,7 +1688,7 @@ $(function() {
         Use the “Identify” feature to label physical fans, then assign appropriate names for clarity (e.g. Rear Fan, HDD Fan).
     </p>
 
-    <p><strong>Custom Name:</strong> This label will be used in logs, UI, and configuration files. Choose a clear name like “HDD_Bay” or “Rear” to identify each block. A valid name is required to save settings.</p>
+    <p><strong>Fan name:</strong> Each block (Fan 1, Fan 2, …, numbered by its place on the page) drives one fan header from the sensors chosen in it. Name it after what it cools, ex. “HDDBayFan” or “RearFan”; the name is used in logs, the interface and the configuration file, and is required to save. Fans on a splitter or hub share one header and one block; a fan on another header gets its own block through <strong>Add Fan</strong>. With no fans set up, two example blocks are shown, switched off, until a name and a PWM controller are chosen.</p>
 
     <p><strong>Fan Control:</strong> Enables or disables the selected fan configuration. When disabled, temperature monitoring and fan speed control for that configuration will stop. 
         In contrast, the <strong>Stop</strong> button fully halts the fanctrlplus2 service, stopping all fan updates and logging across all configurations.
@@ -2006,7 +2007,7 @@ $(function() {
           <p><strong>Usage Guide:</strong></p>
           <p>Syslog output is <strong>enabled by default</strong>. When active, each fan will report actions such as:</p>
           <p class="fc-help-box">
-            [HDDBay] Temp=53 → PWM=255 → RPM=2089
+            [HDDBayFan] Temp=53 → PWM=255 → RPM=2089
           </p>
           <p>This helps you track fan behavior in real time. However, if a particular fan changes frequently and generates too many log entries, you can <strong>disable logging</strong> for that fan.</p>
           <p><strong>Note:</strong> The plugin only writes to syslog when the <strong>PWM value changes by more than 5</strong> compared to the previous value — small changes are ignored to reduce log noise.</p>

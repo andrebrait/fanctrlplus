@@ -113,6 +113,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
     <?php endif; ?>
 
     <fieldset class="fan-fieldset">
+      <legend class="fcp-fan-legend">Fan <span class="fcp-fan-number"></span></legend>
       <div class="fcp-fan-icon-wrap">
         <div class="fan-svg-container fcp-abs-fill">
           <div class="fcp-abs-fill-help"></div>
@@ -166,11 +167,11 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
       </div>
 
       <table class="fcp-w-100">
-        <!-- Custom Name -->
+        <!-- Fan name. The number is the block's place on the page (CSS counter). -->
         <tr>
-          <td class="fcp-help-cursor" 
-              title="Enter a unique name for this fan configuration. Avoid spaces or special characters.">
-            Custom Name
+          <td class="fcp-help-cursor"
+              title="One block drives one fan header (PWM channel) from the sensors you pick below. Name it after what it cools, ex. HDDBayFan or RearFan. Fans on a splitter or hub share one header and one block; a fan on another header gets its own block (Add Fan). Letters, numbers and _ only.">
+            Fan <span class="fcp-fan-number"></span> name
           </td>
           <td>
             <div>
@@ -178,7 +179,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                     name="custom[<?=$i?>]"
                     class="custom-name-input"
                     value="<?=htmlspecialchars($cfg['custom'] ?? '')?>"
-                    placeholder="Required (e.g. HDDBay)"
+                    placeholder="ex. <?=['HDDBayFan', 'RearFan'][$i] ?? 'FrontFan'?>"
                     required>
             </div>
           </td>
