@@ -424,15 +424,21 @@ const FCP_SYSTEM_TEMP_DIR = '/usr/local/emhttp/plugins/dynamix.system.temp';
 
 function fcp_no_pwm_notice(array $pwms, string $system_temp_dir = FCP_SYSTEM_TEMP_DIR): string {
   if ($pwms) return '';
-  $steps = 'open <a href="/Settings/TempSettings">Settings → System Temp</a>, click <strong>Detect</strong>, then <strong>Save</strong> and <strong>Load drivers</strong>, and reload this page.';
-  if (!is_dir($system_temp_dir)) {
-    $steps = 'install <strong>Dynamix System Temperature</strong> from Apps first, then open Settings → System Temp, click <strong>Detect</strong>, then <strong>Save</strong> and <strong>Load drivers</strong>, and reload this page.';
-  }
-  return '<div class="fcp-asset-update-notice fcp-no-pwm-notice"><span>'
-    . '<strong>No PWM controllers found.</strong> The driver for the mainboard\'s fan and sensor chip is probably not loaded, so its fan headers cannot be offered here. '
-    . 'To find and load it, ' . $steps
-    . ' If Detect finds no fan chip, the built-in drivers may not support it, and a driver plugin from Apps is needed: ex. the Nuvoton NCT6687 Driver for many MSI boards.'
-    . '</span></div>';
+  $installed = is_dir($system_temp_dir);
+  $page = $installed ? '<a href="/Settings/TempSettings">Settings → System Temp</a>' : 'Settings → System Temp';
+  $steps = [
+    '<strong>Detect</strong>: looks for the board\'s sensor chips once and fills <strong>Available drivers</strong>, ex. <code>coretemp nct6775</code> on many ASRock and ASUS boards, <code>it87</code> on many Gigabyte boards.',
+    'Check <strong>Available drivers</strong>: a list with only <code>coretemp</code> (the CPU) means no fan chip was found; see below.',
+    '<strong>Save</strong>: stores the list, so the drivers load at every boot. Saving alone does not load them.',
+    '<strong>Load drivers</strong>: loads them now, without a reboot. Then reload this page.',
+  ];
+  return '<div class="fcp-asset-update-notice fcp-no-pwm-notice"><div>'
+    . '<strong>No PWM controllers found.</strong> Fan headers are driven by the mainboard\'s fan and sensor chip, and its driver is probably not loaded, so there is nothing to offer here yet. '
+    . ($installed ? '' : 'Install <strong>Dynamix System Temperature</strong> from Apps first, then ')
+    . ($installed ? 'In ' : 'in ') . $page . ':'
+    . '<ol class="fcp-no-pwm-steps"><li>' . implode('</li><li>', $steps) . '</li></ol>'
+    . 'If Detect finds no fan chip, the built-in drivers may not support it, and a driver plugin from Apps is needed: ex. the Nuvoton NCT6687 Driver for many MSI boards.'
+    . '</div></div>';
 }
 
 // Find storcli binary (storcli64, storcli2, storcli) in common paths

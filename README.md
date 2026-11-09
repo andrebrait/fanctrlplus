@@ -65,9 +65,13 @@ Fan headers appear only once the driver for the mainboard's fan and sensor
 chip (for example `nct6775` or `it87`) is loaded. Unraid loads the drivers
 saved by the Dynamix System Temperature plugin; a saved list that holds only
 `coretemp` leaves the fan headers out. When no PWM controller is found, the
-settings page says so and points to **Settings → System Temp**: click
-**Detect**, then **Save** and **Load drivers**, and reload the page. If that
-plugin is not installed, install it from Apps first. FanCtrl Plus 2 itself
+settings page says so and walks through **Settings → System Temp** in its
+own order: **Detect** fills **Available drivers**; a list with only
+`coretemp` means no fan chip was found; **Save** stores the list for every
+boot; **Load drivers** loads it now. Then reload the page. If that plugin is
+not installed, install it from Apps first. If Detect finds no fan chip, a
+driver plugin from Apps may be needed (for example the Nuvoton NCT6687
+Driver for many MSI boards). FanCtrl Plus 2 itself
 does not load drivers or probe hardware ports.
 
 ## Fan curves
