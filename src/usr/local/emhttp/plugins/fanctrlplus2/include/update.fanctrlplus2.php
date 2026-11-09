@@ -159,6 +159,13 @@ foreach ($_POST['#file'] as $i => $file) {
 }
 
 // Save every validated block. Preflight has checked every name, so nothing here can refuse a block.
+// Temperature sensors are saved with the identity of their chip and device
+// too, which the service start resolves again (see fcp_migrate_sensors).
+$sensor_identities = fcp_sensor_identity_map();
+$sensor_bindings = fn(string $list) => implode(',', array_map(
+  fn($sensor) => fcp_sensor_binding($sensor, $sensor_identities),
+  $list === '' ? [] : explode(',', $list)
+));
 foreach ($_POST['#file'] as $i => $file) {
   $plan = $plans[$i];
   $custom = $plan['custom'];
@@ -266,10 +273,12 @@ foreach ($_POST['#file'] as $i => $file) {
     'notify'     => (string)($previous['notify'] ?? '1'),
     'cpu_enable'    => $cpu_enable,
     'cpu_sensor'    => $cpu_sensor,
+    'cpu_sensor_identity' => $sensor_bindings($cpu_sensor),
     'cpu_min_temp'  => $legacy['cpu_min_temp'],
     'cpu_max_temp'  => $legacy['cpu_max_temp'],
     'aux_enable'    => $aux_enable,
     'aux_sensor'    => $aux_sensor,
+    'aux_sensor_identity' => $sensor_bindings($aux_sensor),
     'aux_min_temp'  => $legacy['aux_min_temp'],
     'aux_max_temp'  => $legacy['aux_max_temp'],
   ] + $disk_groups_out + $curve_fields;

@@ -416,6 +416,14 @@ expect_equal "50" "$(aux_hottest_reading <<< "$readings")" \
 expect_equal "" "$(aux_unread_sensors <<< "$(aux_temp_readings "$tmp/temp3_input")")" \
   "When every sensor reads, none is named."
 
+# A sensor identity the service start could not resolve stands in for the
+# path; it has no reading, so the warning names the sensor that is gone.
+readings=$(aux_temp_readings "hwmon:it8625:temp1:platform/asustor_it87.2608,$tmp/temp3_input")
+expect_equal "hwmon:it8625:temp1:platform/asustor_it87.2608" "$(aux_unread_sensors <<< "$readings")" \
+  "An unresolved sensor identity must count as unread, never as a reading."
+expect_equal "50" "$(aux_hottest_reading <<< "$readings")" \
+  "The other sensors of the list must still be read."
+
 if (( failures > 0 )); then
   printf '%d aux sensor assertion(s) failed.\n' "$failures" >&2
   exit 1

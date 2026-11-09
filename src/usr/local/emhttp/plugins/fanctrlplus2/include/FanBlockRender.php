@@ -299,6 +299,11 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
               <?php foreach ($cpu_sensors as $path => $label): ?>
                 <option value="<?=htmlspecialchars($path)?>" <?=($cfg['cpu_sensor'] ?? '') == $path ? 'selected' : ''?>><?=htmlspecialchars($label)?></option>
               <?php endforeach; ?>
+              <?php // A saved sensor that is not listed stays selected, so saving keeps it rather than the first one listed.
+                $cpu_saved = (string)($cfg['cpu_sensor'] ?? '');
+                if ($cpu_saved !== '' && !array_key_exists($cpu_saved, $cpu_sensors)): ?>
+                <option value="<?=htmlspecialchars($cpu_saved)?>" selected><?=htmlspecialchars(fcp_sensor_unavailable_label($cpu_saved))?></option>
+              <?php endif; ?>
             </select>
           </td>
         </tr>
@@ -328,7 +333,8 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
         <tr class="aux-control aux-control-<?=$i?>">
           <td class="aux-label fcp-help-cursor" title="Select one or more auxiliary temperature sensors to monitor. The highest temperature across all selected sensors is used. Lists non-CPU, non-NVMe hwmon sensors, plus storcli, nvidia-smi and Mellanox NICs if available, and any script you dropped in sensors.d.">Sensor(s):</td>
           <td class="fcp-ddcl-cell">
-            <?php $aux_selected = array_filter(explode(',', $cfg['aux_sensor'] ?? '')); ?>
+            <?php $aux_selected = array_filter(explode(',', $cfg['aux_sensor'] ?? ''));
+              $aux_unlisted = array_diff($aux_selected, array_column(array_merge([], ...array_values($aux_sensors)), 'path')); ?>
             <select class="aux-select aux-input fcp-w-300" name="aux_sensor[<?=$i?>][]" multiple <?=($cfg['aux_enable'] ?? '') != '1' ? 'disabled' : ''?>>
               <?php foreach ($aux_sensors as $group => $entries): ?>
                 <optgroup label="<?=htmlspecialchars($group)?>">
@@ -337,6 +343,13 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                   <?php endforeach; ?>
                 </optgroup>
               <?php endforeach; ?>
+              <?php if ($aux_unlisted): ?>
+                <optgroup label="Unavailable">
+                  <?php foreach ($aux_unlisted as $sensor): ?>
+                    <option value="<?=htmlspecialchars($sensor)?>" selected><?=htmlspecialchars(fcp_sensor_unavailable_label($sensor))?></option>
+                  <?php endforeach; ?>
+                </optgroup>
+              <?php endif; ?>
             </select>
           </td>
         </tr>

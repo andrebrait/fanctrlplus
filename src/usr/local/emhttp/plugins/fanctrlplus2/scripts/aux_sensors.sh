@@ -145,6 +145,11 @@ aux_read_sensor() {
       [[ "$temp" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || return 0
       temp="${temp%%.*}"
       ;;
+    hwmon:*)
+      # A saved sensor identity the service start could not resolve to one
+      # input (fcp_migrate_sensors): it has no reading until the sensor is back.
+      return 0
+      ;;
     *)
       # An hwmon input reading exactly 0 is the long-standing marker for a
       # sensor that is present but not populated, not a reading of 0 °C.

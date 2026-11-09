@@ -200,6 +200,25 @@ reappear after serial ambiguity is resolved.
 The identity identifies the controller's header, not the physical fan attached
 to it; replacing the fan does not change the saved assignment.
 
+## Temperature sensor identity
+
+CPU and auxiliary hwmon sensors are listed as `/sys/class/hwmon/hwmonN` paths,
+and `hwmonN` follows probe order: on a machine with NVMe drives, which register
+hwmon devices too, the CPU or board sensor can come up under another number
+after a reboot. Each selected sensor is therefore also saved with the chip
+name, its device path below `/sys/devices`, and its `tempN` input, for example
+`hwmon:coretemp:temp1:platform/coretemp.0`, in `cpu_sensor_identity` and
+`aux_sensor_identity`. The runtime paths are resolved again whenever the
+service starts, and existing configurations get their identities recorded at
+that point, from the sensors their saved paths name then.
+
+A sensor whose identity is missing or matches more than one input is not
+replaced by another one. It keeps its identity in place of the path, has no
+reading, and triggers the missing-sensor warning described above; the
+settings page lists it as not found and keeps it selected until the sensor
+is back or another one is chosen. Tool and script sensors (`storcli:`,
+`nvidia:`, `mlx:`, `custom:`) are saved as they are.
+
 ## MSI boards with the nct6687 driver
 
 On some MSI boards the nct6687 driver accepts speed changes for the system
