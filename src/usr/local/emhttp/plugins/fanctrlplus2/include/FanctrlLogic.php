@@ -124,6 +124,26 @@ switch ($op) {
       http_response_code(500); json_response(['status'=>'error','message'=>$error->getMessage()]);
     }
     break;
+
+  case 'exportdiagnostics':
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+      header('Allow: GET'); http_response_code(405);
+      json_response(['status'=>'error','message'=>'Use GET to export diagnostics.']);
+    }
+    require_once __DIR__.'/Diagnostics.php';
+    ob_start(); // Warnings printed while collecting must not corrupt the archive or the error JSON.
+    try {
+      $zip = fcp_diagnostics_zip($cfg_dir);
+    } catch (Throwable $error) {
+      error_log('[fanctrlplus2] Diagnostics export failed: '.$error->getMessage());
+      http_response_code(500);
+      json_response(['status'=>'error','message'=>'Diagnostics could not be created. Check the system log for details.']);
+    }
+    while (ob_get_level()) ob_end_clean(); // Discard any output the collector printed.
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="fanctrlplus2-diagnostics.zip"');
+    echo $zip;
+    exit;
     
   case 'identify':
     $pwm  = $_GET['pwm']  ?? '';

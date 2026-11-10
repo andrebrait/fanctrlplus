@@ -170,6 +170,14 @@ scripts separately. Restored USB identities are resolved by the existing device
 migration at service startup; a missing or ambiguous recorded controller is not
 assigned to another device.
 
+## Support diagnostics
+
+Use **General Settings → Download diagnostics** to download a ZIP for support.
+It contains anonymized fan settings, hardware readings and structured fan-control
+events, including whether custom sensors are configured. It does not include raw
+logs, disk identifiers, fan or sensor names, or custom sensor scripts. Hardware
+characteristics can still identify a machine; review the ZIP before sharing it.
+
 ## Fan identity and USB port changes
 
 For USB controllers that expose a unique serial number, fan labels and

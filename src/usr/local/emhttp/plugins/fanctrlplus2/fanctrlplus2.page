@@ -1386,6 +1386,39 @@ $(function() {
       setConfigBackupBusy(false);
     }
   });
+
+  $(document).on('click', '#fcp-diagnostics-export', async function () {
+    const $button = $('#fcp-diagnostics-export');
+    const $status = $('#fcp-diagnostics-status');
+    const failed = 'Diagnostics could not be created.';
+    let message;
+    $button.prop('disabled', true);
+    $status.text('Preparing diagnostics…');
+    try {
+      const response = await fetch(configBackupUrl + '?op=exportdiagnostics', {cache: 'no-store'});
+      // A fatal PHP error answers 200 with HTML, so require the ZIP type before saving.
+      if (response.ok && (response.headers.get('Content-Type') || '').startsWith('application/zip')) {
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'fanctrlplus2-diagnostics.zip';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+        message = 'Diagnostics downloaded.';
+      } else {
+        let body = {};
+        try { body = await response.json(); } catch (_) {}
+        message = body.message || failed;
+      }
+    } catch (_) {
+      message = failed;
+    } finally {
+      $button.prop('disabled', false);
+    }
+    $status.text(message);
+  });
   
   $(document).on('click', '.add-disk-group-btn', function () {
     const $btn = $(this);
@@ -1984,6 +2017,16 @@ $(function() {
           <input type="file" id="fcp-config-import-file" accept=".json,application/json" aria-label="Choose a configuration backup" hidden>
         </div>
         <p id="fcp-config-backup-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="fcp-section">
+        <p><strong>Diagnostics</strong></p>
+        <p id="fcp-diagnostics-help">Download a ZIP for troubleshooting. It contains anonymized fan settings, hardware information and structured fan-control events.
+          It excludes raw logs, names, disk identifiers and custom sensor scripts. Hardware characteristics may still identify this machine, so review the archive before sharing it.</p>
+        <div class="fcp-actions">
+          <button type="button" class="btn" id="fcp-diagnostics-export" aria-describedby="fcp-diagnostics-help">Download diagnostics</button>
+        </div>
+        <p id="fcp-diagnostics-status" role="status" aria-live="polite"></p>
       </div>
     </div>
 
