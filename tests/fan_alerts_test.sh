@@ -68,11 +68,14 @@ expect_equal 'speed;/controller mode stopped' "$(check 120)" "A controller readi
 fan 230 1 1200
 expect_equal 'speed;/controller mode stopped' "$(check 255)" "A readback 10 points off is a problem."
 fan 232 1 1200
-expect_equal '/controller mode speed stopped' "$(check 255)" "A readback 9 points off is fine."
+expect_equal '/controller mode speed stopped' "$(check 255)" "A readback 9 points below the target is within the tolerance."
+fan 255 1 1200
+expect_equal '/controller mode speed stopped' "$(check 232)" "A readback 9 points above the target is within the tolerance."
+expect_equal 'speed;/controller mode stopped' "$(check 230)" "A readback 10 points above the target is a problem."
 fan 154 1 1200
 expect_equal '/controller mode speed stopped' "$(check 166)" "65% read back as 60% is within the general tolerance."
-expect_equal 'speed;/controller mode stopped' "$(check 166 1)" "An nct6687 MSI fan set to 65% and held at 60% is a problem."
-expect_equal 'speed;/controller mode stopped' "$(check 155 1)" "61% is above 60%; a reading of 154 rounds to 60%."
+expect_equal '/controller mode speed stopped' "$(check 176 1)" "An MSI mismatch of 9 points is within the tolerance."
+expect_equal 'speed;/controller mode stopped' "$(check 179 1)" "An MSI mismatch of 10 points is reported."
 expect_equal '/controller mode speed stopped' "$(check 154 1)" "An nct6687 MSI fan set to 60% at 60% is fine."
 fan 155 1 1200
 expect_equal '/controller mode speed stopped' "$(check 166 1)" "An nct6687 MSI fan reading above 60% is not held."
@@ -81,6 +84,48 @@ fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 255 1 "$spun"
 expect_equal 1 "$(grep -c 'msi_fan_brute_force' <<< "${fcp_faults[0]}")" "The nct6687 warning names the driver option that fixes it."
 fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 255 0 "$spun"
 expect_equal 0 "$(grep -c 'msi_fan_brute_force' <<< "${fcp_faults[0]}")" "Other controllers do not get the nct6687 advice."
+
+# RPM evidence is based on the current reading, not a stale earlier sample.
+fcp_response_start 77 255 1000 "$((SECONDS - 30))"
+fan 77 1 3300
+fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 255 0 "$spun"
+expect_equal 1 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "A responding fan qualifies the mismatch."
+fan 77 1 1050
+fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 255 0 "$spun"
+expect_equal 0 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "An old response cannot qualify a current mismatch."
+fcp_response_start 77 255 1000 "$SECONDS"
+fan 77 1 3300
+fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 255 0 "$spun"
+expect_equal 0 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "A fan is given time to settle."
+fcp_response_start 255 77 3300 "$((SECONDS - 30))"
+fan 255 1 1000
+fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 77 0 "$spun"
+expect_equal 1 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "A decrease can qualify a mismatch."
+fcp_response_start 77 255 1000 "$((SECONDS - 30))"
+fan 77 1 900
+fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 255 0 "$spun"
+expect_equal 0 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "A response in the wrong direction is not evidence."
+fcp_response_start 77 90 1000 "$((SECONDS - 30))"
+fan 0 1 3300
+fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 90 0 "$spun"
+expect_equal 0 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "A small PWM change cannot establish a response."
+fcp_response_start 77 255 '' "$((SECONDS - 30))"
+fan 77 1 3300
+fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 255 0 "$spun"
+expect_equal 0 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "A missing baseline cannot establish a response."
+fcp_response_start 77 128 1000 "$((SECONDS - 30))"
+fan 0 1 1199
+fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 128 0 "$spun"
+expect_equal 0 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "RPM changes below 20% are inconclusive."
+fan 0 1 1200
+fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 128 0 "$spun"
+expect_equal 1 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "A 20% RPM change after a 20% PWM step qualifies."
+fcp_response_start 77 127 1000 "$((SECONDS - 30))"
+fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 127 0 "$spun"
+expect_equal 0 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "A PWM step below 20% is inconclusive."
+fcp_response_start 77 255 0 "$((SECONDS - 30))"
+fcp_check_fan "$hw/pwm1" "$hw/fan1_input" 255 0 "$spun"
+expect_equal 0 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "A zero RPM baseline cannot establish a response."
 fan foo 1 1200
 expect_equal '/controller mode stopped' "$(check 255)" "An unreadable speed is not judged."
 
@@ -131,6 +176,24 @@ round() { # time, then problems ("key|subject|details") and keys seen fine
   done
   fcp_track_faults "$now" Bay "$dir"
 }
+: > "$tmp/calls"
+mkdir -p "$tmp/transition"
+fcp_faults=("$speed") fcp_ok=()
+fcp_track_faults 0 Bay "$tmp/transition" 255
+fcp_track_faults 120 Bay "$tmp/transition" 132
+expect_equal 0 "$(sent warning)" "A change of target starts a fresh speed mismatch grace period."
+fcp_track_faults 150 Bay "$tmp/transition" 132
+expect_equal 1 "$(sent warning)" "A mismatch still present 30 seconds after the new target warns."
+fcp_faults=() fcp_ok=(speed)
+fcp_track_faults 160 Bay "$tmp/transition" 130
+fcp_track_faults 180 Bay "$tmp/transition" 128
+fcp_track_faults 190 Bay "$tmp/transition" 126
+expect_equal 1 "$(sent normal)" "Continuous healthy readback recovers even when targets change."
+fcp_faults=("$speed") fcp_ok=()
+fcp_track_faults 200 Bay "$tmp/transition" 126
+fcp_track_faults 230 Bay "$tmp/transition" 126
+expect_equal 2 "$(sent warning)" "A new mismatch after recovery warns again."
+fcp_fault_since=() fcp_clear_since=() fcp_fault_target=''
 : > "$tmp/calls"
 
 round 0 "$speed"

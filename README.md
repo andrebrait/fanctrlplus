@@ -29,7 +29,9 @@ Configuration is done through a user-friendly interface, with custom thresholds,
 - Control multiple PWM fans independently
 - Monitor temps from array disks, NVMe, unassigned devices, and optionally the CPU
 - Monitor auxiliary hwmon, storcli, NVIDIA GPU, and Mellanox NIC (`mget_temp`) temperature sensors, or any sensor of your own through a custom script
-- Sends Unraid notifications when a fan has a problem, while fan control keeps running. A fan gets one warning when, for at least 30 seconds, its PWM controller disappears, the BIOS or another program takes it over, the controller reports a speed 10 or more points away from the one set, or the fan reports 0 RPM while set above 40% after spinning earlier. A fan whose controller is missing when fan control starts also gets one warning. A notice follows once the problem has stayed away for 30 seconds. A configured CPU or auxiliary sensor without a reading for at least 60 seconds also gets one warning per fan per boot, since the fan cannot react to it and, if nothing else reads, stays at its Idle or Min Speed. Alerts are on by default and can be turned off per fan under Syslog & Alerts, for example for a controller with only a few speed steps that never reads back the exact speed set
+- Sends Unraid notifications when a fan has a problem, while fan control keeps running. A fan gets one warning when, for at least 30 seconds, its PWM controller disappears, the BIOS or another program takes it over, the controller reports a speed 10 or more percentage points away from the one set, or the fan reports 0 RPM while set above 40% after spinning earlier. A fan whose controller is missing when fan control starts also gets one warning. A notice follows once the problem has stayed away for 30 seconds. A configured CPU or auxiliary sensor without a reading for at least 60 seconds also gets one warning per fan per boot, since the fan cannot react to it and, if nothing else reads, stays at its Idle or Min Speed. Alerts are on by default and can be turned off per fan under Syslog & Alerts, for example for a controller with only a few speed steps that never reads back the exact speed set
+  A PWM mismatch warning also reports a substantial RPM response to a recent speed change when observed. This suggests, but does not prove, that the fan responded despite the PWM readback.
+  The PWM mismatch grace period restarts when the requested speed changes, so readings from different targets do not combine into one warning.
 - Give each disk group, CPU rule, and auxiliary rule its own 2–8 point fan curve with linear or stepped control
 - Keep absolute point speeds when changing the normal output cap; optionally override that cap at an emergency temperature
 - Configure cooling hysteresis to avoid repeated speed changes near temperature boundaries
@@ -209,9 +211,9 @@ option. When a configured fan uses one of those channels and the option is not
 detected, the settings page shows a notice with the workaround. The option's
 loaded state is read from the driver's `fan_control_watchdog` attribute or its
 "MSI fan brute force mode" kernel log line, falling back to the modprobe
-configuration. While a fan on one of those channels is set above 60% but reads
-back 60% or less for 30 seconds, the plugin also sends an Unraid warning that
-names the option (see the problem alerts above). On Unraid, set the option on the flash drive and
+configuration. If a fan on one of those channels is set above 60%, reads
+back 60% or less, and differs from the target by 10 or more percentage
+points for 30 seconds, the warning names the option. On Unraid, set the option on the flash drive and
 reboot:
 
 ```bash
