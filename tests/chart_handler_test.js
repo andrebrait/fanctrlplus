@@ -190,6 +190,18 @@ vm.runInContext(source, context);
     failures.push(`The Aux preview marker must use the hottest selected sensor and clamp it: ${JSON.stringify(auxPreviewPoint)}`);
   }
 
+  const curveLabels = [
+    ['Disk: NVMe Temp → PWM (%)', 'Disk: NVMe Temp'],
+    ['Disk: Apps-pool Temp → PWM (%)', 'Disk: Apps-pool Temp'],
+    ['CPU Temp → PWM (%)', 'CPU Temp'],
+    ['Aux Temp → PWM (%)', 'Aux Temp'],
+  ];
+  for (const [datasetLabel, expected] of curveLabels) {
+    const got = context.curveTooltipLabel(datasetLabel);
+    if (got !== expected) {
+      failures.push(`Curve tooltip must name its source like the current marker does: ${datasetLabel} -> ${got}, expected ${expected}`);
+    }
+  }
   const bounds = context.temperatureBounds(datasets, [
     { source: 'disk:1', temp: 55, pwm: 255 },
     { source: 'cpu', temp: 80, pwm: 255 },
