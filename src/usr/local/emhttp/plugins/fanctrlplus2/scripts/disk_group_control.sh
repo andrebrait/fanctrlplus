@@ -347,6 +347,16 @@ fcp_controller_subject="has lost its PWM controller"
 fcp_faults=()
 fcp_ok=()
 
+# shortcut: a directional RPM change is suggestive, not proof of control.
+fcp_response_pending=''
+fcp_response_start() {
+  local old="$1" new="$2" rpm="$3" now="$4"
+  fcp_response_pending=''
+  [[ "$old" =~ ^[0-9]+$ && "$new" =~ ^[0-9]+$ && "$rpm" =~ ^[0-9]+$ ]] || return
+  (( rpm > 0 && (new - old >= 51 || old - new >= 51) )) || return
+  fcp_response_old=$old fcp_response_pending=$new fcp_response_baseline=$rpm fcp_response_time=$now
+}
+
 # Checks one fan, set to target (the PWM value last written, or empty before
 # any write succeeded; nct is 1 for a channel fcp_nct6687_msi_channel matched).
 # Sets fcp_faults to this round's problems as "key|subject|details" entries,
@@ -368,6 +378,7 @@ fcp_check_fan() {
     mode=$(cat "${controller}_enable" 2>/dev/null)
     [[ -n "$mode" ]] || return
     if [[ "$mode" != 1 ]]; then
+      fcp_response_pending=''
       fcp_faults+=("mode|is no longer under FanCtrl Plus 2 control|${controller}_enable changed from manual (1) to $mode, so the BIOS or another program sets the fan speed. FanCtrl Plus 2 takes the fan back at its next speed change.")
       return
     fi
@@ -375,17 +386,19 @@ fcp_check_fan() {
   fcp_ok+=(mode)
   # Speed and stopped compare against a written target; there is none yet.
   [[ -n "$target" ]] || return
+  [[ "${fcp_response_pending:-}" == "$target" ]] || fcp_response_pending=''
   want=$(fcp_pwm_percent "$target")
   # Most drivers read back the value last written; a chip that ignores a
   # write, or a write that failed, reads back something else.
   actual=$(cat "$controller" 2>/dev/null)
   if [[ "$actual" =~ ^[0-9]+$ ]]; then
     got=$(fcp_pwm_percent "$actual")
-    # On MSI boards the nct6687 msi_alt1 layout holds ignored fans at about 60% (#13).
-    if (( nct && want > 60 && got <= 60 )); then
-      fcp_faults+=("speed|is not reaching its set speed|Set to $want% but the nct6687 controller reports $got%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page.")
-    elif (( want - got >= 10 || got - want >= 10 )); then
-      fcp_faults+=("speed|is not reaching its set speed|Set to $want% but the controller reports $got%. The controller may be ignoring speed changes, or another program may be setting it.")
+    if (( want - got > 5 || got - want > 5 )); then
+      if (( nct && want > 60 && got <= 60 )); then
+        fcp_faults+=("speed|is not reaching its set speed|Set to $want% but the nct6687 controller reports $got%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page.")
+      else
+        fcp_faults+=("speed|is not reaching its set speed|Set to $want% but the controller reports $got%. The controller may be ignoring speed changes, or another program may be setting it.")
+      fi
     else
       fcp_ok+=(speed)
     fi
@@ -395,6 +408,14 @@ fcp_check_fan() {
   # may have stopped by design.
   rpm=$(cat "$fan_input" 2>/dev/null)
   [[ "$rpm" =~ ^[0-9]+$ ]] || return
+  if [[ ${fcp_response_pending:-} == "$target" && ${#fcp_faults[@]} -gt 0 ]] &&
+     (( SECONDS - fcp_response_time >= 30 && rpm > 0 )); then
+    local delta=$((rpm - fcp_response_baseline))
+    if (( (target > fcp_response_old && delta >= 100 && delta * 5 >= fcp_response_baseline) ||
+          (target < fcp_response_old && delta <= -100 && -delta * 5 >= fcp_response_baseline) )); then
+      fcp_faults[${#fcp_faults[@]}-1]+=" RPM changed from ${fcp_response_baseline} to ${rpm} in the requested direction, suggesting the fan may have responded despite the PWM readback."
+    fi
+  fi
   if (( rpm > 0 )); then
     [[ "$(cat "$dir/.spun" 2>/dev/null)" == "$controller" ]] ||
       printf '%s' "$controller" > "$dir/.spun" 2>/dev/null

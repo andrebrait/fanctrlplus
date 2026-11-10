@@ -61,6 +61,7 @@ fault_dir="/var/tmp/${plugin}/faults_${custom}"
 mkdir -p "$fault_dir"
 
 prev_pwm=-1
+response_last_write=-1
 hist_file="/var/tmp/${plugin}/history_${plugin}_${custom}"
 
 # Seed the sticky-source memory from the last recorded tick, so a loop restart
@@ -188,9 +189,18 @@ while true; do
     if [[ "$aux_temp" =~ ^[0-9]+$ && -v aux_curve ]] && (( aux_pwm_val == pwm_val || (${fcp_curve_latch[aux]:-0} && old_pwm < aux_pwm_val) )); then point_target=1; fi
   fi
   if [[ "$old_pwm" == -1 ]] || (( pwm_val != old_pwm && (point_target || pwm_val == 255 || pwm_val - old_pwm >= 5 || old_pwm - pwm_val >= 5) )); then
+    response_baseline=''
+    if (( old_pwm >= 0 && response_last_write >= 0 && SECONDS - response_last_write >= 30 )); then
+      response_mode=$(cat "$controller_enable" 2>/dev/null)
+      if [[ ! -e "$controller_enable" || "$response_mode" == 1 ]]; then
+        response_baseline=$(cat "$fan_path" 2>/dev/null)
+      fi
+    fi
     if fcp_write_pwm "$pwm_val"; then
       wrote=1
       prev_pwm=$pwm_val
+      fcp_response_start "$old_pwm" "$pwm_val" "$response_baseline" "$SECONDS"
+      response_last_write=$SECONDS
       write_failing=0
     elif (( ! write_failing )); then
       write_failing=1
