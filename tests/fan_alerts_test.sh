@@ -177,6 +177,15 @@ round() { # time, then problems ("key|subject|details") and keys seen fine
   fcp_track_faults "$now" Bay "$dir"
 }
 : > "$tmp/calls"
+mkdir -p "$tmp/transition"
+fcp_faults=("$speed") fcp_ok=()
+fcp_track_faults 0 Bay "$tmp/transition" 255
+fcp_track_faults 120 Bay "$tmp/transition" 132
+expect_equal 0 "$(sent warning)" "A change of target starts a fresh speed mismatch grace period."
+fcp_track_faults 150 Bay "$tmp/transition" 132
+expect_equal 1 "$(sent warning)" "A mismatch still present 30 seconds after the new target warns."
+fcp_fault_since=() fcp_clear_since=() fcp_fault_target=''
+: > "$tmp/calls"
 
 round 0 "$speed"
 round 29 "$speed"

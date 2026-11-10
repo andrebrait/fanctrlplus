@@ -253,7 +253,7 @@ while true; do
   check_target=""
   (( prev_pwm >= 0 )) && check_target=$prev_pwm
   fcp_check_fan "$controller" "$fan_path" "$check_target" "$nct6687_watch" "$fault_dir"
-  fcp_track_faults "$SECONDS" "$custom" "$fault_dir"
+  fcp_track_faults "$SECONDS" "$custom" "$fault_dir" "$check_target"
 
   # Configured sensors that each stay unread past the grace period: warn once.
   fcp_track_missing "$SECONDS" "${unread[@]}"

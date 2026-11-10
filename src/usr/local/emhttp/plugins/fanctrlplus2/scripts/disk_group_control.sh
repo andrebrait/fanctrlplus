@@ -427,6 +427,7 @@ fcp_check_fan() {
 
 # Problem key -> when the current stretch of it being bad, or being fine, began.
 declare -gA fcp_fault_since=() fcp_clear_since=()
+fcp_fault_target=''
 
 # Records fcp_check_fan's results for a fan. A problem lasting the grace
 # period sends one warning; once it has been fine for the grace period, one
@@ -438,6 +439,10 @@ declare -gA fcp_fault_since=() fcp_clear_since=()
 fcp_track_faults() {
   local now="$1" name="$2" dir="$3" fault key subject details flag
   local -A bad=() ok=()
+  if [[ "${4:-}" != "$fcp_fault_target" ]]; then
+    unset 'fcp_fault_since[speed]' 'fcp_clear_since[speed]'
+    fcp_fault_target="${4:-}"
+  fi
   for key in "${fcp_ok[@]}"; do
     ok[$key]=1
     : "${fcp_clear_since[$key]:=$now}"
