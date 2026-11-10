@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="2026.11.08"
+  version="2026.11.10z"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -20,27 +20,25 @@
 <CHANGES>
 <![CDATA[
 
-### 2026.11.08
+### 2026.11.10z
 
-## Editable fan curves
+## Fan alerts and support diagnostics
 
-Configure each disk group, CPU temperature source, and auxiliary temperature source with a 2–8 point fan curve. Choose linear interpolation or stepped control, set cooling hysteresis, and configure an optional emergency temperature and speed that can exceed the normal output cap. Curve points retain their absolute speeds when the cap changes.
+Fan speed mismatch warnings now restart their waiting period when the requested PWM changes, reducing false warnings while a controller or fan catches up. The controller's readback must differ from the requested speed by **10 or more percentage points**, including for MSI nct6687 system-fan warnings. When a substantial fan RPM response is observed, a warning can include it as supporting evidence; this does not prove which controller changed the fan. Other problem alerts remain active.
 
-Disk groups are optional, so a fan can use CPU or auxiliary temperature without assigning a disk. Existing valid settings are preserved as equivalent two-point curves; export a configuration backup before updating.
+A new **Download diagnostics** button in General Settings creates a ZIP containing anonymized fan settings, hardware readings, and structured fan-control events. It excludes raw logs, disk identifiers, fan and sensor names, and custom sensor scripts. Hardware characteristics can still identify a machine, so review the archive before sharing it.
 
-This is software-based control, not independent thermal protection. Monitor actual fan speeds and temperatures, and leave CPU fans under BIOS or firmware control where possible.
+This is software-based fan control, not independent thermal protection. Monitor actual fan speeds and temperatures. Back up your settings before updating. If rolling back, reinstall the older plugin manifest and restore your backup; do not uninstall, because uninstalling deletes the configuration.
 
-Thanks to @fejesgabortorrent-dot for requesting and testing the feature. See #26 and #27.
+### pr30-test-22b732f
 
-### pr27-test-eb28feb
+Test build from commit `22b732f0bc2b5c6f4a9b5da4350d8b71e77e6de8`: PWM alert changes and the 10-point tolerance. This is not a stable release. Back up settings before installing and monitor fan speeds and temperatures.
 
-Test build from commit `eb28feba2c5023772bf757551205601bdceba923`. Includes optional disk groups and the legacy disk deadband fix. This is not a stable release. Back up settings before installing and monitor temperatures and fan speeds.
+To roll back, install the [stable plugin manifest](https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg) and restore your pre-test settings backup. Do not uninstall: uninstalling deletes configuration.
 
-To roll back, install the [stable plugin manifest](https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg) and restore a pre-test settings backup. Do not uninstall: uninstalling deletes the configuration.
+### pr30-test-80ff7af
 
-### pr27-test-05a2777
-
-Test build from commit `05a27777fa738bae4bcc9eed3bdcddfafd265900`: disk groups are optional for CPU or auxiliary temperature control. This is not a stable release. Back up settings before installing and monitor fan speeds and temperatures.
+Test build from commit `80ff7af5ebb2a8bc39f61e73df6f8933a962488d` for PWM mismatch alerts and fan-response evidence (PR #30). This is not a stable release. Back up settings before installing and monitor temperatures and fan speeds.
 
 To roll back, install the [stable plugin manifest](https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg) and restore a pre-test settings backup. Do not uninstall: uninstalling deletes the configuration.
 
@@ -96,16 +94,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.08-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/2026.11.08/fanctrlplus2-2026.11.08-noarch-1.txz</URL>
-<SHA256>864f5e210be22999bf9d7cf6467243ad81cf2fffd1a53282bd84af1bcc0614a9</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.10z-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/2026.11.10z/fanctrlplus2-2026.11.10z-noarch-1.txz</URL>
+<SHA256>f53bf9745456d98de299713715c95b3cf2fd2a5cbfe665a5ca0d11caff078bce</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.08-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.10z-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -128,7 +126,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 2026.11.08"
+echo " Version: 2026.11.10z"
 echo "------------------------------------------------"
 echo ""
 exit 0
