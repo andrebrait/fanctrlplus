@@ -24,23 +24,23 @@
 
 ## Fan alerts and support diagnostics
 
-Fan speed mismatch warnings now restart their waiting period when the requested PWM changes, reducing false warnings while a controller or fan catches up. The controller's readback must differ from the requested speed by **10 or more percentage points**, including for MSI nct6687 system-fan warnings. When a substantial fan RPM response is observed, a warning can include it as supporting evidence; this does not prove which controller changed the fan. Other problem alerts remain active.
+Fan speed mismatch warnings now restart their waiting period when the requested PWM changes, reducing false warnings while a controller or fan catches up. The controller's readback must differ from the requested speed by 10 or more percentage points, including for MSI nct6687 system-fan warnings. When a substantial fan RPM response is observed, a warning can include it as supporting evidence; this does not prove which controller changed the fan. Other problem alerts remain active.
 
-A new **Download diagnostics** button in General Settings creates a ZIP containing anonymized fan settings, hardware readings, and structured fan-control events. It excludes raw logs, disk identifiers, fan and sensor names, and custom sensor scripts. Hardware characteristics can still identify a machine, so review the archive before sharing it.
+A new "Download diagnostics" button in General Settings creates a ZIP containing anonymized fan settings, hardware readings, and structured fan-control events. It excludes raw logs, disk identifiers, fan and sensor names, and custom sensor scripts. Hardware characteristics can still identify a machine, so review the archive before sharing it.
 
 This is software-based fan control, not independent thermal protection. Monitor actual fan speeds and temperatures. Back up your settings before updating. If rolling back, reinstall the older plugin manifest and restore your backup; do not uninstall, because uninstalling deletes the configuration.
 
 ### pr30-test-22b732f
 
-Test build from commit `22b732f0bc2b5c6f4a9b5da4350d8b71e77e6de8`: PWM alert changes and the 10-point tolerance. This is not a stable release. Back up settings before installing and monitor fan speeds and temperatures.
+Test build from commit 22b732f0bc2b5c6f4a9b5da4350d8b71e77e6de8: PWM alert changes and the 10-point tolerance. This is not a stable release. Back up settings before installing and monitor fan speeds and temperatures.
 
-To roll back, install the [stable plugin manifest](https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg) and restore your pre-test settings backup. Do not uninstall: uninstalling deletes configuration.
+To roll back, install the stable plugin manifest (https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg) and restore your pre-test settings backup. Do not uninstall: uninstalling deletes configuration.
 
 ### pr30-test-80ff7af
 
-Test build from commit `80ff7af5ebb2a8bc39f61e73df6f8933a962488d` for PWM mismatch alerts and fan-response evidence (PR #30). This is not a stable release. Back up settings before installing and monitor temperatures and fan speeds.
+Test build from commit 80ff7af5ebb2a8bc39f61e73df6f8933a962488d for PWM mismatch alerts and fan-response evidence (PR #30). This is not a stable release. Back up settings before installing and monitor temperatures and fan speeds.
 
-To roll back, install the [stable plugin manifest](https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg) and restore a pre-test settings backup. Do not uninstall: uninstalling deletes the configuration.
+To roll back, install the stable plugin manifest (https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg) and restore a pre-test settings backup. Do not uninstall: uninstalling deletes the configuration.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
