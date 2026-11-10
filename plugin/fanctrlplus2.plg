@@ -19,7 +19,6 @@
 
 <CHANGES>
 <![CDATA[
-
 ### 2026.11.10z
 
 ## Fan alerts and support diagnostics
@@ -30,17 +29,43 @@ A new "Download diagnostics" button in General Settings creates a ZIP containing
 
 This is software-based fan control, not independent thermal protection. Monitor actual fan speeds and temperatures. Back up your settings before updating. If rolling back, reinstall the older plugin manifest and restore your backup; do not uninstall, because uninstalling deletes the configuration.
 
-### pr30-test-22b732f
+### 2026.11.08
 
-Test build from commit 22b732f0bc2b5c6f4a9b5da4350d8b71e77e6de8: PWM alert changes and the 10-point tolerance. This is not a stable release. Back up settings before installing and monitor fan speeds and temperatures.
+## Editable fan curves
 
-To roll back, install the stable plugin manifest (https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg) and restore your pre-test settings backup. Do not uninstall: uninstalling deletes configuration.
+Configure each disk group, CPU temperature source, and auxiliary temperature source with a 2–8 point fan curve. Choose linear interpolation or stepped control, set cooling hysteresis, and configure an optional emergency temperature and speed that can exceed the normal output cap. Curve points retain their absolute speeds when the cap changes.
 
-### pr30-test-80ff7af
+Disk groups are optional, so a fan can use CPU or auxiliary temperature without assigning a disk. Existing valid settings are preserved as equivalent two-point curves; export a configuration backup before updating.
 
-Test build from commit 80ff7af5ebb2a8bc39f61e73df6f8933a962488d for PWM mismatch alerts and fan-response evidence (PR #30). This is not a stable release. Back up settings before installing and monitor temperatures and fan speeds.
+This is software-based control, not independent thermal protection. Monitor actual fan speeds and temperatures, and leave CPU fans under BIOS or firmware control where possible.
 
-To roll back, install the stable plugin manifest (https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg) and restore a pre-test settings backup. Do not uninstall: uninstalling deletes the configuration.
+Thanks to @fejesgabortorrent-dot for requesting and testing the feature. See #26 and #27.
+
+
+### 2026.11.06
+
+## What's changed
+
+- Fan problem alerts. The plugin now sends Unraid notifications when a fan or its controller misbehaves. Fan control keeps running for every fan either way. A fan gets one warning once a problem has lasted 30 seconds:
+  - its PWM controller has disappeared (unplugged, renumbered, or driver unloaded), or was missing when fan control started;
+  - the BIOS or another program has taken the fan out of manual mode;
+  - the controller reports a speed 10 or more points away from the one set. On MSI boards with the nct6687 driver, the warning names the msi_fan_brute_force fix; this replaces the earlier stuck-fan warning;
+  - the fan reports 0 RPM while set above 40%, after it was seen spinning. Fans without a tachometer, and fans at or below 40%, where some stop by design, are not judged.
+
+  Once a problem has stayed away for 30 seconds, a notice says it has recovered. (#25)
+- Problem Alerts switch. Each fan has a Problem Alerts switch, on by default, next to its Syslog switch. The card is renamed Syslog & Alerts. The switch also silences the missing-sensor warning, and takes effect without restarting fan control. (#25)
+
+## Version numbering
+
+Releases are now named by date (YYYY.MM.DD) instead of 1.x.y. Unraid compares plugin versions as plain strings, so 1.10.0 would have counted as older than 1.9.7. 2026.11.06 sorts after 1.9.7, so this update is offered as usual. (#24)
+
+## Upgrade compatibility
+
+No configuration changes. Existing fans have Problem Alerts on. Fan speeds behave as before.
+
+## Verification
+
+All 28 test files pass, and Codex and CodeRabbit reviewed the change. On a real Unraid 7.3.4 server with an nct6798 controller, switching the fan out of manual mode sent the "no longer under FanCtrl Plus 2 control" warning after about 1.5 minutes. Setting it back sent the recovery notice about 2 minutes later. The stopped-fan and wrong-speed alerts were tested only against simulated hardware.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
