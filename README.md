@@ -210,9 +210,9 @@ option. When a configured fan uses one of those channels and the option is not
 detected, the settings page shows a notice with the workaround. The option's
 loaded state is read from the driver's `fan_control_watchdog` attribute or its
 "MSI fan brute force mode" kernel log line, falling back to the modprobe
-configuration. While a fan on one of those channels is set above 60% but reads
-back 60% or less for 30 seconds, the plugin also sends an Unraid warning that
-names the option (see the problem alerts above). On Unraid, set the option on the flash drive and
+configuration. If a fan on one of those channels is set above 60%, reads
+back 60% or less, and differs from the target by more than 5 percentage
+points for 30 seconds, the warning names the option. On Unraid, set the option on the flash drive and
 reboot:
 
 ```bash
