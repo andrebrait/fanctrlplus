@@ -393,7 +393,7 @@ fcp_check_fan() {
   actual=$(cat "$controller" 2>/dev/null)
   if [[ "$actual" =~ ^[0-9]+$ ]]; then
     got=$(fcp_pwm_percent "$actual")
-    if (( want - got > 5 || got - want > 5 )); then
+    if (( want - got >= 10 || got - want >= 10 )); then
       if (( nct && want > 60 && got <= 60 )); then
         fcp_faults+=("speed|is not reaching its set speed|Set to $want% but the nct6687 controller reports $got%. On MSI boards this driver ignores system-fan speed changes unless its msi_fan_brute_force option is set. See the FanCtrl Plus 2 settings page.")
       else

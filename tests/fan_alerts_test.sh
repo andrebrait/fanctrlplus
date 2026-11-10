@@ -67,15 +67,15 @@ fan 255 1 1200
 expect_equal 'speed;/controller mode stopped' "$(check 120)" "A controller reading back far above the set speed is a problem."
 fan 230 1 1200
 expect_equal 'speed;/controller mode stopped' "$(check 255)" "A readback 10 points off is a problem."
-fan 242 1 1200
-expect_equal '/controller mode speed stopped' "$(check 255)" "A readback 5 points off is within the tolerance."
-fan 240 1 1200
-expect_equal 'speed;/controller mode stopped' "$(check 255)" "A readback 6 points off is a problem."
+fan 232 1 1200
+expect_equal '/controller mode speed stopped' "$(check 255)" "A readback 9 points below the target is within the tolerance."
+fan 255 1 1200
+expect_equal '/controller mode speed stopped' "$(check 232)" "A readback 9 points above the target is within the tolerance."
+expect_equal 'speed;/controller mode stopped' "$(check 230)" "A readback 10 points above the target is a problem."
 fan 154 1 1200
 expect_equal '/controller mode speed stopped' "$(check 166)" "65% read back as 60% is within the general tolerance."
-expect_equal '/controller mode speed stopped' "$(check 166 1)" "The MSI check respects the same 5-point tolerance."
-expect_equal '/controller mode speed stopped' "$(check 155 1)" "A 1-point MSI mismatch is within the tolerance."
-expect_equal 'speed;/controller mode stopped' "$(check 170 1)" "An MSI mismatch above 5 points is reported."
+expect_equal '/controller mode speed stopped' "$(check 176 1)" "An MSI mismatch of 9 points is within the tolerance."
+expect_equal 'speed;/controller mode stopped' "$(check 179 1)" "An MSI mismatch of 10 points is reported."
 expect_equal '/controller mode speed stopped' "$(check 154 1)" "An nct6687 MSI fan set to 60% at 60% is fine."
 fan 155 1 1200
 expect_equal '/controller mode speed stopped' "$(check 166 1)" "An nct6687 MSI fan reading above 60% is not held."
