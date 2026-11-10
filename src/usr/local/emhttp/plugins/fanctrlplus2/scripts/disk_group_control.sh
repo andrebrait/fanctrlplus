@@ -440,7 +440,7 @@ fcp_track_faults() {
   local now="$1" name="$2" dir="$3" fault key subject details flag
   local -A bad=() ok=()
   if [[ "${4:-}" != "$fcp_fault_target" ]]; then
-    unset 'fcp_fault_since[speed]' 'fcp_clear_since[speed]'
+    unset 'fcp_fault_since[speed]'
     fcp_fault_target="${4:-}"
   fi
   for key in "${fcp_ok[@]}"; do
