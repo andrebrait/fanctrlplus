@@ -254,7 +254,7 @@ function fcp_diagnostics_zip(
             'README.txt' => FCP_DIAG_README."\n",
             'manifest.json' => fcp_diag_json([
                 'format'=>'fanctrlplus2-diagnostics', 'version'=>1, 'generated_utc'=>gmdate('Y-m-d\TH:i:s\Z'),
-                'plugin_version'=>preg_match('/^\s*version="(\d{4}\.\d{2}\.\d{2}[a-z]?)"/m', $plugin, $m) ? $m[1] : null,
+                'plugin_version'=>preg_match('/^\s*version="(\d{4}\.\d{2}\.\d{2}(?:pr\d+)?[a-z]?)"/m', $plugin, $m) ? $m[1] : null,
                 'kernel'=>preg_match('/^\d+\.\d+\.\d+(?:-Unraid)?$/D', $kernel) ? $kernel : null,
             ]),
             'fans.json' => fcp_diag_json([

