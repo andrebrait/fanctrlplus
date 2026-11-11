@@ -26,8 +26,8 @@ jobs:
               done
             echo 'CHANGELOG_EOF'
           } >> "$GITHUB_ENV"
-      # Includes checkout v7, setup-go v6, and add-and-commit v10.
-      - uses: dkaser/unraid-plugin-release-action@dd44159f2d27c70b101db9cf76d6f11babc3e6f0
+      # Fork of dkaser/unraid-plugin-release-action with pinned nested actions.
+      - uses: andrebrait/unraid-plugin-release-action@bc8f783fa6730140ca95ba65b84a9ec299f8fece
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           plugin_version: ${{ github.event.release.name }}
