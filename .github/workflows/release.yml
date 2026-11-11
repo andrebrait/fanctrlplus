@@ -27,7 +27,7 @@ jobs:
             echo 'CHANGELOG_EOF'
           } >> "$GITHUB_ENV"
       # Fork of dkaser/unraid-plugin-release-action with pinned nested actions.
-      - uses: andrebrait/unraid-plugin-release-action@bc8f783fa6730140ca95ba65b84a9ec299f8fece
+      - uses: andrebrait/unraid-plugin-release-action@dce598e6bbf68e31392666945ca9cb68f30166db
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           plugin_version: ${{ github.event.release.name }}
