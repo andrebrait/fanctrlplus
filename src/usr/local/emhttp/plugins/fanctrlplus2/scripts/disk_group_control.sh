@@ -627,20 +627,32 @@ fcp_track_frozen() {
 }
 
 # The tracking survives a loop restart (applying settings restarts every
-# loop) in a RAM file: "run|SOURCE|VALUE|SINCE|LAST" and "range|SOURCE>OTHER|LO|HI".
+# loop) in a RAM file: "id|SUM", "run|SOURCE|VALUE|SINCE|LAST" and
+# "range|SOURCE>OTHER|LO|HI". The id stands for which sensors and disks the
+# fan is set to read (a second argument, any text): a stretch recorded for
+# other ones says nothing about these, so it is not carried over.
+fcp_frozen_identity() {
+  local sum
+  sum=$(printf '%s' "$1" | cksum)
+  printf '%s' "${sum%% *}"
+}
+
 fcp_frozen_save() {
   local file="$1" key tmp="${1}.tmp.$$"
   {
+    printf 'id|%s\n' "$(fcp_frozen_identity "${2:-}")"
     for key in "${!fcp_frozen_run[@]}"; do printf 'run|%s|%s\n' "$key" "${fcp_frozen_run[$key]}"; done
     for key in "${!fcp_frozen_range[@]}"; do printf 'range|%s|%s\n' "$key" "${fcp_frozen_range[$key]}"; done
   } > "$tmp" 2>/dev/null && mv -f "$tmp" "$file" 2>/dev/null
 }
 
 fcp_frozen_load() {
-  local file="$1" kind key rest
+  local file="$1" kind key rest id
   fcp_frozen_run=()
   fcp_frozen_range=()
   [[ -f "$file" ]] || return 0
+  id=$(fcp_frozen_identity "${2:-}")
+  grep -qxF -- "id|$id" "$file" 2>/dev/null || return 0
   while IFS='|' read -r kind key rest; do
     case "$kind" in
       run)   [[ "$rest" =~ ^[0-9]+\|[0-9]+\|[0-9]+$ ]] && fcp_frozen_run[$key]=$rest ;;
@@ -673,16 +685,20 @@ fcp_frozen_alerts_enabled() {
 # sensors already warned about; a failed notification leaves a sensor out,
 # so the next round tries again.
 fcp_notify_frozen() {
-  local name="$1" flag="$2" found src value since last other lo hi hours
+  local name="$1" flag="$2" found src value since last other lo hi hours key
   shift 2
   for found in "$@"; do
     IFS='|' read -r src value since last other lo hi <<< "$found"
-    grep -qxF -- "$src" "$flag" 2>/dev/null && continue
+    # The flag names the physical sensor: "cpu" alone would stay flagged
+    # after the fan is pointed at another CPU sensor.
+    key=$src
+    [[ "$src" == cpu ]] && key="cpu:${cpu_sensor:-}"
+    grep -qxF -- "$key" "$flag" 2>/dev/null && continue
     fcp_frozen_alerts_enabled || return 0
     touch "$flag" 2>/dev/null || return 0
     hours=$(( (last - since) / 3600 ))
     fcp_notify -i warning -s "Fan $name has a temperature sensor that does not change" \
       -d "$(fcp_frozen_label "$src") has read $value °C for $hours hours while $(fcp_frozen_label "$other") varied $lo–$hi °C. It may report a fixed value rather than a measurement. Fan control is unchanged; pick another sensor for this fan, ex. the CPU package or a board System sensor." &&
-      printf '%s\n' "$src" >> "$flag"
+      printf '%s\n' "$key" >> "$flag"
   done
 }

@@ -76,19 +76,31 @@ expect_equal ';' "$(found)" "A source without a reading is no evidence."
 # The tracking survives a loop restart, and is published for the page.
 fcp_frozen_run=() fcp_frozen_range=()
 run 0 $(( 4 * hour )) 48 71 27
-fcp_frozen_save "$tmp/state"
+fcp_frozen_save "$tmp/state" "cpu1|aux"
 fcp_frozen_run=() fcp_frozen_range=()
-fcp_frozen_load "$tmp/state"
+fcp_frozen_load "$tmp/state" "cpu1|aux"
 run $(( 4 * hour + 120 )) $(( 6 * hour )) 48 71 27
 expect_equal "$acpi|27|0|$(( 6 * hour ))|cpu|48|71;" "$(found)" "A restarted loop must keep the hours already seen."
 fcp_frozen_publish "$tmp/frozen_Bay"
 expect_equal "$acpi|27|0|$(( 6 * hour ))|cpu|48|71" "$(cat "$tmp/frozen_Bay")" "The conclusion is published for the settings page."
+fcp_frozen_load "$tmp/state" "cpu2|aux"
+expect_equal 0 "$(( ${#fcp_frozen_run[@]} + ${#fcp_frozen_range[@]} ))" "Tracking recorded for other sensors is not carried over."
+fcp_frozen_load "$tmp/state"
+expect_equal 0 "$(( ${#fcp_frozen_run[@]} + ${#fcp_frozen_range[@]} ))" "Tracking without a matching identity is not carried over."
+fcp_frozen_load "$tmp/state" "cpu1|aux"
 round $(( 6 * hour + 120 )) 55 28
 fcp_frozen_publish "$tmp/frozen_Bay"
 expect_equal "" "$(cat "$tmp/frozen_Bay")" "A sensor that changed is no longer shown."
 printf 'run|cpu|x|1|2\nrange|cpu>a|1\n' > "$tmp/bad_state"
 fcp_frozen_load "$tmp/bad_state"
 expect_equal 0 "$(( ${#fcp_frozen_run[@]} + ${#fcp_frozen_range[@]} ))" "A damaged state file is ignored."
+
+# A comparison source that stopped reporting: the stretch it moved in is still
+# what it did, so the conclusion stands and names the readings it had.
+fcp_frozen_run=() fcp_frozen_range=()
+run 0 $(( hour )) 48 71 27
+for (( t = hour + 120; t <= 6 * hour; t += 120 )); do fcp_track_frozen "$t" "$gap" "$acpi|27|1"; done
+expect_equal "$acpi|27|0|$(( 6 * hour ))|cpu|48|71;" "$(found)" "A comparison source that went quiet keeps the movement it showed."
 
 # ===== The warning =====
 printf '#!/bin/bash\nprintf "%%s\\n" "$@" >> "%s/calls"\n' "$tmp" > "$fcp_notify_bin"
@@ -106,6 +118,12 @@ expect_equal 1 "$(grep -cF "$acpi has read 27 °C for 6 hours while the CPU sens
   "The warning names the sensor, how long, and what moved meanwhile."
 fcp_notify_frozen Bay "$tmp/flag" "cpu|27|0|$(( 6 * hour ))|disk:0|30|42"
 expect_equal 2 "$(sent)" "Another sensor of the same fan gets its own warning."
+cpu_sensor=/sys/class/hwmon/hwmon5/temp1_input
+fcp_notify_frozen Bay "$tmp/flag" "cpu|27|0|$(( 6 * hour ))|disk:0|30|42"
+expect_equal 3 "$(sent)" "A CPU sensor chosen later is warned about on its own."
+fcp_notify_frozen Bay "$tmp/flag" "cpu|27|0|$(( 6 * hour ))|disk:0|30|42"
+expect_equal 3 "$(sent)" "The same CPU sensor is still warned about only once."
+cpu_sensor=/sys/class/hwmon/hwmon4/temp1_input
 : > "$tmp/calls"
 echo 'frozen_notify="0"' > "$cfg_file"
 fcp_notify_frozen Bay "$tmp/off_flag" "$conclusion"

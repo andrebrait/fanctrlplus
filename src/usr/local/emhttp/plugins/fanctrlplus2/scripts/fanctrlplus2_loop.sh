@@ -70,8 +70,13 @@ prev_hist_src=$(tail -n 1 "$hist_file" 2>/dev/null | cut -d'|' -f2)
 
 # Sensors that have read the same for hours (fcp_track_frozen), carried over
 # from before a restart.
+# The state is dropped when the fan is set to other sensors or disks.
 frozen_state="/var/tmp/${plugin}/frozen_state_${custom}"
-fcp_frozen_load "$frozen_state"
+frozen_identity="${cpu_sensor:-}|${aux_sensor:-}|${disks:-}"
+for curve_key in ${!disk_group_@}; do
+  [[ "$curve_key" == *_disks ]] && frozen_identity+="|$curve_key=${!curve_key}"
+done
+fcp_frozen_load "$frozen_state" "$frozen_identity"
 
 # Whether the last controller write, and the last curve-state snapshot, failed.
 # Each is logged once per stretch, not every round.
@@ -278,7 +283,7 @@ while true; do
   done
   printf -v frozen_now '%(%s)T' -1
   fcp_track_frozen "$frozen_now" $(( 2 * $(interval_seconds) + 60 )) "${frozen_readings[@]}"
-  fcp_frozen_save "$frozen_state"
+  fcp_frozen_save "$frozen_state" "$frozen_identity"
   fcp_frozen_publish "/var/tmp/${plugin}/frozen_${custom}"
   if (( ${#fcp_frozen_found[@]} )); then
     fcp_notify_frozen "$custom" "/var/tmp/${plugin}/sensor_frozen_${custom}" "${fcp_frozen_found[@]}"
