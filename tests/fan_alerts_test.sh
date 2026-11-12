@@ -129,6 +129,36 @@ expect_equal 0 "$(grep -c 'RPM.*respond' <<< "${fcp_faults[0]}")" "A zero RPM ba
 fan foo 1 1200
 expect_equal '/controller mode stopped' "$(check 255)" "An unreadable speed is not judged."
 
+# nct6775-core reports manual PWM=255 as enable=0 (full speed).
+# Only a matching full-speed request/readback on a known chip qualifies.
+for chip in nct6106 nct6116 nct6775 nct6776 nct6779 nct6791 nct6792 nct6793 nct6795 nct6796 nct6797 nct6798 nct6799; do
+  echo "$chip" > "$hw/name"
+  fan 255 0 1200
+  expect_equal '/controller mode speed stopped' "$(check 255)" "$chip full speed is not a loss of control."
+done
+echo nct6798 > "$hw/name"
+expect_equal 'mode;/controller' "$(check 254)" "Even a near-full request must not hide an unexpected full-speed override."
+expect_equal 'mode;/controller' "$(check '')" "Full speed before a successful write is not proof of control."
+fan 254 0 1200
+expect_equal 'mode;/controller' "$(check 255)" "The full-speed exception requires exact readback."
+fan foo 0 1200
+expect_equal 'mode;/controller' "$(check 255)" "An invalid readback cannot establish expected full speed."
+rm -f "$hw/pwm1"
+mkdir "$hw/pwm1"
+expect_equal 'mode;/controller' "$(check 255)" "An unreadable PWM cannot establish expected full speed."
+rmdir "$hw/pwm1"
+fan 255 0 0
+expect_equal 'stopped;/controller mode speed' "$(check 255)" "Expected full-speed mode must still detect a stopped fan."
+fan 255 2 1200
+expect_equal 'mode;/controller' "$(check 255)" "Automatic mode still warns at full speed on a known chip."
+fan 255 0 1200
+for chip in nct6687 nct6683 it8728 unknown ''; do
+  echo "$chip" > "$hw/name"
+  expect_equal 'mode;/controller' "$(check 255)" "Other or unidentified drivers keep mode warnings ($chip)."
+done
+rm -f "$hw/name"
+expect_equal 'mode;/controller' "$(check 255)" "A missing chip name cannot qualify for the exception."
+
 fan 120 2 0
 expect_equal 'mode;/controller' "$(check 255)" "Out of manual mode, only the lost control is reported and nothing else judged."
 fan 255 '' 1200
