@@ -192,7 +192,7 @@ while true; do
     response_baseline=''
     if (( old_pwm >= 0 && response_last_write >= 0 && SECONDS - response_last_write >= 30 )); then
       response_mode=$(cat "$controller_enable" 2>/dev/null)
-      if [[ ! -e "$controller_enable" || "$response_mode" == 1 ]]; then
+      if [[ ! -e "$controller_enable" ]] || fcp_manual_mode "$response_mode" "$controller" "$old_pwm"; then
         response_baseline=$(cat "$fan_path" 2>/dev/null)
       fi
     fi

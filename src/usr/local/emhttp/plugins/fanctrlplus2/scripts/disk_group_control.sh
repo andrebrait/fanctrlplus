@@ -357,20 +357,12 @@ fcp_response_start() {
   fcp_response_old=$old fcp_response_pending=$new fcp_response_baseline=$rpm fcp_response_time=$now
 }
 
-# nct6775-core's reg_to_pwm_enable() reports manual output at 255 as mode 0
-# (full speed). This is expected only after we requested 255 and read it back.
-# Restrict the exception to known chips using that driver; do not infer control
-# from full-speed output alone or skip the subsequent stopped-fan check.
-fcp_nct6775_full_speed() {
-  local controller="$1" target="$2" chip actual
-  [[ "$target" == 255 ]] || return 1
-  chip=$(cat "${controller%/*}/name" 2>/dev/null) || return 1
-  case "$chip" in
-    nct6106|nct6116|nct6775|nct6776|nct6779|nct6791|nct6792|nct6793|nct6795|nct6796|nct6797|nct6798|nct6799) ;;
-    *) return 1 ;;
-  esac
-  actual=$(cat "$controller" 2>/dev/null) || return 1
-  [[ "$actual" == 255 ]]
+# Whether pwmN_enable mode $1 leaves the fan at the speed we last wrote ($3).
+# Mode 0 means full speed, and nct6775-core reports manual output at 255 that
+# way, so it is no loss of control while 255 is our target and the readback.
+# Leaving 255 writes mode 1 again; a driver refusing that still warns.
+fcp_manual_mode() {
+  [[ "$1" == 1 ]] || [[ "$1" == 0 && "$3" == 255 && "$(cat "$2" 2>/dev/null)" == 255 ]]
 }
 
 # Checks one fan, set to target (the PWM value last written, or empty before
@@ -388,13 +380,12 @@ fcp_check_fan() {
     return
   fi
   fcp_ok+=(controller)
-  # Unexpected modes indicate lost control, except nct6775's full-speed alias.
+  # Something else drives the fan, so its speed and RPM say nothing about us.
   # An enable attribute that exists but cannot be read leaves all this unchecked.
   if [[ -e "${controller}_enable" ]]; then
     mode=$(cat "${controller}_enable" 2>/dev/null)
     [[ -n "$mode" ]] || return
-    if [[ "$mode" != 1 ]] &&
-       ! { [[ "$mode" == 0 ]] && fcp_nct6775_full_speed "$controller" "$target"; }; then
+    if ! fcp_manual_mode "$mode" "$controller" "$target"; then
       fcp_response_pending=''
       fcp_faults+=("mode|is no longer under FanCtrl Plus 2 control|${controller}_enable changed from manual (1) to $mode, so the BIOS or another program sets the fan speed. FanCtrl Plus 2 takes the fan back at its next speed change.")
       return
