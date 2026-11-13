@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/Common.php';
 require_once __DIR__.'/CurveConfig.php';
 // Configuration files are sourced by Bash. A restore is data, never shell code.
 const FCP_BACKUP_MAX_BYTES = 2097152;
@@ -55,6 +56,14 @@ function fcp_backup_sys_path(string $path, bool $pwm): bool {
     return preg_match('#^/sys/(?:devices|class/(?:hwmon|thermal))/[A-Za-z0-9_.:/-]+/'.$end.'$#D', $path) === 1;
 }
 
+// One saved temperature sensor: an hwmon path, the identity of a chip's
+// tempN input (fcp_sensor_identity), or, in the aux list, a tool or script.
+function fcp_backup_sensor(string $value, bool $aux): bool {
+    if (fcp_backup_sys_path($value, false)) return true;
+    if (preg_match(FCP_SENSOR_IDENTITY, $value, $m)) return !preg_match('#(?:^|/)\.\.?(?:/|$)#', $m[3]);
+    return $aux && preg_match('/^(?:custom:[A-Za-z0-9_-][A-Za-z0-9._-]*|storcli:c\d+:roc|nvidia:gpu\d+|mlx:[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F])$/D', $value) === 1;
+}
+
 function fcp_backup_binding(string $value): bool {
     if (strpos($value, 'usb:') !== 0) return fcp_backup_sys_path($value, true);
     $hex = substr($value, 4);
@@ -102,7 +111,7 @@ function fcp_validate_fan_config(string $text): array {
     $values = fcp_backup_assignments($text);
     $boolean = ['service','syslog','notify','log_enable','cpu_enable','aux_enable'];
     $numeric = ['pwm','max','idle','idle_percent','low','high','interval','interval_sec','disk_group_count','cpu_min_temp','cpu_max_temp','aux_min_temp','aux_max_temp'];
-    $string = ['custom','label','controller','controller_identity','fan','disks','cpu_sensor','aux_sensor'];
+    $string = ['custom','label','controller','controller_identity','fan','disks','cpu_sensor','cpu_sensor_identity','aux_sensor','aux_sensor_identity'];
     foreach ($values as $key=>$value) {
         $group = preg_match('/^disk_group_(\d+)_(name|disks|low|high)$/D', $key, $m);
         if ($group && (strlen($m[1]) > 3 || (int)$m[1] > 255)) throw new InvalidArgumentException('Too many disk groups.');
@@ -123,15 +132,14 @@ function fcp_validate_fan_config(string $text): array {
         }
         if ($key === 'controller' && !fcp_backup_sys_path($value, true)) throw new InvalidArgumentException('Invalid PWM controller path.');
         if ($key === 'controller_identity' && !fcp_backup_binding($value)) throw new InvalidArgumentException('Invalid controller identity.');
-        if ($key === 'cpu_sensor' && !fcp_backup_sys_path($value, false)) throw new InvalidArgumentException('Invalid CPU sensor path.');
+        if (($key === 'cpu_sensor' || $key === 'cpu_sensor_identity') && !fcp_backup_sensor($value, false)) throw new InvalidArgumentException('Invalid CPU sensor path.');
         if ($key === 'fan' && $value !== '') {
             $pwmPath = preg_replace('#/fan(\d+)_input$#', '/pwm$1', $value);
             if ($pwmPath === $value || !fcp_backup_sys_path($pwmPath, true)) throw new InvalidArgumentException('Invalid legacy fan input.');
         }
-        if ($key === 'aux_sensor') {
+        if ($key === 'aux_sensor' || $key === 'aux_sensor_identity') {
             foreach ($value === '' ? [] : explode(',', $value) as $sensor) {
-                if (fcp_backup_sys_path($sensor, false)) continue;
-                if (!preg_match('/^(?:custom:[A-Za-z0-9_-][A-Za-z0-9._-]*|storcli:c\d+:roc|nvidia:gpu\d+|mlx:[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F])$/D', $sensor)) throw new InvalidArgumentException('Invalid auxiliary sensor.');
+                if (!fcp_backup_sensor($sensor, true)) throw new InvalidArgumentException('Invalid auxiliary sensor.');
             }
         }
         if ($key === 'disks' || ($group && $m[2] === 'disks')) {
