@@ -414,6 +414,33 @@ function fcp_nct6687_brute_force_missing(
   return $last === null || !preg_match('/^(?:$|[1yYtT]|[oO][nN])/', $last);
 }
 
+// Shown on the settings page when no PWM controller is found at all. Most
+// often the driver of the mainboard's Super I/O chip (nct6775, it87 and the
+// like) is not loaded: Unraid loads only the drivers the Dynamix System
+// Temperature plugin saved in its list, and a list holding only coretemp
+// leaves the fan headers out. The plugin's Detect button finds the driver;
+// nothing is loaded or probed from here.
+const FCP_SYSTEM_TEMP_DIR = '/usr/local/emhttp/plugins/dynamix.system.temp';
+
+function fcp_no_pwm_notice(array $pwms, string $system_temp_dir = FCP_SYSTEM_TEMP_DIR): string {
+  if ($pwms) return '';
+  $installed = is_dir($system_temp_dir);
+  $page = $installed ? '<a href="/Settings/TempSettings">Settings → System Temp</a>' : 'Settings → System Temp';
+  $steps = [
+    '<strong>Detect</strong>: looks for the board\'s sensor chips once and fills <strong>Available drivers</strong>, ex. <code>coretemp nct6775</code> on many ASRock and ASUS boards, <code>it87</code> on many Gigabyte boards.',
+    'Check <strong>Available drivers</strong>: a list with only <code>coretemp</code> (the CPU) means no fan chip was found; see below.',
+    '<strong>Save</strong>: stores the list, so the drivers load at every boot. Saving alone does not load them.',
+    '<strong>Load drivers</strong>: loads them now, without a reboot. Then reload this page.',
+  ];
+  return '<div class="fcp-asset-update-notice fcp-no-pwm-notice"><div>'
+    . '<strong>No PWM controllers found.</strong> Fan headers are driven by the mainboard\'s fan and sensor chip, and its driver is probably not loaded, so there is nothing to offer here yet. '
+    . ($installed ? '' : 'Install <strong>Dynamix System Temperature</strong> from Apps first, then ')
+    . ($installed ? 'In ' : 'in ') . $page . ':'
+    . '<ol class="fcp-no-pwm-steps"><li>' . implode('</li><li>', $steps) . '</li></ol>'
+    . 'If Detect finds no fan chip, the built-in drivers may not support it, and a driver plugin from Apps is needed: ex. the Nuvoton NCT6687 Driver for many MSI boards.'
+    . '</div></div>';
+}
+
 // Find storcli binary (storcli64, storcli2, storcli) in common paths
 function find_storcli(): ?string {
   $candidates = [

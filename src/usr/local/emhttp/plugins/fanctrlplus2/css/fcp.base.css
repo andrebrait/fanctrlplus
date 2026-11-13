@@ -280,6 +280,9 @@
   box-sizing: border-box;
 }
 .fcp-asset-update-notice[hidden] { display: none !important; }
+.fcp-no-pwm-notice { justify-content: flex-start; }
+.fcp-no-pwm-steps { margin: 6px 0; padding-left: 22px; }
+.fcp-no-pwm-steps li { margin: 2px 0; }
 .fcp-asset-update-notice button {
   flex: none;
   width: auto;
