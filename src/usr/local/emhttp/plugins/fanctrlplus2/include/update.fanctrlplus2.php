@@ -261,9 +261,10 @@ foreach ($_POST['#file'] as $i => $file) {
     'interval'   => (string)max(1, (int)ceil($interval_seconds / 60)),
     'disks'      => $legacy_disks,
     'disk_group_count' => (string)$disk_group_count,
-    // Per-fan switches set outside this form: keep them, both default on.
+    // Per-fan switches set outside this form: keep them, all default on.
     'syslog'     => (string)($previous['syslog'] ?? '1'),
     'notify'     => (string)($previous['notify'] ?? '1'),
+    'frozen_notify' => (string)($previous['frozen_notify'] ?? '1'),
     'cpu_enable'    => $cpu_enable,
     'cpu_sensor'    => $cpu_sensor,
     'cpu_min_temp'  => $legacy['cpu_min_temp'],

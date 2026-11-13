@@ -88,7 +88,23 @@ function render_disk_group_row($i, $g, $grp, $disks) {
   return $html;
 }
 
-function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors = []) {
+// $frozen: the fan's frozen-sensor conclusions (fcp_frozen_sensors), read
+// from its loop's runtime file when not given.
+function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors = [], $frozen = null) {
+  $frozen ??= fcp_frozen_sensors('/var/tmp/fanctrlplus2/frozen_' . basename((string)($cfg['custom'] ?? '')),
+    2 * cfg_interval_seconds($cfg) + 300);
+  // Sources as the state beside a sensor names them, as in the fan's history.
+  $aux_names = [];
+  foreach ($aux_sensors as $entries) {
+    foreach ($entries as $sensor) $aux_names[$sensor['path']] = preg_replace('/\s*\(-?[\d.]+°C\)$/u', '', $sensor['label']);
+  }
+  $source_name = function (string $src) use ($cfg, $aux_names): string {
+    if ($src === 'cpu') return 'CPU';
+    if (!preg_match('/^disk:(\d+)$/', $src, $m)) return $aux_names[$src] ?? $src;
+    if (intval($cfg['disk_group_count'] ?? 0) === 0) return 'Disk';
+    $name = (string)($cfg["disk_group_{$m[1]}_name"] ?? '');
+    return 'Disk: ' . ($name !== '' ? $name : 'Group ' . ($m[1] + 1));
+  };
   $curve_error = '';
   try { $curve_rules = fcp_curve_rules($cfg); }
   catch (InvalidArgumentException $error) { $curve_rules = null; $curve_error = $error->getMessage(); }
@@ -300,6 +316,9 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                 <option value="<?=htmlspecialchars($path)?>" <?=($cfg['cpu_sensor'] ?? '') == $path ? 'selected' : ''?>><?=htmlspecialchars($label)?></option>
               <?php endforeach; ?>
             </select>
+            <?php if (isset($frozen['cpu'])): ?>
+              <span class="fcp-sensor-state" role="status"><?=htmlspecialchars(fcp_frozen_text($frozen['cpu'], $source_name($frozen['cpu']['other'])))?></span>
+            <?php endif; ?>
           </td>
         </tr>
 
@@ -338,6 +357,9 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                 </optgroup>
               <?php endforeach; ?>
             </select>
+            <?php foreach ($aux_selected as $sensor): if (!isset($frozen[$sensor])) continue; ?>
+              <span class="fcp-sensor-state" role="status"><?=htmlspecialchars($source_name($sensor) . ': ' . fcp_frozen_text($frozen[$sensor], $source_name($frozen[$sensor]['other'])))?></span>
+            <?php endforeach; ?>
           </td>
         </tr>
 
