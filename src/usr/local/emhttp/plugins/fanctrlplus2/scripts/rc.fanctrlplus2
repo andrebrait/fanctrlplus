@@ -157,9 +157,14 @@ fanctrlplus2.stop() {
   pkill -f "$boot_pattern"
   while pgrep -f "$rc_script (start-now|resume)" >/dev/null; do sleep 0.2; done
 
-  # Whether fan control has run: until then the BIOS keeps the fans.
-  local ran=0
-  compgen -G "$pid_dir/${plugin}_*.pid" >/dev/null && ran=1
+  # The fans whose loop has run (a PID file): the BIOS keeps the others.
+  local -A ran=()
+  local pidfile name
+  for pidfile in "$pid_dir"/${plugin}_*.pid; do
+    [[ -f "$pidfile" ]] || continue
+    name=${pidfile##*/${plugin}_}
+    ran[${name%.pid}]=1
+  done
 
   pkill -f "$loop_script"
   rm -f "$pid_dir"/${plugin}_*.pid
@@ -168,14 +173,15 @@ fanctrlplus2.stop() {
   # Stop the dashboard updater.
   pkill -f "$dashboard_updater"
 
-  (( ran )) || return 0
-
   # Set only fanctrlplus2-controlled PWM outputs to 50%.
   for cfg in "$cfg_path"/${plugin}_*.cfg; do
     [[ -f "$cfg" ]] || continue
 
     service=$(grep -Po '^service="\K[^"]+' "$cfg")
     [[ "$service" != "1" ]] && continue
+
+    name=$(grep -Po '^custom="\K[^"]+' "$cfg" | tr -cd '[:alnum:]_-')
+    [[ -n "$name" && -n "${ran[$name]:-}" ]] || continue
 
     pwm=$(grep -Po '^controller="\K[^"]+' "$cfg")
     [[ -z "$pwm" || ! -w "$pwm" ]] && continue

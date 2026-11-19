@@ -128,6 +128,18 @@ echo 2 > "$tmp/hw/pwm1_enable"
 "$rc" stop >/dev/null 2>&1
 expect_equal '1 128' "$(cat "$tmp/hw/pwm1_enable") $(cat "$tmp/hw/pwm1")" "Once fan control ran, stop sets 50% even when emhttpd never started."
 
+# ===== Stop sets 50% only for fans whose loop ran =====
+reset
+"$rc" start >/dev/null 2>&1
+touch "$tmp/emhttpd_up"
+wait_running A
+pkill -f "$rc boot\$"  # B's retry has not run yet
+touch "$tmp/hw/pwm2"
+echo 2 > "$tmp/hw/pwm2_enable"
+echo 77 > "$tmp/hw/pwm2"
+"$rc" stop >/dev/null 2>&1
+expect_equal '2 77' "$(cat "$tmp/hw/pwm2_enable") $(cat "$tmp/hw/pwm2")" "A fan whose loop never ran keeps its BIOS control when another fan's loop stops."
+
 # ===== The boot-time stop leaves the BIOS in control =====
 reset
 echo 2 > "$tmp/hw/pwm1_enable"
