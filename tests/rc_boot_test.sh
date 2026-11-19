@@ -127,7 +127,8 @@ expect_equal 0 "$(warnings)" "A driver that loads within the grace period warns 
 # ===== Boot, a late driver whose channels sit on the parent device =====
 # A long grace period, so a start before it ends comes from the retry.
 rc_long="$tmp/rc_long.fanctrlplus2"
-sed -e "s#^boot_wait_seconds=.*#boot_wait_seconds=30#" -e "s#^rc_script=.*#rc_script=$rc_long#" "$rc" > "$rc_long"
+sed -e "s#^boot_wait_seconds=.*#boot_wait_seconds=30#" -e "s#^rc_script=.*#rc_script=$rc_long#" \
+    -e "s#^fanctrlplus2.boot() {#&\n  exec 2>>$tmp/boot.trace; set -x#" "$rc" > "$rc_long"
 chmod +x "$rc_long"
 reset
 "$rc_long" start >/dev/null 2>&1
@@ -139,7 +140,7 @@ touch "$tmp/hwmon/hwmon2/device/pwm2"
 wait_running 'A B'
 wait_running 'A B'  # 20 seconds in all, still inside the 30-second grace
 expect_equal 'A B' "$(running)" "A channel appearing on the parent device triggers a retry within the grace period."
-[[ "$(running)" == 'A B' ]] || { find "$tmp/hwmon" "$tmp/hw" >&2; pgrep -fa "$tmp/" >&2; }
+[[ "$(running)" == 'A B' ]] || { find "$tmp/hwmon" "$tmp/hw" >&2; pgrep -fa "$tmp/" >&2; tail -n 40 "$tmp/boot.trace" >&2; }
 pkill -f "$rc_long boot\$"
 
 # ===== Boot, the driver never loads =====
