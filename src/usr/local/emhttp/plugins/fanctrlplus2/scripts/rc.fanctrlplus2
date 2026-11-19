@@ -127,18 +127,27 @@ fanctrlplus2.boot() {
   # adds channels), not every round: each retry runs the migration. Listed
   # before the first attempt, so a change during it still counts.
   local seen now
-  # Older drivers keep their channels on the parent device (see list_pwm).
-  seen=$(readlink -f "$hwmon_dir"/*/pwm* "$hwmon_dir"/*/device/pwm* 2>/dev/null)
+  seen=$(fanctrlplus2.pwm_channels)
   fanctrlplus2.locked start-now quiet && return
   deadline=$((SECONDS + boot_wait_seconds))
   while (( SECONDS < deadline )); do
     sleep "$boot_retry_seconds"
-    now=$(readlink -f "$hwmon_dir"/*/pwm* "$hwmon_dir"/*/device/pwm* 2>/dev/null)
+    now=$(fanctrlplus2.pwm_channels)
     [[ "$now" == "$seen" ]] && continue
     seen=$now
     fanctrlplus2.locked resume quiet && return
   done
   fanctrlplus2.locked resume
+}
+
+# The PWM channels present, resolved to their devices. Older drivers keep
+# them on the parent device (see list_pwm). One file at a time: readlink may
+# print nothing when any argument (an unmatched glob) fails.
+fanctrlplus2.pwm_channels() {
+  local p
+  for p in "$hwmon_dir"/*/pwm* "$hwmon_dir"/*/device/pwm*; do
+    [[ -e "$p" ]] && readlink -f "$p"
+  done
 }
 
 fanctrlplus2.start_now() {
