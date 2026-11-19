@@ -178,6 +178,7 @@ $fcp_nct6687_notice = fcp_nct6687_brute_force_missing(array_column($all_cfg, 'co
   <span>FanCtrl Plus 2 files changed on the server. Reload to use matching interface resources.</span>
   <button type="button" id="fcp-asset-reload">Reload page</button>
 </div>
+<?= fcp_no_pwm_notice($pwms) ?>
 <?php if ($fcp_nct6687_notice): ?>
 <div class="fcp-asset-update-notice fcp-nct6687-notice">
   <span>
