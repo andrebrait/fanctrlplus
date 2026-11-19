@@ -120,6 +120,14 @@ sleep 3
 expect_equal '' "$(running)" "A stop during the boot wait is not undone."
 expect_equal 0 "$(pgrep -fc "$rc boot\$")" "The stop ends the boot start."
 
+# ===== A stop after fan control ran, even without emhttpd =====
+reset
+"$rc" start >/dev/null 2>&1
+wait_running A
+echo 2 > "$tmp/hw/pwm1_enable"
+"$rc" stop >/dev/null 2>&1
+expect_equal '1 128' "$(cat "$tmp/hw/pwm1_enable") $(cat "$tmp/hw/pwm1")" "Once fan control ran, stop sets 50% even when emhttpd never started."
+
 # ===== The boot-time stop leaves the BIOS in control =====
 reset
 echo 2 > "$tmp/hw/pwm1_enable"

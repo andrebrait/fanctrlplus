@@ -152,8 +152,14 @@ fanctrlplus2.start_now() {
 fanctrlplus2.stop() {
   # Record that the user requested a stop.
   touch "$user_stopped"
-  # A boot start still waiting must not start the fans again.
+  # A boot start still waiting must not start the fans again, and one of its
+  # steps already running finishes first, so it cannot start loops after this.
   pkill -f "$boot_pattern"
+  while pgrep -f "$rc_script (start-now|resume)" >/dev/null; do sleep 0.2; done
+
+  # Whether fan control has run: until then the BIOS keeps the fans.
+  local ran=0
+  compgen -G "$pid_dir/${plugin}_*.pid" >/dev/null && ran=1
 
   pkill -f "$loop_script"
   rm -f "$pid_dir"/${plugin}_*.pid
@@ -162,8 +168,7 @@ fanctrlplus2.stop() {
   # Stop the dashboard updater.
   pkill -f "$dashboard_updater"
 
-  # At boot no loop has run yet: the BIOS keeps the fans until the boot start.
-  pgrep -x emhttpd >/dev/null || return 0
+  (( ran )) || return 0
 
   # Set only fanctrlplus2-controlled PWM outputs to 50%.
   for cfg in "$cfg_path"/${plugin}_*.cfg; do
