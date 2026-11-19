@@ -79,13 +79,13 @@ foreach ($_POST['#file'] as $i => $file) {
   $previous = is_file($old_path) ? (@parse_ini_file($old_path) ?: []) : [];
   $custom = trim($_POST['custom'][$i] ?? '');
 
-  // Custom Name is required.
-  if ($custom === '') $reject('Custom Name is required.');
+  // Fan name is required, ex. HDDBayFan.
+  if ($custom === '') $reject('Fan name is required, ex. HDDBayFan.');
 
   // Allow only letters, numbers, and underscores in Custom Name.
-  if (!preg_match('/^[A-Za-z0-9_]+$/', $custom)) $reject('Custom Name can only contain letters, numbers, and underscores.');
+  if (!preg_match('/^[A-Za-z0-9_]+$/', $custom)) $reject('Fan name can only contain letters, numbers, and underscores.');
 
-  if (stripos($custom, 'temp_') !== false) $reject('Custom Name cannot contain "temp_".');
+  if (stripos($custom, 'temp_') !== false) $reject('Fan name cannot contain "temp_".');
 
   // Require Interval to be a positive number of seconds.
   $interval = $_POST['interval'][$i] ?? '';
@@ -137,14 +137,14 @@ foreach ($_POST['#file'] as $i => $file) {
 
   // Preflight owns every name collision, so a refused save never leaves an earlier block written.
   $expected_file = $plugin.'_'.$custom.'.cfg';
-  if (isset($claimed[strtolower($expected_file)])) $reject("Custom Name \"$custom\" is used by more than one fan.", $i);
+  if (isset($claimed[strtolower($expected_file)])) $reject("Fan name \"$custom\" is used by more than one fan.", $i);
   $claimed[strtolower($expected_file)] = true;
   foreach (glob("$cfgpath/{$plugin}_*.cfg") as $existing) {
     // The fan's own file is saved or renamed in place, so it never collides with itself.
     if (basename($existing) === $old_file || $same_file($existing, $old_path)) continue;
-    if (strtolower(basename($existing)) === strtolower($expected_file)) $reject("Custom Name \"$custom\" would overwrite another saved configuration.", $i);
+    if (strtolower(basename($existing)) === strtolower($expected_file)) $reject("Fan name \"$custom\" would overwrite another saved configuration.", $i);
     $info = parse_ini_file($existing);
-    if (isset($info['custom']) && strcasecmp(trim($info['custom']), $custom) === 0) $reject("Custom Name \"$custom\" is already used.", $i);
+    if (isset($info['custom']) && strcasecmp(trim($info['custom']), $custom) === 0) $reject("Fan name \"$custom\" is already used.", $i);
   }
 
   $plans[$i] = [

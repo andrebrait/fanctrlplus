@@ -369,6 +369,7 @@ dt.containerSettingsDt {
    minimum the track will not go below, and on a phone that is wider than the
    screen, so it gives way to the container first. */
 #fan-area {
+  counter-reset: fcp-fan;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(510px, 100%), 1fr));
   gap: 16px;
@@ -376,6 +377,7 @@ dt.containerSettingsDt {
   align-items: start;
 }
 .fan-block {
+  counter-increment: fcp-fan;
   position: relative;
   width: 100%;
   box-sizing: border-box;
@@ -389,6 +391,10 @@ dt.containerSettingsDt {
   border-radius: 6px;
   position: relative;
 }
+
+/* "Fan 1", "Fan 2": the block's place on the page, so it follows reordering. */
+.fcp-fan-number::after { content: counter(fcp-fan); }
+.fcp-fan-legend { padding: 0 6px; font-weight: bold; }
 
 .cpu-label.disabled { opacity: 0.5; }
 
