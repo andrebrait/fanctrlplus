@@ -100,6 +100,9 @@ reset
 touch "$tmp/emhttpd_up"
 wait_running A
 expect_equal 1 "$(warnings)" "At boot, a fan saved by its hwmon number warns at once: no driver will fix it."
+expect_equal 1 "$(grep -c 'saved by its hwmon number' "$tmp/notify.log")" "The warning says to select the controller again."
+for _ in {1..50}; do pgrep -f "$rc boot\$" >/dev/null || break; sleep 0.2; done
+expect_equal 0 "$(pgrep -fc "$rc boot\$")" "A fan saved by its hwmon number does not keep the boot start retrying."
 fan B pwm2
 
 # ===== Boot, the driver loads late =====
@@ -115,6 +118,7 @@ touch "$tmp/hw/pwm2"
 sleep 2
 expect_equal A "$(running)" "Without a new chip in the hwmon list, the boot start does not retry."
 mkdir "$tmp/hwmon/hwmon2"
+touch "$tmp/hwmon/hwmon2/pwm2"
 wait_running 'A B'
 expect_equal 'A B' "$(running)" "A controller that appears within the grace period starts its fan."
 expect_equal "$pid_a" "$(cat "$tmp/run/fanctrlplus2_A.pid")" "The retry leaves running fans alone."

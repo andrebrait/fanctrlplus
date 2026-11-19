@@ -152,11 +152,22 @@ if ($cfgLegacy['aux_sensor'] !== "storcli:c0:roc,$temp,$class/hwmon7/temp1_input
 }
 // A class controller older saves recorded as its own identity is kept too.
 file_put_contents("$legacy/fanctrlplus2_ided.cfg", "custom=\"ided\"\ncontroller=\"$class/hwmon2/pwm2\"\ncontroller_identity=\"$class/hwmon2/pwm2\"\n");
+// NVMe hwmon sits directly under its class device, without a hwmon/ directory.
+$nvme = "$sys/devices/pci0000:00/0000:01:00.0/nvme/nvme0";
+@mkdir("$nvme/hwmon4", 0777, true);
+touch("$nvme/hwmon4/temp1_input");
+file_put_contents("$legacy/fanctrlplus2_nvme.cfg", "custom=\"nvme\"\naux_sensor=\"$nvme/hwmon2/temp1_input,,storcli:c0:roc\"\n");
 // A device-path sensor follows its chip to a new hwmon number.
 file_put_contents("$legacy/fanctrlplus2_moved.cfg", "custom=\"moved\"\ncpu_sensor=\"$sys/devices/platform/it87.2624/hwmon/hwmon9/temp1_input\"\n");
 migrate_cfg_and_labels('fanctrlplus2', $legacy, "$class/hwmon*");
 if (parse_ini_file("$legacy/fanctrlplus2_ided.cfg")['controller'] !== "$class/hwmon2/pwm2") {
     $failures[] = 'A /sys/class controller saved with itself as identity must be kept, not blanked or resolved.';
+}
+if (parse_ini_file("$legacy/fanctrlplus2_nvme.cfg")['aux_sensor'] !== "$nvme/hwmon4/temp1_input,,storcli:c0:roc") {
+    $failures[] = 'An NVMe sensor must follow its hwmon number, keeping the other entries as saved.';
+}
+if (strpos(file_get_contents("$legacy/fanctrlplus2_moved.cfg"), 'controller') !== false) {
+    $failures[] = 'Migration must not add controller keys a configuration does not have.';
 }
 if (parse_ini_file("$legacy/fanctrlplus2_moved.cfg")['cpu_sensor'] !== $temp) {
     $failures[] = 'A device-path sensor must follow its chip when its hwmon number changes.';

@@ -183,7 +183,8 @@ foreach ($_POST['#file'] as $i => $file) {
   } elseif ($controller === '') {
     $controller_identity = $previous_controller;
   } else {
-    $controller_identity = fcp_unique_pwm_identity($controller) ?? $controller;
+    // A /sys/class path names a number, not a device: no identity from it.
+    $controller_identity = fcp_class_hwmon_path($controller) ? '' : (fcp_unique_pwm_identity($controller) ?? $controller);
   }
 
   // Rename the cfg file when Custom Name changes.

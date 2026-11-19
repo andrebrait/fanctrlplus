@@ -110,7 +110,12 @@ function fcp_saved_controller_option(array $cfg, array $pwms): array {
     $fields = json_decode((string)@hex2bin(substr($identity, 4)), true);
     [$vid, $pid, $serial] = is_array($fields) && count($fields) >= 3 ? array_map('strval', $fields) : ['?', '?', '?'];
     $text = "USB $vid:$pid, serial $serial";
-    $present = (fcp_pwm_identity_map($pwms)[$identity] ?? null) !== null;
+    $map = fcp_pwm_identity_map($pwms);
+    // Listed twice (duplicate serials): there, but neither one can be picked.
+    if (array_key_exists($identity, $map) && $map[$identity] === null) {
+      return ['__fcp_keep__', "Not unique: $text (another controller reports the same serial)", 'PWM controller'];
+    }
+    $present = isset($map[$identity]);
   } else {
     $present = file_exists($identity);
   }
@@ -123,7 +128,8 @@ function fcp_saved_controller_option(array $cfg, array $pwms): array {
 // A saved temperature source that is not there now: a file path that does not
 // exist, or a tool-backed one (storcli:, nvidia:, ...) the page did not list.
 function fcp_sensor_missing(string $sensor): bool {
-  return $sensor[0] === '/' ? !file_exists($sensor) : true;
+  // A device path whose chip only changed hwmon number is followed at the next start.
+  return !str_starts_with($sensor, '/') || find_moved_pwm_path($sensor) === null;
 }
 
 function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors = []) {

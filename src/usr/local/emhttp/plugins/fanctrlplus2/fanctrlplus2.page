@@ -208,9 +208,10 @@ document.head.appendChild(link);
 function updatePwmDropdowns() {
   // Collect every non-empty PWM selection.
   const selected = [];
+  // A kept binding's option belongs to its own fan only.
   $('.pwm-controller').each(function() {
     const val = $(this).val();
-    if (val) selected.push(val);
+    if (val && !$(this).find('option:selected').is('[data-saved]')) selected.push(val);
   });
 
   // Update each select option.

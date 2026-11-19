@@ -78,8 +78,11 @@ function find_moved_pwm_path(string $old_path): ?string {
     if (fcp_class_hwmon_path($old_path) || strpbrk($old_path, '*?[') !== false) return null;
     if (file_exists($old_path)) return $old_path;
     $pattern = preg_replace(
-        ['#/hwmon/hwmon\d+/#', FCP_HID_INSTANCE],
-        ['/hwmon/hwmon*/', '$1.*/'],
+        // The last hwmonN directory, with or without a hwmon/ glue directory
+        // above it (NVMe and thermal-zone hwmon sit directly under their class
+        // device).
+        ['#/hwmon\d+(?=/[^/]+$)#', FCP_HID_INSTANCE],
+        ['/hwmon*', '$1.*/'],
         $old_path
     );
     $matches = glob($pattern) ?: [];
@@ -100,9 +103,8 @@ function fcp_class_hwmon_path(string $path): bool {
 // chips by then. A device path follows its device when its hwmon number
 // changes, as a controller does; any other source is kept as saved.
 function fcp_pin_sensor(string $path): string {
-    if (!fcp_class_hwmon_path($path)) return $path[0] === '/' ? (find_moved_pwm_path($path) ?? $path) : $path;
-    $real = realpath($path);
-    return $real !== false && is_file($real) ? $real : $path;
+    if (fcp_class_hwmon_path($path)) return realpath($path) ?: $path;
+    return str_starts_with($path, '/') ? (find_moved_pwm_path($path) ?? $path) : $path;
 }
 
 // A fan is a USB controller plus its interface/hwmon channel, not a USB port.

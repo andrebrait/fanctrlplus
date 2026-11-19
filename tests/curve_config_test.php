@@ -273,6 +273,9 @@ $saved = $bindingSave(['controller' => '', 'controller_identity' => $gonePwm], f
 $check(($saved['controller'] ?? null) === '' && ($saved['controller_identity'] ?? '') === $gonePwm, 'Saving a blanked controller shown by its identity must keep it blank.');
 $saved = $bindingSave(['controller' => '', 'controller_identity' => $gonePwm], function (&$post) use ($gonePwm) { $post['controller'][0] = $gonePwm; });
 $check(($saved['controller'] ?? null) === $gonePwm, 'Picking a controller equal to a blanked identity is an explicit choice and must be saved.');
+$classPwm = '/sys/class/hwmon/hwmon3/pwm1';
+$saved = $bindingSave(['controller' => $classPwm, 'controller_identity' => ''], function (&$post) use ($classPwm) { $post['controller'][0] = $classPwm; });
+$check(($saved['controller'] ?? '') === $classPwm && ($saved['controller_identity'] ?? null) === '', 'Saving a controller kept by hwmon number must not give it the identity of whatever holds that number now.');
 $cpuPath = '/sys/devices/platform/coretemp.0/hwmon/hwmon1/temp1_input';
 $saved = $bindingSave(['cpu_sensor' => $cpuPath, 'aux_sensor' => 'storcli:c0:roc'], function (&$post) {
     unset($post['cpu_sensor'][0]);

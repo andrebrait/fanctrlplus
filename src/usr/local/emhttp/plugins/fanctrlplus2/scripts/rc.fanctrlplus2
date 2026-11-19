@@ -59,10 +59,11 @@ fanctrlplus2.start_fans() {
     # A /sys/class/hwmon path waits for the user, not a driver: it warns now.
     controller=$(grep -Po '^controller="\K[^"]+' "$cfg")
     if ! fcp_drivable_controller "$controller"; then
-      local by_number=0
-      [[ "$controller" == */class/hwmon/* ]] && by_number=1
-      [[ -n "$custom_safe" ]] && (( ! by_number )) && missing=1
-      (( quiet && ! by_number )) || [[ -z "$raw_custom" ]] ||
+      if [[ "$controller" != */class/hwmon/* ]]; then
+        [[ -n "$custom_safe" ]] && missing=1
+        (( quiet )) && continue
+      fi
+      [[ -z "$raw_custom" ]] ||
         fcp_warn_not_started "$cfg" "$raw_custom" "$controller" "/var/tmp/$plugin/faults_$raw_custom"
       continue
     fi
@@ -117,21 +118,21 @@ fanctrlplus2.locked() {
 # Boot start, in the background. Waits for emhttpd, which the go file starts
 # once every plugin has installed, or 5 minutes should it never run. A fan
 # whose controller is still missing then gets 5 more minutes for a driver
-# that loads late, retried every 10 seconds, before it warns. The fans with a
+# that loads late, retried when the PWM channels change, before it warns. The fans with a
 # controller run meanwhile.
 fanctrlplus2.boot() {
   local deadline=$((SECONDS + boot_wait_seconds))
   until pgrep -x emhttpd >/dev/null || (( SECONDS >= deadline )); do sleep 2; done
-  # Retry when a chip appears (the hwmon list changes), not every round:
-  # each retry runs the migration. Listed before the first attempt, so a chip
-  # appearing during it still counts.
+  # Retry when the PWM channels change (a chip binds, a driver is swapped or
+  # adds channels), not every round: each retry runs the migration. Listed
+  # before the first attempt, so a change during it still counts.
   local seen now
-  seen=$(ls "$hwmon_dir" 2>/dev/null)
+  seen=$(readlink -f "$hwmon_dir"/*/pwm* 2>/dev/null)
   fanctrlplus2.locked start-now quiet && return
   deadline=$((SECONDS + boot_wait_seconds))
   while (( SECONDS < deadline )); do
     sleep "$boot_retry_seconds"
-    now=$(ls "$hwmon_dir" 2>/dev/null)
+    now=$(readlink -f "$hwmon_dir"/*/pwm* 2>/dev/null)
     [[ "$now" == "$seen" ]] && continue
     seen=$now
     fanctrlplus2.locked resume quiet && return

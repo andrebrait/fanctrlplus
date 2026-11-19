@@ -49,6 +49,9 @@ $check($opt !== '' && !$flagged($opt) && strpos($opt, 'In use by another fan') !
 $opt = $option($render(['controller' => '', 'controller_identity' => 'usb:zz']), '__fcp_keep__');
 $check(strpos($opt, 'USB ?:?, serial ?') !== false, 'A malformed USB identity must still render.');
 
+$opt = $option($render(['controller' => $present]), $present);
+$check($opt !== '' && !$flagged($opt) && strpos($opt, ' selected') !== false, 'A saved controller that exists but is not listed stays selected without a flag.');
+
 $html = $render(['controller' => $pwms[0]['sensor'], 'cpu_sensor' => array_key_first($cpu)]);
 $check(strpos($html, 'data-missing') === false && strpos($html, 'data-saved') === false, 'Present selections must not be marked missing.');
 
