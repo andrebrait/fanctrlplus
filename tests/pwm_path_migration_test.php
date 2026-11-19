@@ -126,11 +126,12 @@ if (parse_ini_file("$boot/fanctrlplus2_array.cfg")['controller'] !== $loaded) {
     $failures[] = 'Once its chip loads, the fan must bind to it again.';
 }
 
-// Legacy /sys/class bindings name an index, not a device. A controller is
-// never resolved through one; a sensor is pinned to the device holding it.
+// Legacy /sys/class bindings name an index, not a device. Controllers and
+// sensors are pinned to the device holding it; an absent index is kept.
 $legacy = "$root/legacy";
 @mkdir($legacy);
 $temp = "$sys/devices/platform/it87.2624/hwmon/hwmon2/temp1_input";
+$classPwm = "$sys/devices/platform/it87.2624/hwmon/hwmon2/pwm2";
 touch($temp);
 file_put_contents("$legacy/fanctrlplus2_old.cfg", implode("\n", [
     'custom="old"',
@@ -141,8 +142,8 @@ file_put_contents("$legacy/fanctrlplus2_old.cfg", implode("\n", [
 ]) . "\n");
 migrate_cfg_and_labels('fanctrlplus2', $legacy, "$class/hwmon*");
 $cfgLegacy = parse_ini_file("$legacy/fanctrlplus2_old.cfg");
-if ($cfgLegacy['controller'] !== "$class/hwmon2/pwm2") {
-    $failures[] = 'A /sys/class controller must be kept as saved, for the user to pick again, not resolved to the chip at that index.';
+if ($cfgLegacy['controller'] !== $classPwm) {
+    $failures[] = 'A /sys/class controller must be pinned to the device holding that index, got ' . $cfgLegacy['controller'];
 }
 if ($cfgLegacy['cpu_sensor'] !== $temp) {
     $failures[] = 'A /sys/class CPU sensor must be pinned to the device holding that index, got ' . $cfgLegacy['cpu_sensor'];
@@ -150,8 +151,12 @@ if ($cfgLegacy['cpu_sensor'] !== $temp) {
 if ($cfgLegacy['aux_sensor'] !== "storcli:c0:roc,$temp,$class/hwmon7/temp1_input") {
     $failures[] = 'Aux hwmon sensors must be pinned, other sources and absent ones kept, got ' . $cfgLegacy['aux_sensor'];
 }
-// A class controller older saves recorded as its own identity is kept too.
-file_put_contents("$legacy/fanctrlplus2_ided.cfg", "custom=\"ided\"\ncontroller=\"$class/hwmon2/pwm2\"\ncontroller_identity=\"$class/hwmon2/pwm2\"\n");
+// A class controller whose index is absent is kept, also when older saves
+// recorded it as its own identity, and one whose device another fan already
+// drives is kept rather than doubled.
+file_put_contents("$legacy/fanctrlplus2_ided.cfg", "custom=\"ided\"\ncontroller=\"$class/hwmon7/pwm2\"\ncontroller_identity=\"$class/hwmon7/pwm2\"\n");
+file_put_contents("$legacy/fanctrlplus2_absent.cfg", "custom=\"absent\"\ncontroller=\"$class/hwmon7/pwm2\"\n");
+file_put_contents("$legacy/fanctrlplus2_twin.cfg", "custom=\"twin\"\ncontroller=\"$class/hwmon2/pwm2\"\n");
 // NVMe hwmon sits directly under its class device, without a hwmon/ directory.
 $nvme = "$sys/devices/pci0000:00/0000:01:00.0/nvme/nvme0";
 @mkdir("$nvme/hwmon4", 0777, true);
@@ -160,8 +165,12 @@ file_put_contents("$legacy/fanctrlplus2_nvme.cfg", "custom=\"nvme\"\naux_sensor=
 // A device-path sensor follows its chip to a new hwmon number.
 file_put_contents("$legacy/fanctrlplus2_moved.cfg", "custom=\"moved\"\ncpu_sensor=\"$sys/devices/platform/it87.2624/hwmon/hwmon9/temp1_input\"\n");
 migrate_cfg_and_labels('fanctrlplus2', $legacy, "$class/hwmon*");
-if (parse_ini_file("$legacy/fanctrlplus2_ided.cfg")['controller'] !== "$class/hwmon2/pwm2") {
-    $failures[] = 'A /sys/class controller saved with itself as identity must be kept, not blanked or resolved.';
+if (parse_ini_file("$legacy/fanctrlplus2_ided.cfg")['controller'] !== "$class/hwmon7/pwm2"
+    || parse_ini_file("$legacy/fanctrlplus2_absent.cfg")['controller'] !== "$class/hwmon7/pwm2") {
+    $failures[] = 'A /sys/class controller whose index is absent must be kept, not blanked or moved.';
+}
+if (parse_ini_file("$legacy/fanctrlplus2_twin.cfg")['controller'] !== "$class/hwmon2/pwm2") {
+    $failures[] = 'A /sys/class controller must not be pinned to a device another fan already drives.';
 }
 if (parse_ini_file("$legacy/fanctrlplus2_nvme.cfg")['aux_sensor'] !== "$nvme/hwmon4/temp1_input,,storcli:c0:roc") {
     $failures[] = 'An NVMe sensor must follow its hwmon number, keeping the other entries as saved.';

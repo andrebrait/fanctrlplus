@@ -90,17 +90,18 @@ function find_moved_pwm_path(string $old_path): ?string {
 }
 
 // A legacy /sys/class/hwmon path names a number, whatever chip holds it, not
-// a device: a controller saved that way is never resolved or driven (the user
-// picks it again), and a fan is never moved to another chip with a channel of
-// the same name (a chip whose driver has not loaded yet, #41).
+// a device: it is never driven or followed to another number. Migration pins
+// it, once, to the chip holding that number (fcp_pin_sensor) after every
+// plugin has installed, the chip stable releases resolved it to; an absent
+// number stays saved until the user picks the controller again (#41).
 function fcp_class_hwmon_path(string $path): bool {
     return strpos($path, '/class/hwmon/') !== false;
 }
 
-// A hwmon temperature sensor saved by its /sys/class/hwmon index is pinned,
-// once, to the device holding that index. Migration runs once every plugin
-// has installed (rc.fanctrlplus2 boot), so drivers have normally bound their
-// chips by then. A device path follows its device when its hwmon number
+// A hwmon controller or temperature sensor saved by its /sys/class/hwmon
+// index is pinned, once, to the device holding that index. Migration runs
+// once every plugin has installed (rc.fanctrlplus2 boot), so drivers have
+// normally bound their chips by then. A device path follows its device when its hwmon number
 // changes, as a controller does; any other source is kept as saved.
 function fcp_pin_sensor(string $path): string {
     if (fcp_class_hwmon_path($path)) return realpath($path) ?: $path;
@@ -270,14 +271,16 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
     }
 }
 // Resolves one configuration's controller in $ini. A saved path that no longer
-// exists, or a /sys/class one, is kept for the settings page to show, until
-// the user picks another controller; nothing is moved to another device.
+// exists, including a /sys/class one, is kept for the settings page to show,
+// until the user picks another controller; nothing is moved to another device.
 function fcp_migrate_controller(array &$ini, string $cfgfile, array &$in_use, array $identities): void {
     $old_path = trim((string)($ini['controller'] ?? ''), " \t\n\r\0\x0B\"'");
     $identity = (string)($ini['controller_identity'] ?? '');
     if ($identity === '' && !preg_match('#/pwm\d+$#', $old_path)) return;
     $source = $identity !== '' ? $identity : $old_path;
-    $new_path = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : find_moved_pwm_path($source);
+    if (strpos($source, 'usb:') === 0) $new_path = $identities[$source] ?? null;
+    elseif (fcp_class_hwmon_path($source)) $new_path = is_file($source) ? fcp_pin_sensor($source) : null;
+    else $new_path = find_moved_pwm_path($source);
     if ($new_path !== null && isset($in_use[$new_path]) && $in_use[$new_path] !== $cfgfile) {
         log_migrate("migrate cfg: keep $old_path in $cfgfile, $new_path is already controlled");
         if ($identity === '' && !is_file($old_path)) return;
