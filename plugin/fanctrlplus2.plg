@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="2026.11.12"
+  version="2026.11.19"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,19 @@
 
 <CHANGES>
 <![CDATA[
+### 2026.11.19
+
+## Fan control starts once every plugin has installed
+
+At boot, FanCtrl Plus 2 now starts fan control only after every plugin has installed. Fans on chips whose driver comes from another plugin, such as it87 or nct6687, no longer trigger "lost its PWM controller" and "recovered" notifications at every boot. A controller still missing then gets 5 more minutes before the plugin warns.
+
+## Fans stay on their own chip
+
+A fan is never moved to another chip. Controllers, labels, and CPU and auxiliary sensors still saved in the older /sys/class/hwmon/hwmonN form are converted once, on the first start after this update, to the chip holding that number at that start: the chip earlier releases were driving. A controller or sensor that is not detected, including one saved under a number that did not exist then, stays selected and is marked on the settings page, and saving asks first. Select it again once.
+
+This is software-based fan control, not independent thermal protection. Monitor actual fan speeds and temperatures. Back up your settings before updating. If rolling back, reinstall the older plugin manifest and restore your backup; do not uninstall, because uninstalling deletes the configuration.
+
+
 ### 2026.11.12
 
 ## Fewer false control-loss warnings at full speed
@@ -39,19 +52,6 @@ Fan speed mismatch warnings now restart their waiting period when the requested 
 A new "Download diagnostics" button in General Settings creates a ZIP containing anonymized fan settings, hardware readings, and structured fan-control events. It excludes raw logs, disk identifiers, fan and sensor names, and custom sensor scripts. Hardware characteristics can still identify a machine, so review the archive before sharing it.
 
 This is software-based fan control, not independent thermal protection. Monitor actual fan speeds and temperatures. Back up your settings before updating. If rolling back, reinstall the older plugin manifest and restore your backup; do not uninstall, because uninstalling deletes the configuration.
-
-### 2026.11.08
-
-## Editable fan curves
-
-Configure each disk group, CPU temperature source, and auxiliary temperature source with a 2–8 point fan curve. Choose linear interpolation or stepped control, set cooling hysteresis, and configure an optional emergency temperature and speed that can exceed the normal output cap. Curve points retain their absolute speeds when the cap changes.
-
-Disk groups are optional, so a fan can use CPU or auxiliary temperature without assigning a disk. Existing valid settings are preserved as equivalent two-point curves; export a configuration backup before updating.
-
-This is software-based control, not independent thermal protection. Monitor actual fan speeds and temperatures, and leave CPU fans under BIOS or firmware control where possible.
-
-Thanks to @fejesgabortorrent-dot for requesting and testing the feature. See #26 and #27.
-
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -105,16 +105,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.12-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/2026.11.12/fanctrlplus2-2026.11.12-noarch-1.txz</URL>
-<SHA256>c224d31106be38610e3b2b8727781b2e0d4cce9a893f64e2b03e2cb6e19b5a50</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.19-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/2026.11.19/fanctrlplus2-2026.11.19-noarch-1.txz</URL>
+<SHA256>1ec7829e15c3d863443c09ed5903b45a3f2eb17470e9b289e9f2379bbef153a4</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.12-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.19-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -137,7 +137,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 2026.11.12"
+echo " Version: 2026.11.19"
 echo "------------------------------------------------"
 echo ""
 exit 0
