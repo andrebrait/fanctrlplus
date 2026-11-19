@@ -41,7 +41,8 @@ while true; do
     # fan loops it spawns do not keep the lock held.
     (
       flock 9 || exit 0
-      if ! is_fanctrl_running && [[ ! -f "$pidfile" ]]; then
+      # The boot start (rc.fanctrlplus2 boot) is still giving a driver time.
+      if ! is_fanctrl_running && [[ ! -f "$pidfile" ]] && ! pgrep -f "rc.fanctrlplus2 boot$" >/dev/null; then
         log "FanCtrlPlus not running after array start → launching"
         "$rc_script" start 9>&-
       fi

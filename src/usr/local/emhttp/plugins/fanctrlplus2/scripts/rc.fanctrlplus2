@@ -20,17 +20,23 @@ cfg_path="/boot/config/plugins/$plugin"
 loop_script="/usr/local/emhttp/plugins/$plugin/scripts/fanctrlplus2_loop.sh"
 dashboard_updater="/usr/local/emhttp/plugins/$plugin/scripts/fanctrlplus2_dashboard_update.sh"
 pid_dir="/var/run"
+rc_script="/usr/local/emhttp/plugins/$plugin/scripts/rc.fanctrlplus2"
+config_lock="/var/run/${plugin}.config.lock"
+boot_wait_seconds=300
+boot_retry_seconds=10
+boot_pattern="$rc_script boot\$"
+user_stopped="/var/run/${plugin}.user_stopped"
 source "/usr/local/emhttp/plugins/$plugin/scripts/disk_group_control.sh"
 
-fanctrlplus2.start() {
-  # Clear the user-requested stop marker.
-  rm -f /var/run/fanctrlplus2.user_stopped
-
-  pkill -f "$loop_script" 2>/dev/null
-
-  # Migrate configuration and labels before starting.
-  php -r "require_once '/usr/local/emhttp/plugins/fanctrlplus2/include/Common.php'; migrate_cfg_and_labels('fanctrlplus2');"
-
+# Starts the loop of every enabled fan whose controller can be written, and
+# fails when a fan did not start for want of one. "missing" leaves fans whose
+# loop runs alone; "quiet" holds back the missing-controller warning.
+fanctrlplus2.start_fans() {
+  local only_missing=0 quiet=0 missing=0 opt cfg service raw_custom controller clean_custom custom_safe pidfile
+  for opt; do
+    [[ "$opt" == missing ]] && only_missing=1
+    [[ "$opt" == quiet ]] && quiet=1
+  done
   for cfg in "$cfg_path"/${plugin}_*.cfg; do
     [[ -f "$cfg" ]] || continue
 
@@ -39,24 +45,87 @@ fanctrlplus2.start() {
 
     raw_custom=$(grep -Po '^custom="\K[^"]+' "$cfg")
 
+    # Sanitize the custom name before using it in a PID filename.
+    clean_custom=$(echo "$raw_custom" | tr -d '\r\n\t ')
+    custom_safe=$(echo "$clean_custom" | tr -cd '[:alnum:]_-')
+    pidfile="$pid_dir/${plugin}_${custom_safe}.pid"
+
+    if (( only_missing )) && [[ -n "$custom_safe" ]] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; then
+      continue
+    fi
+
     # Serial resolution can leave an absent/ambiguous controller unassigned.
     controller=$(grep -Po '^controller="\K[^"]+' "$cfg")
     if [[ -z "$controller" || ! -w "$controller" ]]; then
-      [[ -n "$raw_custom" ]] &&
+      [[ -n "$custom_safe" ]] && missing=1
+      (( quiet )) || [[ -z "$raw_custom" ]] ||
         fcp_warn_not_started "$cfg" "$raw_custom" "$controller" "/var/tmp/$plugin/faults_$raw_custom"
       continue
     fi
 
-    # Sanitize the custom name before using it in a PID filename.
-    clean_custom=$(echo "$raw_custom" | tr -d '\r\n\t ')
-    custom_safe=$(echo "$clean_custom" | tr -cd '[:alnum:]_-')
-
     [[ -z "$custom_safe" ]] && continue
 
     nohup "$loop_script" "$cfg" > /dev/null 2>&1 &
-    echo $! > "$pid_dir/${plugin}_${custom_safe}.pid"
+    echo $! > "$pidfile"
     logger -t "$plugin" "Started [$custom_safe] from $cfg"
   done
+  return $missing
+}
+
+fanctrlplus2.migrate() {
+  php -r "require_once '/usr/local/emhttp/plugins/fanctrlplus2/include/Common.php'; migrate_cfg_and_labels('fanctrlplus2');"
+}
+
+fanctrlplus2.start() {
+  # Clear the user-requested stop marker.
+  rm -f "$user_stopped"
+
+  # At boot, plugins install in name order before the go file starts emhttpd,
+  # so a driver plugin sorting after this one (it87-driver, nct6687) has not
+  # bound its chip yet (#41). fanctrlplus2.boot starts the fans later.
+  if ! pgrep -x emhttpd >/dev/null; then
+    if ! pgrep -f "$boot_pattern" >/dev/null; then
+      nohup "$rc_script" boot >/dev/null 2>&1 &
+      logger -t "$plugin" "Waiting for the plugins to finish installing before starting"
+    fi
+    return 0
+  fi
+  # A fan without its controller is warned about, not a failed start.
+  fanctrlplus2.start_now
+  return 0
+}
+
+# Runs one rc action under the settings lock, which the fan loops it starts
+# must not inherit (see array_monitor.sh).
+fanctrlplus2.locked() {
+  ( flock 9 || exit 1; "$rc_script" "$@" 9>&- ) 9>>"$config_lock"
+}
+
+# Boot start, in the background. Waits for emhttpd, which the go file starts
+# once every plugin has installed, or 5 minutes should it never run. A fan
+# whose controller is still missing then gets 5 more minutes for a driver
+# that loads late, retried every 10 seconds, before it warns. The fans with a
+# controller run meanwhile.
+fanctrlplus2.boot() {
+  local deadline=$((SECONDS + boot_wait_seconds))
+  until pgrep -x emhttpd >/dev/null || (( SECONDS >= deadline )); do sleep 2; done
+  fanctrlplus2.locked start-now quiet && return
+  deadline=$((SECONDS + boot_wait_seconds))
+  while (( SECONDS < deadline )); do
+    sleep "$boot_retry_seconds"
+    fanctrlplus2.locked resume quiet && return
+  done
+  fanctrlplus2.locked resume
+}
+
+fanctrlplus2.start_now() {
+  local status=0
+  pkill -f "$loop_script" 2>/dev/null
+
+  # Migrate configuration and labels before starting.
+  fanctrlplus2.migrate
+
+  fanctrlplus2.start_fans "$@" || status=1
 
   # Drop the alert state of fans no configuration names any more.
   local -A names=()
@@ -77,11 +146,25 @@ fanctrlplus2.start() {
   if [[ -x "$dashboard_updater" ]]; then
     nohup "$dashboard_updater" >/dev/null 2>&1 &
   fi
+  return $status
 }
 
 fanctrlplus2.stop() {
   # Record that the user requested a stop.
-  touch /var/run/fanctrlplus2.user_stopped
+  touch "$user_stopped"
+  # A boot start still waiting must not start the fans again, and one of its
+  # steps already running finishes first, so it cannot start loops after this.
+  pkill -f "$boot_pattern"
+  while pgrep -f "$rc_script (start-now|resume)" >/dev/null; do sleep 0.2; done
+
+  # The fans whose loop has run (a PID file): the BIOS keeps the others.
+  local -A ran=()
+  local pidfile name
+  for pidfile in "$pid_dir"/${plugin}_*.pid; do
+    [[ -f "$pidfile" ]] || continue
+    name=${pidfile##*/${plugin}_}
+    ran[${name%.pid}]=1
+  done
 
   pkill -f "$loop_script"
   rm -f "$pid_dir"/${plugin}_*.pid
@@ -96,6 +179,9 @@ fanctrlplus2.stop() {
 
     service=$(grep -Po '^service="\K[^"]+' "$cfg")
     [[ "$service" != "1" ]] && continue
+
+    name=$(grep -Po '^custom="\K[^"]+' "$cfg" | tr -cd '[:alnum:]_-')
+    [[ -n "$name" && -n "${ran[$name]:-}" ]] || continue
 
     pwm=$(grep -Po '^controller="\K[^"]+' "$cfg")
     [[ -z "$pwm" || ! -w "$pwm" ]] && continue
@@ -123,6 +209,11 @@ fanctrlplus2.status() {
 
 case "$1" in
   start) fanctrlplus2.start ;;
+  # Internal: the boot start and its steps (fanctrlplus2.boot).
+  boot) fanctrlplus2.boot ;;
+  # Run under the settings lock: a stop since the boot started ends it.
+  start-now) [[ -f "$user_stopped" ]] || fanctrlplus2.start_now "${@:2}" ;;
+  resume) [[ -f "$user_stopped" ]] || { fanctrlplus2.migrate; fanctrlplus2.start_fans missing "${@:2}"; } ;;
   stop) fanctrlplus2.stop ;;
   restart)
     fanctrlplus2.stop
