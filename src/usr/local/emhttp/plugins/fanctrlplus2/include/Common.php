@@ -90,23 +90,26 @@ function find_moved_pwm_path(string $old_path): ?string {
 }
 
 // A legacy /sys/class/hwmon path names a number, whatever chip holds it, not
-// a device: it is never driven or followed to another number. Migration pins
-// a controller saved that way to the chip holding that number on its first run
-// after every plugin has installed, the chip stable releases resolved it to.
-// A number absent then stays saved until the user picks the controller again,
-// and is never resolved later, when another chip may hold it (#41).
+// a device: it is never driven or followed to another number. The first
+// migration after the upgrade (FCP_CLASS_FLAG) pins controllers, labels and
+// sensors saved that way to the chip holding that number then, the chip
+// stable releases resolved them to; it runs once every plugin has installed
+// (rc.fanctrlplus2 boot), so drivers have normally bound their chips by then.
+// A number absent then stays saved, and a controller undriven until the user
+// picks it again: it is never resolved later, when another chip may hold it
+// (#41).
 function fcp_class_hwmon_path(string $path): bool {
     return strpos($path, '/class/hwmon/') !== false;
 }
 
-// A hwmon controller or temperature sensor saved by its /sys/class/hwmon
-// index is pinned, once, to the device holding that index. Migration runs
-// once every plugin has installed (rc.fanctrlplus2 boot), so drivers have
-// normally bound their chips by then. A device path follows its device when
-// its hwmon number changes, as a controller does; any other source is kept as
-// saved.
-function fcp_pin_sensor(string $path): string {
-    if (fcp_class_hwmon_path($path)) return realpath($path) ?: $path;
+const FCP_CLASS_FLAG = '.hwmon_numbers_converted';
+
+// A hwmon temperature sensor saved by its /sys/class/hwmon index is pinned to
+// the device holding that index on the first migration only
+// (fcp_class_hwmon_path). A device path follows its device when its hwmon
+// number changes, as a controller does; any other source is kept as saved.
+function fcp_pin_sensor(string $path, bool $by_number): string {
+    if (fcp_class_hwmon_path($path)) return $by_number ? (realpath($path) ?: $path) : $path;
     return str_starts_with($path, '/') ? (find_moved_pwm_path($path) ?? $path) : $path;
 }
 
@@ -184,6 +187,48 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
     $labelFile = "$cfgpath/pwm_labels.cfg";
     $pwms = list_pwm($hwmon_glob);
     $identities = fcp_pwm_identity_map($pwms);
+    $flag = "$cfgpath/".FCP_CLASS_FLAG;
+    $by_number = !is_file($flag);
+
+    // --- cfgs ---
+    // A fan assigned to the current path while an old one still pointed at
+    // the vanished path keeps it: two loops must not drive the same PWM.
+    $cfgfiles = glob("$cfgpath/{$plugin}_*.cfg") ?: [];
+    $configs = []; $in_use = []; $pinned = [];
+    foreach ($cfgfiles as $cfgfile) {
+        $ini = @parse_ini_file($cfgfile);
+        if (!$ini) continue;
+        $configs[$cfgfile] = $ini;
+        $path = (string)($ini['controller'] ?? '');
+        $identity = (string)($ini['controller_identity'] ?? '');
+        $source = $identity !== '' ? $identity : $path;
+        $resolved = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : (is_file($source) ? $source : null);
+        // Already-current manual assignments win over stale migrated ones.
+        if ($resolved === $path && $path !== '' && !isset($in_use[$path])) $in_use[$path] = $cfgfile;
+    }
+    foreach ($configs as $cfgfile => $ini) {
+        $original = $ini;
+        foreach (['cpu_sensor', 'aux_sensor'] as $k) {
+            if (($ini[$k] ?? '') === '') continue;
+            $ini[$k] = implode(',', array_map(fn($s) => fcp_pin_sensor($s, $by_number), explode(',', (string)$ini[$k])));
+            if ($ini[$k] !== $original[$k]) log_migrate("migrate cfg: $cfgfile $k: {$original[$k]} → {$ini[$k]}");
+        }
+        fcp_migrate_controller($ini, $cfgfile, $in_use, $identities, $by_number);
+        $was = (string)($original['controller'] ?? '');
+        if (fcp_class_hwmon_path($was) && !fcp_class_hwmon_path((string)$ini['controller'])) $pinned[$was] = $ini['controller'];
+        if ($ini === $original) continue;
+        // Only these fields change. Re-serializing the entire INI would
+        // re-escape free-text values that are also sourced by the shell.
+        $buf = (string)file_get_contents($cfgfile);
+        foreach (['controller', 'controller_identity', 'cpu_sensor', 'aux_sensor'] as $k) {
+            if (($ini[$k] ?? null) === ($original[$k] ?? null)) continue;
+            $v = str_replace(["\\", '"', '$', '`', "\r", "\n"], ["\\\\", '\\"', '\\$', '\\`', '', ''], (string)$ini[$k]);
+            $line = "$k=\"$v\"";
+            $buf = preg_replace_callback('/^[ \t]*'.$k.'[ \t]*=.*$/m', function () use ($line) { return $line; }, $buf, -1, $count);
+            if ($count === 0) $buf = rtrim($buf, "\n")."\n".$line."\n";
+        }
+        safe_rewrite($cfgfile, $buf);
+    }
 
     // --- labels ---
     if (is_file($labelFile)) {
@@ -205,7 +250,8 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
             }
 
             $stable = strpos($old_path, 'usb:') === 0;
-            $new_path = $stable ? ($identities[$old_path] ?? null) : find_moved_pwm_path($old_path);
+            // A class label follows only its controller pinned above.
+            $new_path = $stable ? ($identities[$old_path] ?? null) : ($pinned[$old_path] ?? find_moved_pwm_path($old_path));
             if ($new_path === null) { log_migrate("migrate label: no match, keep $old_path"); $out[]=$line; continue; }
             $is_current = $stable || $new_path === $old_path;
             $key = fcp_unique_pwm_identity($new_path, $identities) ?? $new_path;
@@ -233,79 +279,20 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
         }
         if ($changed) safe_rewrite($labelFile, implode("\n", $out));
     }
-
-    // --- cfgs ---
-    // A fan assigned to the current path while an old one still pointed at
-    // the vanished path keeps it: two loops must not drive the same PWM.
-    $cfgfiles = glob("$cfgpath/{$plugin}_*.cfg") ?: [];
-    $configs = []; $in_use = []; $pinned = [];
-    foreach ($cfgfiles as $cfgfile) {
-        $ini = @parse_ini_file($cfgfile);
-        if (!$ini) continue;
-        $configs[$cfgfile] = $ini;
-        $path = (string)($ini['controller'] ?? '');
-        $identity = (string)($ini['controller_identity'] ?? '');
-        $source = $identity !== '' ? $identity : $path;
-        $resolved = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : (is_file($source) ? $source : null);
-        // Already-current manual assignments win over stale migrated ones.
-        if ($resolved === $path && $path !== '' && !isset($in_use[$path])) $in_use[$path] = $cfgfile;
-    }
-    foreach ($configs as $cfgfile => $ini) {
-        $original = $ini;
-        foreach (['cpu_sensor', 'aux_sensor'] as $k) {
-            if (($ini[$k] ?? '') === '') continue;
-            $ini[$k] = implode(',', array_map('fcp_pin_sensor', explode(',', (string)$ini[$k])));
-            if ($ini[$k] !== $original[$k]) log_migrate("migrate cfg: $cfgfile $k: {$original[$k]} → {$ini[$k]}");
-        }
-        fcp_migrate_controller($ini, $cfgfile, $in_use, $identities);
-        $was = (string)($original['controller'] ?? '');
-        if (fcp_class_hwmon_path($was) && !fcp_class_hwmon_path((string)$ini['controller'])) $pinned[$was] = $ini['controller_identity'];
-        if ($ini === $original) continue;
-        // Only these fields change. Re-serializing the entire INI would
-        // re-escape free-text values that are also sourced by the shell.
-        $buf = (string)file_get_contents($cfgfile);
-        foreach (['controller', 'controller_identity', 'cpu_sensor', 'aux_sensor'] as $k) {
-            if (($ini[$k] ?? null) === ($original[$k] ?? null)) continue;
-            $v = str_replace(["\\", '"', '$', '`', "\r", "\n"], ["\\\\", '\\"', '\\$', '\\`', '', ''], (string)$ini[$k]);
-            $line = "$k=\"$v\"";
-            $buf = preg_replace_callback('/^[ \t]*'.$k.'[ \t]*=.*$/m', function () use ($line) { return $line; }, $buf, -1, $count);
-            if ($count === 0) $buf = rtrim($buf, "\n")."\n".$line."\n";
-        }
-        safe_rewrite($cfgfile, $buf);
-    }
-
-    // A label saved under a class controller follows it, only when that
-    // controller was pinned; a label already saved for the device wins.
-    if ($pinned && is_file($labelFile)) {
-        $lines = file($labelFile, FILE_IGNORE_NEW_LINES) ?: [];
-        $keys = array_map(fn($l) => trim(explode('=', $l, 2)[0], " \t\n\r\0\x0B\"'"), $lines);
-        $out = [];
-        foreach ($lines as $i => $line) {
-            $to = $pinned[$keys[$i]] ?? null;
-            if ($to === null) { $out[] = $line; continue; }
-            if (in_array($to, $keys, true)) continue;
-            $out[] = $to.'='.explode('=', $line, 2)[1];
-            log_migrate("migrate label: {$keys[$i]} → $to");
-        }
-        if ($out !== $lines) safe_rewrite($labelFile, implode("\n", $out));
-    }
+    if ($by_number) @touch($flag);
 }
 // Resolves one configuration's controller in $ini. A saved path that no longer
-// exists, or a /sys/class one that cannot be pinned (fcp_class_hwmon_path), is
-// kept for the settings page to show, until the user picks another controller;
-// nothing is moved to another device.
-function fcp_migrate_controller(array &$ini, string $cfgfile, array &$in_use, array $identities): void {
+// exists, or a /sys/class one not pinned on the first run ($by_number,
+// fcp_class_hwmon_path), is kept for the settings page to show, until the user
+// picks another controller; nothing is moved to another device.
+function fcp_migrate_controller(array &$ini, string $cfgfile, array &$in_use, array $identities, bool $by_number = false): void {
     $old_path = trim((string)($ini['controller'] ?? ''), " \t\n\r\0\x0B\"'");
     $identity = (string)($ini['controller_identity'] ?? '');
     if ($identity === '' && !preg_match('#/pwm\d+$#', $old_path)) return;
     $source = $identity !== '' ? $identity : $old_path;
     if (strpos($source, 'usb:') === 0) $new_path = $identities[$source] ?? null;
-    elseif (fcp_class_hwmon_path($source)) {
-        // Only on the first run: a class path saved as its own identity was
-        // absent or lost a conflict then, and is never resolved by number again.
-        $new_path = $identity === '' ? (realpath($source) ?: null) : null;
-        if ($new_path === null) $ini['controller_identity'] = $identity = $source;
-    } else $new_path = find_moved_pwm_path($source);
+    elseif (fcp_class_hwmon_path($source)) $new_path = $by_number ? (realpath($source) ?: null) : null;
+    else $new_path = find_moved_pwm_path($source);
     if ($new_path !== null && isset($in_use[$new_path]) && $in_use[$new_path] !== $cfgfile) {
         log_migrate("migrate cfg: keep $old_path in $cfgfile, $new_path is already controlled");
         if ($identity === '' && !is_file($old_path)) return;
