@@ -334,6 +334,31 @@ if await_barrier; then
 fi
 cfg_pwm=100
 
+# A controller saved by its /sys/class/hwmon number may belong to another chip
+# now (#41): Run Now refuses it and writes nothing.
+mkdir -p "$tmp/class/hwmon/hwmon2"
+echo 77 > "$tmp/class/hwmon/hwmon2/pwm1"
+write_cfg ''
+sed -i "s#^controller=.*#controller=\"$tmp/class/hwmon/hwmon2/pwm1\"#" "$FCP_CONFIG_DIR/fanctrlplus2_$custom.cfg"
+run_manual 50000
+expect_equal "1 77" "$rc $(cat "$tmp/class/hwmon/hwmon2/pwm1")" "Run Now refuses a controller saved by its hwmon number."
+expect_equal yes "$(said 'saved by its hwmon number')" "The refusal says to select the controller again."
+write_cfg ''
+
+# A saved controller that is not there is refused with a reason, not a write error.
+write_cfg ''
+sed -i "s#^controller=.*#controller=\"$tmp/gone/pwm1\"#" "$FCP_CONFIG_DIR/fanctrlplus2_$custom.cfg"
+run_manual 50000
+expect_equal "1 yes" "$rc $(said 'is not detected now')" "Run Now refuses a missing controller with a reason."
+
+# A USB controller kept while unresolved: another device may sit at its path.
+write_cfg 'controller_identity="usb:00"'
+printf '%s\n' 77 > "$tmp/pwm1"
+run_manual 50000
+expect_equal "1 77" "$rc $(cat "$tmp/pwm1")" "Run Now refuses a path that is not the saved USB controller."
+expect_equal yes "$(said 'not the USB controller saved')" "The refusal names the missing USB controller."
+write_cfg ''
+
 if (( failures > 0 )); then
   exit 1
 fi

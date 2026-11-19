@@ -208,9 +208,10 @@ document.head.appendChild(link);
 function updatePwmDropdowns() {
   // Collect every non-empty PWM selection.
   const selected = [];
+  // A kept binding's option belongs to its own fan only.
   $('.pwm-controller').each(function() {
     const val = $(this).val();
-    if (val) selected.push(val);
+    if (val && !$(this).find('option:selected').is('[data-saved]')) selected.push(val);
   });
 
   // Update each select option.
@@ -928,6 +929,9 @@ $(function() {
 
       $('.pwm-controller').each(function () {
         const selected = $(this).val();
+        // The saved controller the list lacks (missing, or saved by hwmon
+        // number) stays, so a label save does not drop it.
+        const saved = $(this).find('option[data-saved]').detach();
         $(this).empty().append('<option value="">-- Select PWM Controller --</option>');
 
         pwmList.forEach(pwm => {
@@ -940,6 +944,10 @@ $(function() {
           $(this).append($('<option>').val(pwm.sensor).text(display)
             .prop({selected: isSelected, disabled: isUsed}));
         });
+        // Dropped once the device is listed again.
+        if (!pwmList.some(pwm => pwm.sensor === saved.val())) {
+          $(this).append(saved.prop('selected', saved.val() === selected));
+        }
       });
 
       updatePWMLabelMap();
@@ -1229,6 +1237,19 @@ $(function() {
 
     if (!valid) {
       alert(errorMsg);
+      return;
+    }
+
+    // Saved controllers and sensors that are not present are kept until
+    // changed, but the fan cannot use them meanwhile.
+    const missing = [];
+    $('.fan-block').each(function () {
+      const name = $(this).find('.custom-name-input').val();
+      $(this).find('select:enabled option[data-missing]:selected').each(function () {
+        missing.push(`Fan ${name}: ${this.dataset.missing}, ${this.textContent.trim()}`);
+      });
+    });
+    if (missing.length && !confirm(`These are not detected on this system now:\n\n${missing.join('\n')}\n\nThe fan cannot use them until they are back and fan control restarts, or until you select others. Save anyway?`)) {
       return;
     }
 

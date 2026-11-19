@@ -39,6 +39,7 @@ sed -e "s#^cfg_path=.*#cfg_path=$tmp/cfg#" \
     -e "s#^config_lock=.*#config_lock=$tmp/run/lock#" \
     -e "s#^boot_wait_seconds=.*#boot_wait_seconds=3#" \
     -e "s#^boot_retry_seconds=.*#boot_retry_seconds=1#" \
+    -e "s#^hwmon_dir=.*#hwmon_dir=$tmp/hwmon#" \
     -e "s#^user_stopped=.*#user_stopped=$tmp/run/user_stopped#" \
     -e "s#^source .*#source $scripts/disk_group_control.sh#" \
     -e "s#^  script=.*#  script=$tmp/none#" \
@@ -63,7 +64,8 @@ fan B pwm2
 reset() {
   "$rc" stop >/dev/null 2>&1
   pkill -f "$tmp/loop.sh" 2>/dev/null
-  rm -rf "$tmp/run/"* "$tmp/var/"* "$tmp/notify.log" "$tmp/emhttpd_up" "$tmp/hw/"*
+  rm -rf "$tmp/run/"* "$tmp/var/"* "$tmp/notify.log" "$tmp/emhttpd_up" "$tmp/hw/"* "$tmp/hwmon"
+  mkdir -p "$tmp/hwmon/hwmon1"
   touch "$tmp/hw/pwm1"
 }
 running() { ls "$tmp/run" | grep -o '^fanctrlplus2_[A-Z]' | cut -d_ -f2 | xargs; }
@@ -79,6 +81,30 @@ expect_equal 0 $? "A missing controller is warned about, not a failed start: a r
 expect_equal A "$(running)" "The fan with a controller starts."
 expect_equal 1 "$(warnings)" "Outside boot, a missing controller warns at once."
 
+# ===== A /sys/class controller names an index, not a device =====
+reset
+touch "$tmp/emhttpd_up"
+mkdir -p "$tmp/class/hwmon/hwmon3"
+touch "$tmp/class/hwmon/hwmon3/pwm2"
+fan B ../class/hwmon/hwmon3/pwm2
+"$rc" start >/dev/null 2>&1
+expect_equal A "$(running)" "A fan saved by its hwmon number is not started until its controller is picked again."
+expect_equal 1 "$(warnings)" "The fan saved by its hwmon number is warned about."
+echo 2 > "$tmp/class/hwmon/hwmon3/pwm2_enable"
+echo 77 > "$tmp/class/hwmon/hwmon3/pwm2"
+touch "$tmp/run/fanctrlplus2_B.pid"  # as if B ran before an upgrade kept its class path
+"$rc" stop >/dev/null 2>&1
+expect_equal '2 77' "$(cat "$tmp/class/hwmon/hwmon3/pwm2_enable") $(cat "$tmp/class/hwmon/hwmon3/pwm2")" "Stop must not set 50% on a hwmon number that may belong to another chip."
+reset
+"$rc" start >/dev/null 2>&1
+touch "$tmp/emhttpd_up"
+wait_running A
+expect_equal 1 "$(warnings)" "At boot, a fan saved by its hwmon number warns at once: no driver will fix it."
+expect_equal 1 "$(grep -c 'saved by its hwmon number' "$tmp/notify.log")" "The warning says to select the controller again."
+for _ in {1..50}; do pgrep -f "$rc boot\$" >/dev/null || break; sleep 0.2; done
+expect_equal 0 "$(pgrep -fc "$rc boot\$")" "A fan saved by its hwmon number does not keep the boot start retrying."
+fan B pwm2
+
 # ===== Boot, the driver loads late =====
 reset
 "$rc" start >/dev/null 2>&1
@@ -89,10 +115,31 @@ wait_running A
 expect_equal A "$(running)" "Once emhttpd runs, the fan with a controller starts."
 pid_a=$(cat "$tmp/run/fanctrlplus2_A.pid")
 touch "$tmp/hw/pwm2"
+sleep 2
+expect_equal A "$(running)" "Without a new chip in the hwmon list, the boot start does not retry."
+mkdir "$tmp/hwmon/hwmon2"
+touch "$tmp/hwmon/hwmon2/pwm2"
 wait_running 'A B'
 expect_equal 'A B' "$(running)" "A controller that appears within the grace period starts its fan."
 expect_equal "$pid_a" "$(cat "$tmp/run/fanctrlplus2_A.pid")" "The retry leaves running fans alone."
 expect_equal 0 "$(warnings)" "A driver that loads within the grace period warns nothing (#41)."
+
+# ===== Boot, a late driver whose channels sit on the parent device =====
+# A long grace period, so a start before it ends comes from the retry.
+rc_long="$tmp/rc_long.fanctrlplus2"
+sed -e "s#^boot_wait_seconds=.*#boot_wait_seconds=30#" -e "s#^rc_script=.*#rc_script=$rc_long#" \
+    "$rc" > "$rc_long"
+chmod +x "$rc_long"
+reset
+"$rc_long" start >/dev/null 2>&1
+touch "$tmp/emhttpd_up"
+wait_running A
+touch "$tmp/hw/pwm2"
+mkdir -p "$tmp/hwmon/hwmon2/device"
+touch "$tmp/hwmon/hwmon2/device/pwm2"
+wait_running 'A B'
+expect_equal 'A B' "$(running)" "A channel appearing on the parent device triggers a retry within the grace period."
+pkill -f "$rc_long boot\$"
 
 # ===== Boot, the driver never loads =====
 reset

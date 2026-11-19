@@ -141,11 +141,13 @@ function fcp_diag_fan(?array $cfg, int $index, array $controllers, string $senso
     $fan['custom_sensors_missing'] = $missing;
 
     $path = $cfg['controller'] ?? '';
-    $real = $path === '' ? false : realpath($path);
+    // A /sys/class path is not driven (#41): the chip holding it may be another.
+    $byNumber = str_contains($path, '/class/hwmon/');
+    $real = $path === '' || $byNumber ? false : realpath($path);
     $fan['controller'] = $real !== false && isset($controllers[$real])
         ? $controllers[$real] + ['present'=>true]
         : ['present'=>false] + (preg_match('/pwm(\d{1,3})$/D', $path, $m) ? ['pwm'=>(int)$m[1]] : []);
-    $fan['controller']['binding'] = str_starts_with($cfg['controller_identity'] ?? '', 'usb:') ? 'usb' : 'path';
+    $fan['controller']['binding'] = str_starts_with($cfg['controller_identity'] ?? '', 'usb:') ? 'usb' : ($byNumber ? 'hwmon-number' : 'path');
 
     // Validated and rebuilt as integers and the linear/stepped enum.
     try { $fan['curves'] = fcp_curve_rules($cfg); }

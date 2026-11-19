@@ -24,6 +24,7 @@ rc_script="/usr/local/emhttp/plugins/$plugin/scripts/rc.fanctrlplus2"
 config_lock="/var/run/${plugin}.config.lock"
 boot_wait_seconds=300
 boot_retry_seconds=10
+hwmon_dir=/sys/class/hwmon
 boot_pattern="$rc_script boot\$"
 user_stopped="/var/run/${plugin}.user_stopped"
 source "/usr/local/emhttp/plugins/$plugin/scripts/disk_group_control.sh"
@@ -55,10 +56,14 @@ fanctrlplus2.start_fans() {
     fi
 
     # Serial resolution can leave an absent/ambiguous controller unassigned.
+    # A /sys/class/hwmon path waits for the user, not a driver: it warns now.
     controller=$(grep -Po '^controller="\K[^"]+' "$cfg")
-    if [[ -z "$controller" || ! -w "$controller" ]]; then
-      [[ -n "$custom_safe" ]] && missing=1
-      (( quiet )) || [[ -z "$raw_custom" ]] ||
+    if ! fcp_drivable_controller "$controller"; then
+      if [[ "$controller" != */class/hwmon/* ]]; then
+        [[ -n "$custom_safe" ]] && missing=1
+        (( quiet )) && continue
+      fi
+      [[ -z "$raw_custom" ]] ||
         fcp_warn_not_started "$cfg" "$raw_custom" "$controller" "/var/tmp/$plugin/faults_$raw_custom"
       continue
     fi
@@ -90,9 +95,18 @@ fanctrlplus2.start() {
     fi
     return 0
   fi
+  # A boot start in its grace period would race this start.
+  fanctrlplus2.end_boot
   # A fan without its controller is warned about, not a failed start.
   fanctrlplus2.start_now
   return 0
+}
+
+# Ends a boot start still waiting, and lets one of its steps already running
+# finish, so it cannot start loops after a stop or alongside a start.
+fanctrlplus2.end_boot() {
+  pkill -f "$boot_pattern"
+  while pgrep -f "$rc_script (start-now|resume)" >/dev/null; do sleep 0.2; done
 }
 
 # Runs one rc action under the settings lock, which the fan loops it starts
@@ -104,18 +118,36 @@ fanctrlplus2.locked() {
 # Boot start, in the background. Waits for emhttpd, which the go file starts
 # once every plugin has installed, or 5 minutes should it never run. A fan
 # whose controller is still missing then gets 5 more minutes for a driver
-# that loads late, retried every 10 seconds, before it warns. The fans with a
+# that loads late, retried when the PWM channels change, before it warns. The fans with a
 # controller run meanwhile.
 fanctrlplus2.boot() {
   local deadline=$((SECONDS + boot_wait_seconds))
   until pgrep -x emhttpd >/dev/null || (( SECONDS >= deadline )); do sleep 2; done
+  # Retry when the PWM channels change (a chip binds, a driver is swapped or
+  # adds channels), not every round: each retry runs the migration. Listed
+  # before the first attempt, so a change during it still counts.
+  local seen now
+  seen=$(fanctrlplus2.pwm_channels)
   fanctrlplus2.locked start-now quiet && return
   deadline=$((SECONDS + boot_wait_seconds))
   while (( SECONDS < deadline )); do
     sleep "$boot_retry_seconds"
+    now=$(fanctrlplus2.pwm_channels)
+    [[ "$now" == "$seen" ]] && continue
+    seen=$now
     fanctrlplus2.locked resume quiet && return
   done
   fanctrlplus2.locked resume
+}
+
+# The PWM channels present, resolved to their devices. Older drivers keep
+# them on the parent device (see list_pwm). One file at a time: readlink may
+# print nothing when any argument (an unmatched glob) fails.
+fanctrlplus2.pwm_channels() {
+  local p
+  for p in "$hwmon_dir"/*/pwm* "$hwmon_dir"/*/device/pwm*; do
+    [[ -e "$p" ]] && readlink -f "$p"
+  done
 }
 
 fanctrlplus2.start_now() {
@@ -152,10 +184,7 @@ fanctrlplus2.start_now() {
 fanctrlplus2.stop() {
   # Record that the user requested a stop.
   touch "$user_stopped"
-  # A boot start still waiting must not start the fans again, and one of its
-  # steps already running finishes first, so it cannot start loops after this.
-  pkill -f "$boot_pattern"
-  while pgrep -f "$rc_script (start-now|resume)" >/dev/null; do sleep 0.2; done
+  fanctrlplus2.end_boot
 
   # The fans whose loop has run (a PID file): the BIOS keeps the others.
   local -A ran=()
@@ -184,7 +213,7 @@ fanctrlplus2.stop() {
     [[ -n "$name" && -n "${ran[$name]:-}" ]] || continue
 
     pwm=$(grep -Po '^controller="\K[^"]+' "$cfg")
-    [[ -z "$pwm" || ! -w "$pwm" ]] && continue
+    fcp_drivable_controller "$pwm" || continue
 
     enable="${pwm}_enable"
     if [[ -w "$enable" ]]; then

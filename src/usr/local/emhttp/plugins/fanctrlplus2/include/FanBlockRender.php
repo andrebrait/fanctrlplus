@@ -88,6 +88,59 @@ function render_disk_group_row($i, $g, $grp, $disks) {
   return $html;
 }
 
+// The option for a saved controller that the list of present ones lacks, as
+// [value, text, what is missing ('' when nothing is)], or a blank value when
+// there is none. A blanked controller (unresolved, or one that lost a
+// conflict) shows its identity; its value keeps the blank binding on save
+// ('__fcp_keep__' in update.fanctrlplus2.php).
+function fcp_saved_controller_option(array $cfg, array $pwms): array {
+  $listed = array_column($pwms, 'sensor');
+  $controller = (string)($cfg['controller'] ?? '');
+  $identity = (string)($cfg['controller_identity'] ?? '');
+  if ($controller !== '') {
+    if (in_array($controller, $listed, true)) {
+      // A kept USB path another device occupies now: not the saved controller.
+      if (strpos($identity, 'usb:') !== 0 || (fcp_pwm_identity_map($pwms)[$identity] ?? null) === $controller) return ['', '', ''];
+      return ['__fcp_keep__', 'Missing: ' . fcp_usb_identity_text($identity) . " (another device is at $controller now)", 'PWM controller'];
+    }
+    if (fcp_class_hwmon_path($controller)) {
+      return [$controller, "Select again: $controller (saved by hwmon number)", 'PWM controller saved by its hwmon number'];
+    }
+    return file_exists($controller) ? [$controller, $controller, ''] : [$controller, "Missing: $controller", 'PWM controller'];
+  }
+  if ($identity === '') return ['', '', ''];
+  $text = $identity;
+  if (strpos($identity, 'usb:') === 0) {
+    $text = fcp_usb_identity_text($identity);
+    $map = fcp_pwm_identity_map($pwms);
+    // Listed twice (duplicate serials): there, but neither one can be picked.
+    if (array_key_exists($identity, $map) && $map[$identity] === null) {
+      return ['__fcp_keep__', "Not unique: $text (another controller reports the same serial)", 'PWM controller'];
+    }
+    $present = isset($map[$identity]);
+  } else {
+    $present = file_exists($identity);
+  }
+  // Present: another fan holds it (migration blanked this one, #41).
+  return $present
+    ? ['__fcp_keep__', "In use by another fan: $text", '']
+    : ['__fcp_keep__', "Missing: $text", 'PWM controller'];
+}
+
+// A USB identity (usb:<hex JSON [vid, pid, serial, channel]>) for people.
+function fcp_usb_identity_text(string $identity): string {
+  $fields = json_decode((string)@hex2bin(substr($identity, 4)), true);
+  [$vid, $pid, $serial] = is_array($fields) && count($fields) >= 3 ? array_map('strval', $fields) : ['?', '?', '?'];
+  return "USB $vid:$pid, serial $serial";
+}
+
+// A saved temperature source that is not there now: a file path that does not
+// exist, or a tool-backed one (storcli:, nvidia:, ...) the page did not list.
+function fcp_sensor_missing(string $sensor): bool {
+  // A device path whose chip only changed hwmon number is followed at the next start.
+  return !str_starts_with($sensor, '/') || find_moved_pwm_path($sensor) === null;
+}
+
 function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors = []) {
   $curve_error = '';
   try { $curve_rules = fcp_curve_rules($cfg); }
@@ -212,6 +265,10 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                   <?= $display ?>
                 </option>
               <?php endforeach; ?>
+              <?php [$saved_value, $saved_text, $saved_flag] = fcp_saved_controller_option($cfg, $pwms); ?>
+              <?php if ($saved_value !== ''): ?>
+                <option value="<?=htmlspecialchars($saved_value)?>" data-saved="1" <?=$saved_flag !== '' ? 'data-missing="'.htmlspecialchars($saved_flag).'"' : ''?> selected><?=htmlspecialchars($saved_text)?></option>
+              <?php endif; ?>
             </select>
           </td>
         </tr>
@@ -299,6 +356,10 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
               <?php foreach ($cpu_sensors as $path => $label): ?>
                 <option value="<?=htmlspecialchars($path)?>" <?=($cfg['cpu_sensor'] ?? '') == $path ? 'selected' : ''?>><?=htmlspecialchars($label)?></option>
               <?php endforeach; ?>
+              <?php if (($cfg['cpu_sensor'] ?? '') !== '' && !array_key_exists($cfg['cpu_sensor'], $cpu_sensors)): ?>
+                <?php $cpu_gone = fcp_sensor_missing($cfg['cpu_sensor']); ?>
+                <option value="<?=htmlspecialchars($cfg['cpu_sensor'])?>" <?=$cpu_gone ? 'data-missing="CPU sensor"' : ''?> selected><?=$cpu_gone ? 'Not detected: ' : ''?><?=htmlspecialchars($cfg['cpu_sensor'])?></option>
+              <?php endif; ?>
             </select>
           </td>
         </tr>
@@ -337,6 +398,14 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                   <?php endforeach; ?>
                 </optgroup>
               <?php endforeach; ?>
+              <?php $aux_missing = array_diff($aux_selected, array_column(array_merge([], ...array_values($aux_sensors)), 'path')); ?>
+              <?php if ($aux_missing): ?>
+                <optgroup label="Saved, not listed">
+                  <?php foreach ($aux_missing as $path): ?>
+                    <option value="<?=htmlspecialchars($path)?>" <?=fcp_sensor_missing($path) ? 'data-missing="auxiliary sensor"' : ''?> selected><?=htmlspecialchars($path)?></option>
+                  <?php endforeach; ?>
+                </optgroup>
+              <?php endif; ?>
             </select>
           </td>
         </tr>

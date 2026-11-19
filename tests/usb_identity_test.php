@@ -98,7 +98,7 @@ if ($identity !== '') {
         file_put_contents($serialFile, "controller=\"$root/gone/hwmon1/pwm10\"\ncontroller_identity=\"$known\"\n");
         file_put_contents($liveFile, "controller=\"$replacement\"\n");
         migrate_cfg_and_labels('fanctrlplus2', $collision, "$hwmon/hwmon*");
-        $check(parse_ini_file($liveFile)['controller'] === $replacement && parse_ini_file($serialFile)['controller'] === '', 'A current manual assignment must win without two loops, in either filename order.');
+        $check(parse_ini_file($liveFile)['controller'] === $replacement && parse_ini_file($serialFile)['controller'] === "$root/gone/hwmon1/pwm10", 'A current manual assignment must win without two loops, in either filename order; the other keeps its missing path.');
         unlink($liveFile);
         migrate_cfg_and_labels('fanctrlplus2', $collision, "$hwmon/hwmon*");
         $check(parse_ini_file($serialFile)['controller'] === $replacement, 'A blocked identity must recover when the other assignment is removed.');

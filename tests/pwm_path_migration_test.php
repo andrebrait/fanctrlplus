@@ -45,7 +45,7 @@ if (find_moved_pwm_path("$twin/0003:3904:F001.000A/hwmon/hwmon9/pwm1") !== "$twi
 
 $make("$root/class/hwmon/hwmon3/pwm2");
 if (find_moved_pwm_path("$root/class/hwmon/hwmon5/pwm2") !== null) {
-    $failures[] = 'A /sys/class path carries no device identity and must be left to the chip-name fallback.';
+    $failures[] = 'A /sys/class path carries no device identity, so it cannot be followed to another index.';
 }
 if (find_moved_pwm_path("$root/devices/platform/nct6775.*/hwmon/hwmon4/pwm2") !== null) {
     $failures[] = 'A saved path must not be used as a glob pattern.';
@@ -87,6 +87,93 @@ if ($controller('old') !== "$old/pwm9") {
 }
 if ($controller('rear') !== "$new/pwm8" || $controller('rear2') !== "$older/pwm8") {
     $failures[] = 'Exactly one of two stale fans on the same PWM must be migrated to its current path.';
+}
+
+// #41: a chip whose driver has not loaded yet. Another chip now holds its
+// hwmon index and has a channel of the same name; the fan must not move there.
+$sys = "$root/chips";
+$class = "$sys/class/hwmon";
+@mkdir($class, 0777, true);
+$chip = function (string $device, string $index, string $name) use ($sys, $class): string {
+    $dir = "$sys/devices/platform/$device/hwmon/$index";
+    @mkdir($dir, 0777, true);
+    file_put_contents("$dir/name", "$name\n");
+    touch("$dir/pwm2");
+    symlink($dir, "$class/$index");
+    return "$dir/pwm2";
+};
+$other = $chip('nct6775.656', 'hwmon2', 'nct6798');
+$it87 = "$sys/devices/platform/it87.2624/hwmon/hwmon2/pwm2";
+$boot = "$root/boot";
+@mkdir($boot);
+file_put_contents("$boot/fanctrlplus2_array.cfg", "custom=\"array\"\ncontroller=\"$it87\"\ncontroller_identity=\"$it87\"\n");
+// Configurations an older version blanked keep their binding in the identity.
+file_put_contents("$boot/fanctrlplus2_blanked.cfg", "custom=\"blanked\"\ncontroller=\"\"\ncontroller_identity=\"$it87\"\n");
+migrate_cfg_and_labels('fanctrlplus2', $boot, "$class/hwmon*");
+if (parse_ini_file("$boot/fanctrlplus2_array.cfg")['controller'] !== $it87) {
+    $failures[] = "A missing chip's fan must keep its saved controller, not move to another chip's channel.";
+}
+$blanked = parse_ini_file("$boot/fanctrlplus2_blanked.cfg");
+if ($blanked['controller'] !== '' || $blanked['controller_identity'] !== $it87) {
+    $failures[] = 'A blanked controller must stay blank (it may have lost a conflict) and keep its identity, not move to another chip.';
+}
+unlink("$class/hwmon2");
+rename("$sys/devices/platform/nct6775.656/hwmon/hwmon2", "$sys/devices/platform/nct6775.656/hwmon/hwmon3");
+symlink("$sys/devices/platform/nct6775.656/hwmon/hwmon3", "$class/hwmon3");
+$loaded = $chip('it87.2624', 'hwmon2', 'it8686');
+migrate_cfg_and_labels('fanctrlplus2', $boot, "$class/hwmon*");
+if (parse_ini_file("$boot/fanctrlplus2_array.cfg")['controller'] !== $loaded) {
+    $failures[] = 'Once its chip loads, the fan must bind to it again.';
+}
+
+// Legacy /sys/class bindings name an index, not a device. A controller is
+// never resolved through one; a sensor is pinned to the device holding it.
+$legacy = "$root/legacy";
+@mkdir($legacy);
+$temp = "$sys/devices/platform/it87.2624/hwmon/hwmon2/temp1_input";
+touch($temp);
+file_put_contents("$legacy/fanctrlplus2_old.cfg", implode("\n", [
+    'custom="old"',
+    "controller=\"$class/hwmon2/pwm2\"",
+    "cpu_sensor=\"$class/hwmon2/temp1_input\"",
+    "aux_sensor=\"storcli:c0:roc,$class/hwmon2/temp1_input,$class/hwmon7/temp1_input\"",
+    'note="a \\` b"',
+]) . "\n");
+migrate_cfg_and_labels('fanctrlplus2', $legacy, "$class/hwmon*");
+$cfgLegacy = parse_ini_file("$legacy/fanctrlplus2_old.cfg");
+if ($cfgLegacy['controller'] !== "$class/hwmon2/pwm2") {
+    $failures[] = 'A /sys/class controller must be kept as saved, for the user to pick again, not resolved to the chip at that index.';
+}
+if ($cfgLegacy['cpu_sensor'] !== $temp) {
+    $failures[] = 'A /sys/class CPU sensor must be pinned to the device holding that index, got ' . $cfgLegacy['cpu_sensor'];
+}
+if ($cfgLegacy['aux_sensor'] !== "storcli:c0:roc,$temp,$class/hwmon7/temp1_input") {
+    $failures[] = 'Aux hwmon sensors must be pinned, other sources and absent ones kept, got ' . $cfgLegacy['aux_sensor'];
+}
+// A class controller older saves recorded as its own identity is kept too.
+file_put_contents("$legacy/fanctrlplus2_ided.cfg", "custom=\"ided\"\ncontroller=\"$class/hwmon2/pwm2\"\ncontroller_identity=\"$class/hwmon2/pwm2\"\n");
+// NVMe hwmon sits directly under its class device, without a hwmon/ directory.
+$nvme = "$sys/devices/pci0000:00/0000:01:00.0/nvme/nvme0";
+@mkdir("$nvme/hwmon4", 0777, true);
+touch("$nvme/hwmon4/temp1_input");
+file_put_contents("$legacy/fanctrlplus2_nvme.cfg", "custom=\"nvme\"\naux_sensor=\"$nvme/hwmon2/temp1_input,,storcli:c0:roc\"\n");
+// A device-path sensor follows its chip to a new hwmon number.
+file_put_contents("$legacy/fanctrlplus2_moved.cfg", "custom=\"moved\"\ncpu_sensor=\"$sys/devices/platform/it87.2624/hwmon/hwmon9/temp1_input\"\n");
+migrate_cfg_and_labels('fanctrlplus2', $legacy, "$class/hwmon*");
+if (parse_ini_file("$legacy/fanctrlplus2_ided.cfg")['controller'] !== "$class/hwmon2/pwm2") {
+    $failures[] = 'A /sys/class controller saved with itself as identity must be kept, not blanked or resolved.';
+}
+if (parse_ini_file("$legacy/fanctrlplus2_nvme.cfg")['aux_sensor'] !== "$nvme/hwmon4/temp1_input,,storcli:c0:roc") {
+    $failures[] = 'An NVMe sensor must follow its hwmon number, keeping the other entries as saved.';
+}
+if (strpos(file_get_contents("$legacy/fanctrlplus2_moved.cfg"), 'controller') !== false) {
+    $failures[] = 'Migration must not add controller keys a configuration does not have.';
+}
+if (parse_ini_file("$legacy/fanctrlplus2_moved.cfg")['cpu_sensor'] !== $temp) {
+    $failures[] = 'A device-path sensor must follow its chip when its hwmon number changes.';
+}
+if (strpos(file_get_contents("$legacy/fanctrlplus2_old.cfg"), 'note="a \\` b"') === false) {
+    $failures[] = 'Pinning sensors must not rewrite unrelated configuration lines.';
 }
 
 exec('rm -rf ' . escapeshellarg($root));

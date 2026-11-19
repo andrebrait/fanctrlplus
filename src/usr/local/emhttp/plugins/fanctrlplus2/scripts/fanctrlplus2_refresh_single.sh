@@ -25,6 +25,23 @@ fail() {
   exit 1
 }
 
+# A /sys/class/hwmon path names an index, whatever chip holds it (see rc.fanctrlplus2).
+[[ "$controller" == */class/hwmon/* ]] &&
+  fail "The PWM controller is saved by its hwmon number ($controller), which may now belong to another chip. Select the controller again on the settings page. Nothing was written."
+
+# A saved controller that is not there (migration keeps it until the user
+# picks another): nothing to write to.
+[[ -n "$controller" && -e "$controller" ]] ||
+  fail "The PWM controller ${controller:-for this fan} is not detected now. Select another on the settings page, or wait for it to return. Nothing was written."
+
+# A USB controller kept while unresolved (migration keeps its last path) may
+# have another device at that path now: drive it only as the saved device.
+if [[ "${controller_identity:-}" == usb:* ]] &&
+   ! php -r 'require $argv[1]; exit(fcp_unique_pwm_identity($argv[2]) === $argv[3] ? 0 : 1);' \
+       "${BASH_SOURCE%/*}/../include/Common.php" "$controller" "$controller_identity" 2>/dev/null; then
+  fail "The PWM controller at $controller is not the USB controller saved for this fan, which is not detected now. Nothing was written."
+fi
+
 mkdir -p "/var/tmp/${plugin}" ||
   fail "Could not create /var/tmp/${plugin}, so this run cannot coordinate with the fan loop. Nothing was written."
 
