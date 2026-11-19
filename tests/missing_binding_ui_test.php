@@ -46,6 +46,9 @@ $opt = $option($render(['controller' => '', 'controller_identity' => $usb]), '__
 $check($flagged($opt) && strpos($opt, 'USB 3904:f001, serial ABC123') !== false, 'A blanked USB controller must show its identity, readably, as missing.');
 $opt = $option($render(['controller' => '', 'controller_identity' => $present]), '__fcp_keep__');
 $check($opt !== '' && !$flagged($opt) && strpos($opt, 'In use by another fan') !== false, 'A blanked controller whose device another fan holds must say so, without a missing flag.');
+// A kept USB path that another device occupies now is listed, but not the saved controller.
+$opt = $option($render(['controller' => $pwms[0]['sensor'], 'controller_identity' => $usb]), '__fcp_keep__');
+$check($flagged($opt) && strpos($opt, 'another device is at') !== false, 'A listed path that is not the saved USB controller must be flagged.');
 $opt = $option($render(['controller' => '', 'controller_identity' => 'usb:zz']), '__fcp_keep__');
 $check(strpos($opt, 'USB ?:?, serial ?') !== false, 'A malformed USB identity must still render.');
 

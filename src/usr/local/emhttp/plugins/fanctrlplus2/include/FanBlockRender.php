@@ -96,20 +96,22 @@ function render_disk_group_row($i, $g, $grp, $disks) {
 function fcp_saved_controller_option(array $cfg, array $pwms): array {
   $listed = array_column($pwms, 'sensor');
   $controller = (string)($cfg['controller'] ?? '');
+  $identity = (string)($cfg['controller_identity'] ?? '');
   if ($controller !== '') {
-    if (in_array($controller, $listed, true)) return ['', '', ''];
+    if (in_array($controller, $listed, true)) {
+      // A kept USB path another device occupies now: not the saved controller.
+      if (strpos($identity, 'usb:') !== 0 || (fcp_pwm_identity_map($pwms)[$identity] ?? null) === $controller) return ['', '', ''];
+      return ['__fcp_keep__', 'Missing: ' . fcp_usb_identity_text($identity) . " (another device is at $controller now)", 'PWM controller'];
+    }
     if (fcp_class_hwmon_path($controller)) {
       return [$controller, "Select again: $controller (saved by hwmon number)", 'PWM controller saved by its hwmon number'];
     }
     return file_exists($controller) ? [$controller, $controller, ''] : [$controller, "Missing: $controller", 'PWM controller'];
   }
-  $identity = (string)($cfg['controller_identity'] ?? '');
   if ($identity === '') return ['', '', ''];
   $text = $identity;
   if (strpos($identity, 'usb:') === 0) {
-    $fields = json_decode((string)@hex2bin(substr($identity, 4)), true);
-    [$vid, $pid, $serial] = is_array($fields) && count($fields) >= 3 ? array_map('strval', $fields) : ['?', '?', '?'];
-    $text = "USB $vid:$pid, serial $serial";
+    $text = fcp_usb_identity_text($identity);
     $map = fcp_pwm_identity_map($pwms);
     // Listed twice (duplicate serials): there, but neither one can be picked.
     if (array_key_exists($identity, $map) && $map[$identity] === null) {
@@ -123,6 +125,13 @@ function fcp_saved_controller_option(array $cfg, array $pwms): array {
   return $present
     ? ['__fcp_keep__', "In use by another fan: $text", '']
     : ['__fcp_keep__', "Missing: $text", 'PWM controller'];
+}
+
+// A USB identity (usb:<hex JSON [vid, pid, serial, channel]>) for people.
+function fcp_usb_identity_text(string $identity): string {
+  $fields = json_decode((string)@hex2bin(substr($identity, 4)), true);
+  [$vid, $pid, $serial] = is_array($fields) && count($fields) >= 3 ? array_map('strval', $fields) : ['?', '?', '?'];
+  return "USB $vid:$pid, serial $serial";
 }
 
 // A saved temperature source that is not there now: a file path that does not
