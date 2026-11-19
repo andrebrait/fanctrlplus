@@ -137,7 +137,9 @@ touch "$tmp/hw/pwm2"
 mkdir -p "$tmp/hwmon/hwmon2/device"
 touch "$tmp/hwmon/hwmon2/device/pwm2"
 wait_running 'A B'
+wait_running 'A B'  # 20 seconds in all, still inside the 30-second grace
 expect_equal 'A B' "$(running)" "A channel appearing on the parent device triggers a retry within the grace period."
+[[ "$(running)" == 'A B' ]] || { find "$tmp/hwmon" "$tmp/hw" >&2; pgrep -fa "$tmp/" >&2; }
 pkill -f "$rc_long boot\$"
 
 # ===== Boot, the driver never loads =====
