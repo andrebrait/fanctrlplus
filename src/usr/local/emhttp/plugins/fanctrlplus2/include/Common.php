@@ -214,23 +214,24 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
     }
     // Then, on the first run, a device some class path names (a number) goes
     // to a fan saved on it: first one whose saved device moved there (it names
-    // a device), then one saved on that class path. Blanked losers claim
-    // nothing, so file order cannot hand them a fan's device. Devices no class
-    // path names are left to the migration below, as on later runs.
+    // a device), then one saved on that class path, then one blanked but bound
+    // to a device or serial; one blanked on a class path claims nothing, so
+    // file order cannot hand it a fan's device. Devices no class path names
+    // are left to the migration below, as on later runs.
     if ($by_number) {
-        $target = [];
+        $target = []; $is_class = []; $named = [];
         foreach ($configs as $cfgfile => $ini) {
             $source = fcp_controller_source($ini);
-            if (preg_match('#^usb:|/pwm\d+$#', $source)) $target[$cfgfile] = fcp_controller_target($source, $identities, true);
+            if (!preg_match('#^usb:|/pwm\d+$#', $source)) continue;
+            $target[$cfgfile] = fcp_controller_target($source, $identities, true);
+            $is_class[$cfgfile] = fcp_class_hwmon_path($source);
+            if ($target[$cfgfile] !== null && $is_class[$cfgfile]) $named[$target[$cfgfile]] = true;
         }
-        $named = [];
-        foreach ($target as $cfgfile => $device) {
-            if ($device !== null && fcp_class_hwmon_path(fcp_controller_source($configs[$cfgfile]))) $named[$device] = true;
-        }
-        foreach ([false, true] as $by_class) foreach ($target as $cfgfile => $device) {
-            $ini = $configs[$cfgfile];
-            if ($device === null || !isset($named[$device]) || (string)($ini['controller'] ?? '') === '') continue;
-            if (fcp_class_hwmon_path(fcp_controller_source($ini)) === $by_class) $in_use[$device] ??= $cfgfile;
+        // Tiers: saved on a moved device, saved on a class path, then blanked
+        // but bound to a device or serial. A blank class config never claims.
+        foreach ([[false, false], [true, false], [false, true]] as [$by_class, $blank]) foreach ($target as $cfgfile => $device) {
+            if ($device === null || !isset($named[$device]) || $is_class[$cfgfile] !== $by_class) continue;
+            if (((string)($configs[$cfgfile]['controller'] ?? '') === '') === $blank) $in_use[$device] ??= $cfgfile;
         }
     }
     foreach ($configs as $cfgfile => $ini) {

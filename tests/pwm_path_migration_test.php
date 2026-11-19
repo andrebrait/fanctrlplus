@@ -255,6 +255,27 @@ file_put_contents("$noflag/fanctrlplus2_x.cfg", "custom=\"x\"\ncontroller=\"$cla
 migrate_cfg_and_labels('fanctrlplus2', $noflag, "$class/hwmon*");
 $got = parse_ini_file("$noflag/fanctrlplus2_x.cfg")['controller'];
 if ($got !== "$class/hwmon2/pwm2") $failures[] = "Without a writable flag, nothing may be converted by number, got $got";
+// After the first run nothing is claimed ahead of migration: a config
+// blanked on a device keeps resolving as before the update, even next to a
+// class path naming that device, and a class path never resolves.
+$later = "$root/later";
+@mkdir($later);
+touch("$later/.hwmon_numbers_converted");
+file_put_contents("$later/fanctrlplus2_acls.cfg", "custom=\"acls\"\ncontroller=\"$class/hwmon2/pwm9\"\n");
+file_put_contents("$later/fanctrlplus2_bblank.cfg", "custom=\"bblank\"\ncontroller=\"\"\ncontroller_identity=\"$sys/devices/platform/it87.2624/hwmon/hwmon9/pwm9\"\n");
+migrate_cfg_and_labels('fanctrlplus2', $later, "$class/hwmon*");
+$got = parse_ini_file("$later/fanctrlplus2_bblank.cfg")['controller'];
+if ($got !== "$dev/pwm9") $failures[] = "After the first run, a blanked device binding must resolve as before the update, got $got";
+
+// A config blanked on a device or serial beats one blanked on a class path.
+$tier = "$root/tier";
+@mkdir($tier);
+file_put_contents("$tier/fanctrlplus2_acls.cfg", "custom=\"acls\"\ncontroller=\"\"\ncontroller_identity=\"$class/hwmon2/pwm9\"\n");
+file_put_contents("$tier/fanctrlplus2_bdev.cfg", "custom=\"bdev\"\ncontroller=\"\"\ncontroller_identity=\"$sys/devices/platform/it87.2624/hwmon/hwmon9/pwm9\"\n");
+migrate_cfg_and_labels('fanctrlplus2', $tier, "$class/hwmon*");
+$a = parse_ini_file("$tier/fanctrlplus2_acls.cfg")['controller']; $b = parse_ini_file("$tier/fanctrlplus2_bdev.cfg")['controller'];
+if ($b !== "$dev/pwm9" || $a !== '') $failures[] = "A blanked device binding must beat a blanked class path, got bdev=$b acls=$a";
+
 // Anything at the flag path, even a directory, means the conversion ran.
 $dirflag = "$root/dirflag";
 @mkdir("$dirflag/.hwmon_numbers_converted", 0777, true);
@@ -265,7 +286,7 @@ if ($got !== "$class/hwmon2/pwm2") $failures[] = "A directory at the flag path m
 if (parse_ini_file("$legacy/fanctrlplus2_nvme.cfg")['aux_sensor'] !== "$nvme/hwmon4/temp1_input,,storcli:c0:roc") {
     $failures[] = 'An NVMe sensor must follow its hwmon number, keeping the other entries as saved.';
 }
-if (strpos(file_get_contents("$legacy/fanctrlplus2_moved.cfg"), 'controller') !== false) {
+if (preg_match('/^controller/m', file_get_contents("$legacy/fanctrlplus2_moved.cfg"))) {
     $failures[] = 'Migration must not add controller keys a configuration does not have.';
 }
 if (parse_ini_file("$legacy/fanctrlplus2_moved.cfg")['cpu_sensor'] !== $temp) {
