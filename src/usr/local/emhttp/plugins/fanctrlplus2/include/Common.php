@@ -190,8 +190,12 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
     $flag = "$cfgpath/".FCP_CLASS_FLAG;
     // The flag is written first: if it cannot be, nothing is converted by
     // number, rather than again at a later start when the numbers may differ.
-    $by_number = !is_file($flag) && @touch($flag);
-    if (!$by_number && !is_file($flag)) log_migrate("migrate: cannot write $flag; hwmon numbers are not converted");
+    // Nothing to convert without a config directory: no flag, no log.
+    $by_number = is_dir($cfgpath) && !file_exists($flag);
+    if ($by_number && !@touch($flag)) {
+        log_migrate("migrate: cannot write $flag; hwmon numbers are not converted");
+        $by_number = false;
+    }
 
     // --- cfgs ---
     // A fan assigned to the current path while an old one still pointed at
@@ -209,13 +213,18 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
         // Already-current manual assignments win over stale migrated ones.
         if ($resolved === $path && $path !== '' && !isset($in_use[$path])) $in_use[$path] = $cfgfile;
     }
-    // Then, on the first run, a fan still saved on a class path holds the
-    // device that path names, before a loser 2026.11.12 blanked can claim it.
-    if ($by_number) foreach ($configs as $cfgfile => $ini) {
+    // Then, on the first run, fans still saved on a device claim it: first
+    // those whose saved device moved (it names a device), then those saved on
+    // a class path (it names a number). Losers 2026.11.12 blanked claim
+    // nothing here, so file order cannot hand them a fan's device.
+    if ($by_number) foreach ([false, true] as $by_class) foreach ($configs as $cfgfile => $ini) {
         $path = (string)($ini['controller'] ?? '');
-        $source = (string)($ini['controller_identity'] ?? '') ?: $path;
-        if ($path === '' || !fcp_class_hwmon_path($source) || !is_file($source)) continue;
-        $in_use[realpath($source)] ??= $cfgfile;
+        $identity = (string)($ini['controller_identity'] ?? '');
+        $source = $identity !== '' ? $identity : $path;
+        if ($path === '' || fcp_class_hwmon_path($source) !== $by_class) continue;
+        if ($by_class) $device = is_file($source) ? realpath($source) : null;
+        else $device = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : find_moved_pwm_path($source);
+        if ($device !== null) $in_use[$device] ??= $cfgfile;
     }
     foreach ($configs as $cfgfile => $ini) {
         $original = $ini;
@@ -225,7 +234,9 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
             if ($ini[$k] !== $original[$k]) log_migrate("migrate cfg: $cfgfile $k: {$original[$k]} → {$ini[$k]}");
         }
         fcp_migrate_controller($ini, $cfgfile, $in_use, $identities, $by_number);
-        $was = (string)(($original['controller'] ?? '') ?: ($original['controller_identity'] ?? ''));
+        // The class path migration resolved: the identity first, as it does.
+        $was = (string)($original['controller_identity'] ?? '');
+        if ($was === '') $was = (string)($original['controller'] ?? '');
         $now = (string)($ini['controller'] ?? '');
         if (fcp_class_hwmon_path($was) && $now !== '' && !fcp_class_hwmon_path($now)) $pinned[$was] = $now;
         if ($ini === $original) continue;

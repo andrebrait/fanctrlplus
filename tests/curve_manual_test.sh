@@ -364,10 +364,10 @@ write_cfg "$rule_latch"
 mkdir -p "$tmp/class/hwmon/hwmon3"
 printf '60000\n' > "$tmp/class/hwmon/hwmon3/temp1_input"
 sed -i "s#^cpu_sensor=.*#cpu_sensor=\"$tmp/class/hwmon/hwmon3/temp1_input\"#" "$FCP_CONFIG_DIR/fanctrlplus2_$custom.cfg"
-fresh 0
+fresh 100
 run_manual 60000
-[[ "$(cat "$tmp/pwm1")" != 255 ]] && read_by_number=no || read_by_number=yes
-expect_equal no "$read_by_number" "Run Now must not read a CPU sensor saved by its hwmon number."
+# No reading: the run applies the no-source output (0 here), not the 60 °C emergency.
+expect_equal "0 0" "$rc $(cat "$tmp/pwm1")" "Run Now must not read a CPU sensor saved by its hwmon number."
 write_cfg ''
 
 if (( failures > 0 )); then

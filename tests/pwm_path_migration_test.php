@@ -138,7 +138,7 @@ $classPwm3 = "$sys/devices/platform/it87.2624/hwmon/hwmon2/pwm3";
 $classPwm4 = "$sys/devices/platform/it87.2624/hwmon/hwmon2/pwm4";
 touch($classPwm3);
 touch($classPwm4);
-file_put_contents("$legacy/pwm_labels.cfg", "$class/hwmon2/pwm2=Front intake\n$class/hwmon7/pwm2=Absent\n$classPwm3=Saved\n$class/hwmon2/pwm3=Old\n$class/hwmon2/pwm4=Blank\n");
+file_put_contents("$legacy/pwm_labels.cfg", "$class/hwmon2/pwm2=Front intake\n$class/hwmon7/pwm2=Absent\n$classPwm3=Saved\n$class/hwmon2/pwm3=Old\n$class/hwmon2/pwm4=Blank\n$class/hwmon2/pwm5=Mixed\n");
 file_put_contents("$legacy/fanctrlplus2_old.cfg", implode("\n", [
     'custom="old"',
     "controller=\"$class/hwmon2/pwm2\"",
@@ -165,6 +165,13 @@ file_put_contents("$legacy/fanctrlplus2_amix.cfg", "custom=\"amix\"\ncontroller=
 // bman was saved before its chip moved from hwmon9: not current, so it is
 // not claimed first, and amix must not hold pwm5 against it.
 file_put_contents("$legacy/fanctrlplus2_bman.cfg", "custom=\"bman\"\ncontroller=\"$sys/devices/platform/it87.2624/hwmon/hwmon9/pwm5\"\n");
+// A fan whose saved device moved beats a blanked loser and a class path that
+// name the same device, whatever the file order.
+foreach ([8, 9] as $n) touch("$dev/pwm$n");
+file_put_contents("$legacy/fanctrlplus2_alose8.cfg", "custom=\"alose8\"\ncontroller=\"\"\ncontroller_identity=\"$class/hwmon2/pwm8\"\n");
+file_put_contents("$legacy/fanctrlplus2_zwin8.cfg", "custom=\"zwin8\"\ncontroller=\"$sys/devices/platform/it87.2624/hwmon/hwmon9/pwm8\"\n");
+file_put_contents("$legacy/fanctrlplus2_acls9.cfg", "custom=\"acls9\"\ncontroller=\"$class/hwmon2/pwm9\"\n");
+file_put_contents("$legacy/fanctrlplus2_zwin9.cfg", "custom=\"zwin9\"\ncontroller=\"$sys/devices/platform/it87.2624/hwmon/hwmon9/pwm9\"\n");
 // A blank form whose number is absent stays as saved, and so does its label.
 file_put_contents("$legacy/fanctrlplus2_gone.cfg", "custom=\"gone\"\ncontroller=\"\"\ncontroller_identity=\"$class/hwmon7/pwm2\"\n");
 file_put_contents("$legacy/fanctrlplus2_absent.cfg", "custom=\"absent\"\ncontroller=\"$class/hwmon7/pwm2\"\n");
@@ -185,6 +192,9 @@ if ($c('bdev') !== "$dev/pwm7" || $c('acls') !== "$class/hwmon2/pwm7") {
 if ($c('bman') !== "$dev/pwm5" || $c('amix') !== "$dev/pwm6") {
     $failures[] = "A class controller with another identity must not hold the device its path names, got bman={$c('bman')} amix={$c('amix')}";
 }
+if ($c('zwin8') !== "$dev/pwm8" || $c('alose8') !== '' || $c('zwin9') !== "$dev/pwm9" || $c('acls9') !== "$class/hwmon2/pwm9") {
+    $failures[] = "A moved device binding must beat a blanked loser and a class path, got zwin8={$c('zwin8')} alose8={$c('alose8')} zwin9={$c('zwin9')} acls9={$c('acls9')}";
+}
 $got = parse_ini_file("$legacy/fanctrlplus2_gone.cfg");
 if ($got['controller'] !== '' || $got['controller_identity'] !== "$class/hwmon7/pwm2") {
     $failures[] = "A blank-form controller whose number is absent must stay as saved, got {$got['controller']} / {$got['controller_identity']}";
@@ -194,7 +204,7 @@ foreach (['ided' => $classPwm3, 'blank' => $classPwm4] as $name => $want) {
     if ($got !== $want) $failures[] = "A /sys/class controller saved as its identity ($name) must be pinned too, got $got";
 }
 // A label already saved for the device wins over the class one.
-if (file("$legacy/pwm_labels.cfg", FILE_IGNORE_NEW_LINES) !== ["$classPwm=Front intake", "$class/hwmon7/pwm2=Absent", "$classPwm3=Saved", "$classPwm4=Blank"]) {
+if (file("$legacy/pwm_labels.cfg", FILE_IGNORE_NEW_LINES) !== ["$classPwm=Front intake", "$class/hwmon7/pwm2=Absent", "$classPwm3=Saved", "$classPwm4=Blank", "$class/hwmon2/pwm5=Mixed"]) {
     $failures[] = "A label must follow its pinned class controller, unless the device has one; others kept. Got:\n" . file_get_contents("$legacy/pwm_labels.cfg");
 }
 if ($cfgLegacy['cpu_sensor'] !== $temp) {
@@ -237,6 +247,13 @@ file_put_contents("$noflag/fanctrlplus2_x.cfg", "custom=\"x\"\ncontroller=\"$cla
 migrate_cfg_and_labels('fanctrlplus2', $noflag, "$class/hwmon*");
 $got = parse_ini_file("$noflag/fanctrlplus2_x.cfg")['controller'];
 if ($got !== "$class/hwmon2/pwm2") $failures[] = "Without a writable flag, nothing may be converted by number, got $got";
+// Anything at the flag path, even a directory, means the conversion ran.
+$dirflag = "$root/dirflag";
+@mkdir("$dirflag/.hwmon_numbers_converted", 0777, true);
+file_put_contents("$dirflag/fanctrlplus2_x.cfg", "custom=\"x\"\ncontroller=\"$class/hwmon2/pwm2\"\n");
+migrate_cfg_and_labels('fanctrlplus2', $dirflag, "$class/hwmon*");
+$got = parse_ini_file("$dirflag/fanctrlplus2_x.cfg")['controller'];
+if ($got !== "$class/hwmon2/pwm2") $failures[] = "A directory at the flag path must count as converted, got $got";
 if (parse_ini_file("$legacy/fanctrlplus2_nvme.cfg")['aux_sensor'] !== "$nvme/hwmon4/temp1_input,,storcli:c0:roc") {
     $failures[] = 'An NVMe sensor must follow its hwmon number, keeping the other entries as saved.';
 }
