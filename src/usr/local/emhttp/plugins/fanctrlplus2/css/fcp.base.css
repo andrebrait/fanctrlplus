@@ -287,6 +287,17 @@
   white-space: nowrap;
 }
 .fcp-nct6687-notice { justify-content: flex-start; }
+/* A conclusion about a configured sensor, shown beside its setting. */
+.fcp-sensor-state {
+  display: block;
+  max-width: 300px;
+  margin-top: 4px;
+  padding-left: 6px;
+  border-left: 3px solid #d79b00;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: normal;
+}
 .fcp-nct6687-notice code.fcp-cmd { display: block; margin: 4px 0; user-select: all; }
 
 /* ===== Sort toggle ===== */
@@ -568,7 +579,7 @@ dt.containerSettingsDt {
 
 .fcp-airflow-switch{ display: none; }
 .fcp-history-switch{ display: none; }
-.syslog-switch, .notify-switch{ display: none; }
+.syslog-switch, .notify-switch, .frozen-switch{ display: none; }
 .switch-button-label{ font-size: 12px; }
 .switch-button-label.on{ display: none; }
 .switch-button-background.checked ~ .switch-button-label.on{ display: inline; }

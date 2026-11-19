@@ -1261,8 +1261,8 @@ $(function() {
     $area.find('.switch-button-button').css('left', checked ? '12px' : '-1px');
 
     // Persist the relevant switch.
-    if ($input.hasClass('syslog-switch') || $input.hasClass('notify-switch')) {
-      saveFanSwitchState($input.hasClass('syslog-switch') ? 'setsyslog' : 'setnotify', $input.data('cfg'), checked);
+    if ($input.hasClass('syslog-switch') || $input.hasClass('notify-switch') || $input.hasClass('frozen-switch')) {
+      saveFanSwitchState($input.hasClass('syslog-switch') ? 'setsyslog' : $input.hasClass('notify-switch') ? 'setnotify' : 'setfrozennotify', $input.data('cfg'), checked);
     } else if ($input.hasClass('fcp-airflow-switch')) {
       saveAirflowSwitchState(checked);
     } else if ($input.hasClass('fcp-history-switch')) {
@@ -1271,7 +1271,7 @@ $(function() {
   });
 
   // Shared change handler for the per-fan and FCP Airflow/History switches.
-  $(document).on('change', '.syslog-switch, .notify-switch, .fcp-airflow-switch, .fcp-history-switch', function() {
+  $(document).on('change', '.syslog-switch, .notify-switch, .frozen-switch, .fcp-airflow-switch, .fcp-history-switch', function() {
     var checked = $(this).prop('checked');
     var $area = $(this).closest('.switch-area');
 
@@ -2055,6 +2055,7 @@ $(function() {
           <p><strong>Note:</strong> The plugin only writes to syslog when the <strong>PWM value changes by more than 5</strong> compared to the previous value — small changes are ignored to reduce log noise.</p>
           <p><strong>Problem Alerts</strong> are also <strong>enabled by default</strong>. Fan control keeps running either way; the alerts only send Unraid notifications. A fan gets one warning when, for at least 30 seconds, its PWM controller has disappeared, the BIOS or another program has taken it over, its controller reports a speed 10 or more percentage points away from the one set, or it reports 0 RPM while set above 40% after spinning earlier. A fan whose controller is missing when fan control starts, and a configured sensor without a reading for 60 seconds, also warn. Once the problem has stayed away for 30 seconds, a notice says so. Turn the alerts off for a fan whose controller raises false alarms, such as one with only a few speed steps.</p>
           <p>When RPM has changed in the requested direction at least 30 seconds after a substantial speed change, a PWM mismatch warning includes that observation. It suggests that the fan may have responded despite the reported PWM; it does not prove which controller changed the fan.</p>
+          <p><strong>Frozen Sensors</strong>: a CPU or auxiliary sensor whose reading has not changed by even 1&nbsp;°C for 6 hours, while another source of the same fan moved by 10&nbsp;°C or more, may report a fixed placeholder rather than a measurement (some boards fill ACPI thermal zones with 27.8&nbsp;°C). The settings page always shows this beside the sensor; this switch, <strong>enabled by default</strong>, also sends one Unraid warning per sensor per boot. Fan control is unchanged either way. If it shows, pick another sensor for that fan, ex. the CPU package or a board System sensor; leave the switch on unless the sensor is known to be fixed and you keep it on purpose.</p>
         </blockquote>
       </div>
 
@@ -2066,6 +2067,7 @@ $(function() {
                 <th class="name">Configured Fan</th>
                 <th class="switch">Syslog</th>
                 <th class="switch">Problem Alerts</th>
+                <th class="switch">Frozen Sensors</th>
               </tr>
             </thead>
             <tbody>
@@ -2079,7 +2081,7 @@ $(function() {
               ?>
               <tr class="sortable" id="syslog-row-<?= $custom_id ?>">
                 <td class="name"><?= htmlspecialchars($cfg['custom']) ?></td>
-                <?php foreach (['syslog', 'notify'] as $switch):
+                <?php foreach (['syslog' => 'syslog', 'notify' => 'notify', 'frozen_notify' => 'frozen'] as $switch => $switch_class):
                   $is_on = ($cfg[$switch] ?? "1") != "0";
                   $switch_id = "$switch-switch-" . htmlspecialchars($cfg['custom']);
                 ?>
@@ -2091,7 +2093,7 @@ $(function() {
                     </div>
                     <input type="checkbox"
                           id="<?= $switch_id ?>"
-                          class="<?= $switch ?>-switch"
+                          class="<?= $switch_class ?>-switch"
                           data-cfg="<?= htmlspecialchars($cfg['file']) ?>"
                           <?= $is_on ? 'checked' : '' ?>>
                     <span class="switch-button-label on">ON</span>
