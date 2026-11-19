@@ -148,7 +148,9 @@ aux_read_sensor() {
     *)
       # An hwmon input reading exactly 0 is the long-standing marker for a
       # sensor that is present but not populated, not a reading of 0 °C.
-      [[ -f "$sensor" ]] || return 0
+      # A /sys/class/hwmon path names a number, whatever chip holds it now:
+      # never read (fcp_class_hwmon_path in Common.php).
+      [[ -f "$sensor" && "$sensor" != */class/hwmon/* ]] || return 0
       raw=$(cat "$sensor" 2>/dev/null)
       [[ "$raw" =~ ^-?[0-9]+$ ]] || return 0
       (( raw == 0 )) && return 0

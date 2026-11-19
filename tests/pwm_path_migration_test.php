@@ -134,9 +134,11 @@ $legacy = "$root/legacy";
 $temp = "$sys/devices/platform/it87.2624/hwmon/hwmon2/temp1_input";
 $classPwm = "$sys/devices/platform/it87.2624/hwmon/hwmon2/pwm2";
 touch($temp);
-touch("$sys/devices/platform/it87.2624/hwmon/hwmon2/pwm3");
 $classPwm3 = "$sys/devices/platform/it87.2624/hwmon/hwmon2/pwm3";
-file_put_contents("$legacy/pwm_labels.cfg", "$class/hwmon2/pwm2=Front intake\n$class/hwmon7/pwm2=Absent\n$classPwm3=Saved\n$class/hwmon2/pwm3=Old\n");
+$classPwm4 = "$sys/devices/platform/it87.2624/hwmon/hwmon2/pwm4";
+touch($classPwm3);
+touch($classPwm4);
+file_put_contents("$legacy/pwm_labels.cfg", "$class/hwmon2/pwm2=Front intake\n$class/hwmon7/pwm2=Absent\n$classPwm3=Saved\n$class/hwmon2/pwm3=Old\n$class/hwmon2/pwm4=Blank\n");
 file_put_contents("$legacy/fanctrlplus2_old.cfg", implode("\n", [
     'custom="old"',
     "controller=\"$class/hwmon2/pwm2\"",
@@ -147,8 +149,10 @@ file_put_contents("$legacy/fanctrlplus2_old.cfg", implode("\n", [
 // 2026.11.12 saved a class controller as its own identity, or only as its
 // identity when its chip was missing at a start.
 file_put_contents("$legacy/fanctrlplus2_ided.cfg", "custom=\"ided\"\ncontroller=\"$class/hwmon2/pwm3\"\ncontroller_identity=\"$class/hwmon2/pwm3\"\n");
-touch("$sys/devices/platform/it87.2624/hwmon/hwmon2/pwm4");
 file_put_contents("$legacy/fanctrlplus2_blank.cfg", "custom=\"blank\"\ncontroller=\"\"\ncontroller_identity=\"$class/hwmon2/pwm4\"\n");
+// 2026.11.12 blanked a conflict loser and kept the class path as its identity;
+// it sorts first, but the winner saved on that path keeps the device.
+file_put_contents("$legacy/fanctrlplus2_aloser.cfg", "custom=\"aloser\"\ncontroller=\"\"\ncontroller_identity=\"$class/hwmon2/pwm2\"\n");
 file_put_contents("$legacy/fanctrlplus2_absent.cfg", "custom=\"absent\"\ncontroller=\"$class/hwmon7/pwm2\"\n");
 file_put_contents("$legacy/fanctrlplus2_twin.cfg", "custom=\"twin\"\ncontroller=\"$class/hwmon2/pwm2\"\n");
 migrate_cfg_and_labels('fanctrlplus2', $legacy, "$class/hwmon*");
@@ -156,12 +160,14 @@ $cfgLegacy = parse_ini_file("$legacy/fanctrlplus2_old.cfg");
 if ($cfgLegacy['controller'] !== $classPwm) {
     $failures[] = 'A /sys/class controller must be pinned to the device holding that index, got ' . $cfgLegacy['controller'];
 }
-foreach (['ided' => $classPwm3, 'blank' => "$sys/devices/platform/it87.2624/hwmon/hwmon2/pwm4"] as $name => $want) {
+$got = parse_ini_file("$legacy/fanctrlplus2_aloser.cfg")['controller'];
+if ($got !== '') $failures[] = "A blanked conflict loser must not take the device from the fan saved on it, got $got";
+foreach (['ided' => $classPwm3, 'blank' => $classPwm4] as $name => $want) {
     $got = parse_ini_file("$legacy/fanctrlplus2_$name.cfg")['controller'];
     if ($got !== $want) $failures[] = "A /sys/class controller saved as its identity ($name) must be pinned too, got $got";
 }
 // A label already saved for the device wins over the class one.
-if (file("$legacy/pwm_labels.cfg", FILE_IGNORE_NEW_LINES) !== ["$classPwm=Front intake", "$class/hwmon7/pwm2=Absent", "$classPwm3=Saved"]) {
+if (file("$legacy/pwm_labels.cfg", FILE_IGNORE_NEW_LINES) !== ["$classPwm=Front intake", "$class/hwmon7/pwm2=Absent", "$classPwm3=Saved", "$classPwm4=Blank"]) {
     $failures[] = "A label must follow its pinned class controller, unless the device has one; others kept. Got:\n" . file_get_contents("$legacy/pwm_labels.cfg");
 }
 if ($cfgLegacy['cpu_sensor'] !== $temp) {

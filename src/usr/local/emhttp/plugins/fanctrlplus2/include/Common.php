@@ -109,7 +109,7 @@ const FCP_CLASS_FLAG = '.hwmon_numbers_converted';
 // (fcp_class_hwmon_path). A device path follows its device when its hwmon
 // number changes, as a controller does; any other source is kept as saved.
 function fcp_pin_sensor(string $path, bool $by_number): string {
-    if (fcp_class_hwmon_path($path)) return $by_number ? (realpath($path) ?: $path) : $path;
+    if ($by_number && fcp_class_hwmon_path($path)) return realpath($path) ?: $path;
     return str_starts_with($path, '/') ? (find_moved_pwm_path($path) ?? $path) : $path;
 }
 
@@ -203,6 +203,12 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
         $identity = (string)($ini['controller_identity'] ?? '');
         $source = $identity !== '' ? $identity : $path;
         $resolved = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : (is_file($source) ? $source : null);
+        // The first run pins a class controller: it holds the device it names,
+        // before a blanked loser's identity can claim it.
+        if ($by_number && fcp_class_hwmon_path($path) && is_file($path) && !isset($in_use[realpath($path)])) {
+            $in_use[realpath($path)] = $cfgfile;
+            continue;
+        }
         // Already-current manual assignments win over stale migrated ones.
         if ($resolved === $path && $path !== '' && !isset($in_use[$path])) $in_use[$path] = $cfgfile;
     }
@@ -214,7 +220,7 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
             if ($ini[$k] !== $original[$k]) log_migrate("migrate cfg: $cfgfile $k: {$original[$k]} → {$ini[$k]}");
         }
         fcp_migrate_controller($ini, $cfgfile, $in_use, $identities, $by_number);
-        $was = (string)($original['controller'] ?? '');
+        $was = (string)(($original['controller'] ?? '') ?: ($original['controller_identity'] ?? ''));
         if (fcp_class_hwmon_path($was) && !fcp_class_hwmon_path((string)$ini['controller'])) $pinned[$was] = $ini['controller'];
         if ($ini === $original) continue;
         // Only these fields change. Re-serializing the entire INI would
@@ -279,19 +285,19 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
         }
         if ($changed) safe_rewrite($labelFile, implode("\n", $out));
     }
-    if ($by_number) @touch($flag);
+    if ($by_number && !@touch($flag)) log_migrate("migrate: cannot write $flag; hwmon numbers will be converted again next start");
 }
 // Resolves one configuration's controller in $ini. A saved path that no longer
 // exists, or a /sys/class one not pinned on the first run ($by_number,
 // fcp_class_hwmon_path), is kept for the settings page to show, until the user
 // picks another controller; nothing is moved to another device.
-function fcp_migrate_controller(array &$ini, string $cfgfile, array &$in_use, array $identities, bool $by_number = false): void {
+function fcp_migrate_controller(array &$ini, string $cfgfile, array &$in_use, array $identities, bool $by_number): void {
     $old_path = trim((string)($ini['controller'] ?? ''), " \t\n\r\0\x0B\"'");
     $identity = (string)($ini['controller_identity'] ?? '');
     if ($identity === '' && !preg_match('#/pwm\d+$#', $old_path)) return;
     $source = $identity !== '' ? $identity : $old_path;
     if (strpos($source, 'usb:') === 0) $new_path = $identities[$source] ?? null;
-    elseif (fcp_class_hwmon_path($source)) $new_path = $by_number ? (realpath($source) ?: null) : null;
+    elseif ($by_number && fcp_class_hwmon_path($source)) $new_path = realpath($source) ?: null;
     else $new_path = find_moved_pwm_path($source);
     if ($new_path !== null && isset($in_use[$new_path]) && $in_use[$new_path] !== $cfgfile) {
         log_migrate("migrate cfg: keep $old_path in $cfgfile, $new_path is already controlled");
