@@ -188,7 +188,10 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
     $pwms = list_pwm($hwmon_glob);
     $identities = fcp_pwm_identity_map($pwms);
     $flag = "$cfgpath/".FCP_CLASS_FLAG;
-    $by_number = !is_file($flag);
+    // The flag is written first: if it cannot be, nothing is converted by
+    // number, rather than again at a later start when the numbers may differ.
+    $by_number = !is_file($flag) && @touch($flag);
+    if (!$by_number && !is_file($flag)) log_migrate("migrate: cannot write $flag; hwmon numbers are not converted");
 
     // --- cfgs ---
     // A fan assigned to the current path while an old one still pointed at
@@ -203,14 +206,16 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
         $identity = (string)($ini['controller_identity'] ?? '');
         $source = $identity !== '' ? $identity : $path;
         $resolved = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : (is_file($source) ? $source : null);
-        // The first run pins a class controller: it holds the device it names,
-        // before a blanked loser's identity can claim it.
-        if ($by_number && fcp_class_hwmon_path($path) && is_file($path) && !isset($in_use[realpath($path)])) {
-            $in_use[realpath($path)] = $cfgfile;
-            continue;
-        }
         // Already-current manual assignments win over stale migrated ones.
         if ($resolved === $path && $path !== '' && !isset($in_use[$path])) $in_use[$path] = $cfgfile;
+    }
+    // Then, on the first run, a fan still saved on a class path holds the
+    // device that path names, before a loser 2026.11.12 blanked can claim it.
+    if ($by_number) foreach ($configs as $cfgfile => $ini) {
+        $path = (string)($ini['controller'] ?? '');
+        $source = (string)($ini['controller_identity'] ?? '') ?: $path;
+        if ($path === '' || !fcp_class_hwmon_path($source) || !is_file($source)) continue;
+        $in_use[realpath($source)] ??= $cfgfile;
     }
     foreach ($configs as $cfgfile => $ini) {
         $original = $ini;
@@ -221,7 +226,8 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
         }
         fcp_migrate_controller($ini, $cfgfile, $in_use, $identities, $by_number);
         $was = (string)(($original['controller'] ?? '') ?: ($original['controller_identity'] ?? ''));
-        if (fcp_class_hwmon_path($was) && !fcp_class_hwmon_path((string)$ini['controller'])) $pinned[$was] = $ini['controller'];
+        $now = (string)($ini['controller'] ?? '');
+        if (fcp_class_hwmon_path($was) && $now !== '' && !fcp_class_hwmon_path($now)) $pinned[$was] = $now;
         if ($ini === $original) continue;
         // Only these fields change. Re-serializing the entire INI would
         // re-escape free-text values that are also sourced by the shell.
@@ -285,7 +291,6 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
         }
         if ($changed) safe_rewrite($labelFile, implode("\n", $out));
     }
-    if ($by_number && !@touch($flag)) log_migrate("migrate: cannot write $flag; hwmon numbers will be converted again next start");
 }
 // Resolves one configuration's controller in $ini. A saved path that no longer
 // exists, or a /sys/class one not pinned on the first run ($by_number,
