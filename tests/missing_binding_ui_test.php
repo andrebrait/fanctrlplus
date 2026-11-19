@@ -39,11 +39,15 @@ $check($flagged($opt) && strpos($opt, 'Select again') !== false, 'A controller s
 
 // Blanked controllers (unresolved, or a conflict loser) show their identity
 // only when that device is absent.
-$check($flagged($option($render(['controller' => '', 'controller_identity' => $gone]), $gone)), 'A blanked controller must show its absent identity as missing.');
+$opt = $option($render(['controller' => '', 'controller_identity' => $gone]), '__fcp_keep__');
+$check($flagged($opt) && strpos($opt, "Missing: $gone") !== false, 'A blanked controller must show its absent identity as missing.');
 $usb = 'usb:' . bin2hex(json_encode(['3904', 'f001', 'ABC123', '/interface:1.0/hwmon/hwmon*/pwm1']));
-$opt = $option($render(['controller' => '', 'controller_identity' => $usb]), $usb);
+$opt = $option($render(['controller' => '', 'controller_identity' => $usb]), '__fcp_keep__');
 $check($flagged($opt) && strpos($opt, 'USB 3904:f001, serial ABC123') !== false, 'A blanked USB controller must show its identity, readably, as missing.');
-$check(strpos($render(['controller' => '', 'controller_identity' => $present]), 'data-saved') === false, 'A blanked controller whose device exists lost a conflict and must not be shown.');
+$opt = $option($render(['controller' => '', 'controller_identity' => $present]), '__fcp_keep__');
+$check($opt !== '' && !$flagged($opt) && strpos($opt, 'In use by another fan') !== false, 'A blanked controller whose device another fan holds must say so, without a missing flag.');
+$opt = $option($render(['controller' => '', 'controller_identity' => 'usb:zz']), '__fcp_keep__');
+$check(strpos($opt, 'USB ?:?, serial ?') !== false, 'A malformed USB identity must still render.');
 
 $html = $render(['controller' => $pwms[0]['sensor'], 'cpu_sensor' => array_key_first($cpu)]);
 $check(strpos($html, 'data-missing') === false && strpos($html, 'data-saved') === false, 'Present selections must not be marked missing.');

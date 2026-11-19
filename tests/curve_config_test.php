@@ -269,8 +269,10 @@ $gonePwm = '/sys/devices/platform/it87.2624/hwmon/hwmon2/pwm2';
 $usbKey = 'usb:' . bin2hex(json_encode(['3904', 'f001', 'ABC123', '/interface:1.0/hwmon/hwmon*/pwm1']));
 $saved = $bindingSave(['controller' => $gonePwm, 'controller_identity' => $usbKey], function (&$post) use ($gonePwm) { $post['controller'][0] = $gonePwm; });
 $check(($saved['controller'] ?? '') === $gonePwm && ($saved['controller_identity'] ?? '') === $usbKey, 'Saving an unchanged missing controller must keep it and its USB identity.');
-$saved = $bindingSave(['controller' => '', 'controller_identity' => $gonePwm], function (&$post) use ($gonePwm) { $post['controller'][0] = $gonePwm; });
+$saved = $bindingSave(['controller' => '', 'controller_identity' => $gonePwm], function (&$post) { $post['controller'][0] = '__fcp_keep__'; });
 $check(($saved['controller'] ?? null) === '' && ($saved['controller_identity'] ?? '') === $gonePwm, 'Saving a blanked controller shown by its identity must keep it blank.');
+$saved = $bindingSave(['controller' => '', 'controller_identity' => $gonePwm], function (&$post) use ($gonePwm) { $post['controller'][0] = $gonePwm; });
+$check(($saved['controller'] ?? null) === $gonePwm, 'Picking a controller equal to a blanked identity is an explicit choice and must be saved.');
 $cpuPath = '/sys/devices/platform/coretemp.0/hwmon/hwmon1/temp1_input';
 $saved = $bindingSave(['cpu_sensor' => $cpuPath, 'aux_sensor' => 'storcli:c0:roc'], function (&$post) {
     unset($post['cpu_sensor'][0]);

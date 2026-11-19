@@ -174,15 +174,17 @@ foreach ($_POST['#file'] as $i => $file) {
   $previous = $plan['previous'];
   // An unchanged controller keeps its binding: a missing one (kept by
   // migration until the user picks another) cannot be identified again, and a
-  // blanked one is shown by its identity (fcp_saved_controller_option).
+  // blanked one is posted as '__fcp_keep__' (fcp_saved_controller_option).
   $previous_controller = (string)($previous['controller'] ?? '');
   $previous_identity = (string)($previous['controller_identity'] ?? '');
-  if ($controller === $previous_controller || ($previous_controller === '' && $controller === $previous_identity)) {
-    $controller = $previous_controller;
+  if ($controller === '__fcp_keep__') $controller = $previous_controller;
+  if (($controller === '' || $controller === $previous_controller) && $previous_identity !== '') {
+    $controller_identity = $previous_identity;
+  } elseif ($controller === '') {
+    $controller_identity = $previous_controller;
+  } else {
+    $controller_identity = fcp_unique_pwm_identity($controller) ?? $controller;
   }
-  $controller_identity = ($controller === '' || $controller === $previous_controller) && $previous_identity !== ''
-    ? $previous_identity
-    : ($controller === '' ? $previous_controller : (fcp_unique_pwm_identity($controller) ?? $controller));
 
   // Rename the cfg file when Custom Name changes.
   if ($old_file !== $expected_file) {

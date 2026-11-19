@@ -39,6 +39,7 @@ sed -e "s#^cfg_path=.*#cfg_path=$tmp/cfg#" \
     -e "s#^config_lock=.*#config_lock=$tmp/run/lock#" \
     -e "s#^boot_wait_seconds=.*#boot_wait_seconds=3#" \
     -e "s#^boot_retry_seconds=.*#boot_retry_seconds=1#" \
+    -e "s#^hwmon_dir=.*#hwmon_dir=$tmp/hwmon#" \
     -e "s#^user_stopped=.*#user_stopped=$tmp/run/user_stopped#" \
     -e "s#^source .*#source $scripts/disk_group_control.sh#" \
     -e "s#^  script=.*#  script=$tmp/none#" \
@@ -63,7 +64,8 @@ fan B pwm2
 reset() {
   "$rc" stop >/dev/null 2>&1
   pkill -f "$tmp/loop.sh" 2>/dev/null
-  rm -rf "$tmp/run/"* "$tmp/var/"* "$tmp/notify.log" "$tmp/emhttpd_up" "$tmp/hw/"*
+  rm -rf "$tmp/run/"* "$tmp/var/"* "$tmp/notify.log" "$tmp/emhttpd_up" "$tmp/hw/"* "$tmp/hwmon"
+  mkdir -p "$tmp/hwmon/hwmon1"
   touch "$tmp/hw/pwm1"
 }
 running() { ls "$tmp/run" | grep -o '^fanctrlplus2_[A-Z]' | cut -d_ -f2 | xargs; }
@@ -88,6 +90,15 @@ fan B ../class/hwmon/hwmon3/pwm2
 "$rc" start >/dev/null 2>&1
 expect_equal A "$(running)" "A fan saved by its hwmon number is not started until its controller is picked again."
 expect_equal 1 "$(warnings)" "The fan saved by its hwmon number is warned about."
+echo 2 > "$tmp/class/hwmon/hwmon3/pwm2_enable"
+echo 77 > "$tmp/class/hwmon/hwmon3/pwm2"
+"$rc" stop >/dev/null 2>&1
+expect_equal '2 77' "$(cat "$tmp/class/hwmon/hwmon3/pwm2_enable") $(cat "$tmp/class/hwmon/hwmon3/pwm2")" "Stop must not set 50% on a hwmon number that may belong to another chip."
+reset
+"$rc" start >/dev/null 2>&1
+touch "$tmp/emhttpd_up"
+wait_running A
+expect_equal 1 "$(warnings)" "At boot, a fan saved by its hwmon number warns at once: no driver will fix it."
 fan B pwm2
 
 # ===== Boot, the driver loads late =====
@@ -100,6 +111,9 @@ wait_running A
 expect_equal A "$(running)" "Once emhttpd runs, the fan with a controller starts."
 pid_a=$(cat "$tmp/run/fanctrlplus2_A.pid")
 touch "$tmp/hw/pwm2"
+sleep 2
+expect_equal A "$(running)" "Without a new chip in the hwmon list, the boot start does not retry."
+mkdir "$tmp/hwmon/hwmon2"
 wait_running 'A B'
 expect_equal 'A B' "$(running)" "A controller that appears within the grace period starts its fan."
 expect_equal "$pid_a" "$(cat "$tmp/run/fanctrlplus2_A.pid")" "The retry leaves running fans alone."

@@ -943,7 +943,10 @@ $(function() {
           $(this).append($('<option>').val(pwm.sensor).text(display)
             .prop({selected: isSelected, disabled: isUsed}));
         });
-        $(this).append(saved.prop('selected', saved.val() === selected));
+        // Dropped once the device is listed again.
+        if (!pwmList.some(pwm => pwm.sensor === saved.val())) {
+          $(this).append(saved.prop('selected', saved.val() === selected));
+        }
       });
 
       updatePWMLabelMap();
@@ -1242,7 +1245,7 @@ $(function() {
     $('.fan-block').each(function () {
       const name = $(this).find('.custom-name-input').val();
       $(this).find('select:enabled option[data-missing]:selected').each(function () {
-        missing.push(`Fan ${name}: ${this.dataset.missing} ${this.value}`);
+        missing.push(`Fan ${name}: ${this.dataset.missing}, ${this.textContent.trim()}`);
       });
     });
     if (missing.length && !confirm(`These are not detected on this system now:\n\n${missing.join('\n')}\n\nThe fan cannot use them until they are back and fan control restarts, or until you select others. Save anyway?`)) {

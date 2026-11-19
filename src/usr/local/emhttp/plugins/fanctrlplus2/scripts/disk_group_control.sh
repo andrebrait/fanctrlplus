@@ -487,17 +487,25 @@ fcp_track_faults() {
   done
 }
 
+# A controller fan control may drive: writable, and not a /sys/class/hwmon
+# path, which names a number whatever chip holds it (#41).
+fcp_drivable_controller() {
+  [[ -n "$1" && -w "$1" && "$1" != */class/hwmon/* ]]
+}
+
 # Warns once that a fan's loop could not start because its controller is
 # missing. The flag directory is the loop's own, so the loop announces the
 # recovery once the controller is back and the fan is started again.
 fcp_warn_not_started() {
   local cfg_file="$1" name="$2" controller="$3" dir="$4"
+  local details="${controller:-Its PWM controller} is missing or cannot be written, so FanCtrl Plus 2 did not start controlling this fan. The controller may be unplugged, renumbered or ambiguous, or its driver not loaded. Check the controller on the FanCtrl Plus 2 settings page, then apply."
+  [[ "$controller" == */class/hwmon/* ]] &&
+    details="$controller is saved by its hwmon number, which may now belong to another chip, so FanCtrl Plus 2 did not start controlling this fan. Select the controller again on the FanCtrl Plus 2 settings page, then apply."
   mkdir -p "$dir" 2>/dev/null
   [[ -e "$dir/controller" ]] && return 0
   fcp_alerts_enabled || return 0
   [[ -d "$dir" && -w "$dir" ]] || return 0
-  fcp_notify -i warning -s "Fan $name $fcp_controller_subject" \
-    -d "${controller:-Its PWM controller} is missing or cannot be written, so FanCtrl Plus 2 did not start controlling this fan. The controller may be unplugged, renumbered or ambiguous, or its driver not loaded. Check the controller on the FanCtrl Plus 2 settings page, then apply." &&
+  fcp_notify -i warning -s "Fan $name $fcp_controller_subject" -d "$details" &&
     printf '%s' "$fcp_controller_subject" > "$dir/controller" 2>/dev/null
 }
 

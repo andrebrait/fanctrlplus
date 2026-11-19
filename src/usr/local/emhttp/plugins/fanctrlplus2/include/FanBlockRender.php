@@ -91,26 +91,33 @@ function render_disk_group_row($i, $g, $grp, $disks) {
 // The option for a saved controller that the list of present ones lacks, as
 // [value, text, what is missing ('' when nothing is)], or a blank value when
 // there is none. A blanked controller (unresolved, or one that lost a
-// conflict) shows its identity when that device is absent; saving it
-// unchanged keeps the blank (update.fanctrlplus2.php).
+// conflict) shows its identity; its value keeps the blank binding on save
+// ('__fcp_keep__' in update.fanctrlplus2.php).
 function fcp_saved_controller_option(array $cfg, array $pwms): array {
   $listed = array_column($pwms, 'sensor');
   $controller = (string)($cfg['controller'] ?? '');
   if ($controller !== '') {
     if (in_array($controller, $listed, true)) return ['', '', ''];
-    if (strpos($controller, '/class/hwmon/') !== false) {
+    if (fcp_class_hwmon_path($controller)) {
       return [$controller, "Select again: $controller (saved by hwmon number)", 'PWM controller saved by its hwmon number'];
     }
     return file_exists($controller) ? [$controller, $controller, ''] : [$controller, "Missing: $controller", 'PWM controller'];
   }
   $identity = (string)($cfg['controller_identity'] ?? '');
   if ($identity === '') return ['', '', ''];
-  if (strpos($identity, 'usb:') !== 0) {
-    return file_exists($identity) ? ['', '', ''] : [$identity, "Missing: $identity", 'PWM controller'];
+  $text = $identity;
+  if (strpos($identity, 'usb:') === 0) {
+    $fields = json_decode((string)@hex2bin(substr($identity, 4)), true);
+    [$vid, $pid, $serial] = is_array($fields) && count($fields) >= 3 ? array_map('strval', $fields) : ['?', '?', '?'];
+    $text = "USB $vid:$pid, serial $serial";
+    $present = (fcp_pwm_identity_map($pwms)[$identity] ?? null) !== null;
+  } else {
+    $present = file_exists($identity);
   }
-  if ((fcp_pwm_identity_map($pwms)[$identity] ?? null) !== null) return ['', '', ''];
-  [$vid, $pid, $serial] = json_decode((string)hex2bin(substr($identity, 4)), true) ?: ['?', '?', '?'];
-  return [$identity, "Missing: USB $vid:$pid, serial $serial", 'PWM controller'];
+  // Present: another fan holds it (migration blanked this one, #41).
+  return $present
+    ? ['__fcp_keep__', "In use by another fan: $text", '']
+    : ['__fcp_keep__', "Missing: $text", 'PWM controller'];
 }
 
 // A saved temperature source that is not there now: a file path that does not

@@ -150,6 +150,17 @@ if ($cfgLegacy['cpu_sensor'] !== $temp) {
 if ($cfgLegacy['aux_sensor'] !== "storcli:c0:roc,$temp,$class/hwmon7/temp1_input") {
     $failures[] = 'Aux hwmon sensors must be pinned, other sources and absent ones kept, got ' . $cfgLegacy['aux_sensor'];
 }
+// A class controller older saves recorded as its own identity is kept too.
+file_put_contents("$legacy/fanctrlplus2_ided.cfg", "custom=\"ided\"\ncontroller=\"$class/hwmon2/pwm2\"\ncontroller_identity=\"$class/hwmon2/pwm2\"\n");
+// A device-path sensor follows its chip to a new hwmon number.
+file_put_contents("$legacy/fanctrlplus2_moved.cfg", "custom=\"moved\"\ncpu_sensor=\"$sys/devices/platform/it87.2624/hwmon/hwmon9/temp1_input\"\n");
+migrate_cfg_and_labels('fanctrlplus2', $legacy, "$class/hwmon*");
+if (parse_ini_file("$legacy/fanctrlplus2_ided.cfg")['controller'] !== "$class/hwmon2/pwm2") {
+    $failures[] = 'A /sys/class controller saved with itself as identity must be kept, not blanked or resolved.';
+}
+if (parse_ini_file("$legacy/fanctrlplus2_moved.cfg")['cpu_sensor'] !== $temp) {
+    $failures[] = 'A device-path sensor must follow its chip when its hwmon number changes.';
+}
 if (strpos(file_get_contents("$legacy/fanctrlplus2_old.cfg"), 'note="a \\` b"') === false) {
     $failures[] = 'Pinning sensors must not rewrite unrelated configuration lines.';
 }

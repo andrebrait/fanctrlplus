@@ -14,6 +14,10 @@ while true; do
     [[ "$service" != "1" ]] && continue
     [[ -z "$controller" || -z "$custom" ]] && continue
 
+    # A /sys/class/hwmon controller is not driven: the chip holding that
+    # number now is not necessarily this fan's (#41).
+    [[ "$controller" == */class/hwmon/* ]] && controller="${controller%/*}/.not-driven/pwm0"
+
     # Derive the fanX_input path from pwmX.
     if [[ "$controller" =~ pwm([0-9]+)$ ]]; then
       fan_index="${BASH_REMATCH[1]}"
