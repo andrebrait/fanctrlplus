@@ -79,6 +79,17 @@ expect_equal 0 $? "A missing controller is warned about, not a failed start: a r
 expect_equal A "$(running)" "The fan with a controller starts."
 expect_equal 1 "$(warnings)" "Outside boot, a missing controller warns at once."
 
+# ===== A /sys/class controller names an index, not a device =====
+reset
+touch "$tmp/emhttpd_up"
+mkdir -p "$tmp/class/hwmon/hwmon3"
+touch "$tmp/class/hwmon/hwmon3/pwm2"
+fan B ../class/hwmon/hwmon3/pwm2
+"$rc" start >/dev/null 2>&1
+expect_equal A "$(running)" "A fan saved by its hwmon number is not started until its controller is picked again."
+expect_equal 1 "$(warnings)" "The fan saved by its hwmon number is warned about."
+fan B pwm2
+
 # ===== Boot, the driver loads late =====
 reset
 "$rc" start >/dev/null 2>&1

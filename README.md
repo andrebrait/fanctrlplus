@@ -206,10 +206,17 @@ is removed.
 A controller on a motherboard chip follows only that chip when its hwmon
 number changes. When the chip is absent, for example because its driver is not
 loaded, the fan keeps its saved controller and is not moved to another chip
-with a channel of the same name.
-The settings page shows a saved controller, CPU sensor, or auxiliary sensor
-that is not present as "Missing" and keeps it selected; saving asks for
-confirmation first, and the fan cannot use it until it is back.
+with a channel of the same name. A controller saved in the older
+`/sys/class/hwmon/hwmonN` form names a number rather than a chip, so it is no
+longer driven: select that fan's controller again once.
+CPU and auxiliary hwmon sensors are saved by their device as well. Sensors
+saved in the older `/sys/class/hwmon/hwmonN` form are converted once, when fan
+control starts after every plugin has installed, to the chip holding that
+number then.
+The settings page keeps a saved controller, CPU sensor, or auxiliary sensor
+that is not detected selected and marks it; saving asks for confirmation
+first. The fan cannot use it until it is back and fan control restarts, or
+until another one is selected.
 Saving a configuration without a resolved controller, including a rename,
 retains its binding. Selecting a different controller replaces the binding.
 Clearing a label also removes its dormant USB identity entry, so it cannot

@@ -25,6 +25,10 @@ fail() {
   exit 1
 }
 
+# A /sys/class/hwmon path names an index, whatever chip holds it (see rc.fanctrlplus2).
+[[ "$controller" == */class/hwmon/* ]] &&
+  fail "The PWM controller is saved by its hwmon number ($controller), which may now belong to another chip. Select the controller again on the settings page. Nothing was written."
+
 mkdir -p "/var/tmp/${plugin}" ||
   fail "Could not create /var/tmp/${plugin}, so this run cannot coordinate with the fan loop. Nothing was written."
 

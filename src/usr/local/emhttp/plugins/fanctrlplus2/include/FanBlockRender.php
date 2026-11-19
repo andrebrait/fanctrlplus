@@ -88,6 +88,37 @@ function render_disk_group_row($i, $g, $grp, $disks) {
   return $html;
 }
 
+// The option for a saved controller that the list of present ones lacks, as
+// [value, text, what is missing ('' when nothing is)], or a blank value when
+// there is none. A blanked controller (unresolved, or one that lost a
+// conflict) shows its identity when that device is absent; saving it
+// unchanged keeps the blank (update.fanctrlplus2.php).
+function fcp_saved_controller_option(array $cfg, array $pwms): array {
+  $listed = array_column($pwms, 'sensor');
+  $controller = (string)($cfg['controller'] ?? '');
+  if ($controller !== '') {
+    if (in_array($controller, $listed, true)) return ['', '', ''];
+    if (strpos($controller, '/class/hwmon/') !== false) {
+      return [$controller, "Select again: $controller (saved by hwmon number)", 'PWM controller saved by its hwmon number'];
+    }
+    return file_exists($controller) ? [$controller, $controller, ''] : [$controller, "Missing: $controller", 'PWM controller'];
+  }
+  $identity = (string)($cfg['controller_identity'] ?? '');
+  if ($identity === '') return ['', '', ''];
+  if (strpos($identity, 'usb:') !== 0) {
+    return file_exists($identity) ? ['', '', ''] : [$identity, "Missing: $identity", 'PWM controller'];
+  }
+  if ((fcp_pwm_identity_map($pwms)[$identity] ?? null) !== null) return ['', '', ''];
+  [$vid, $pid, $serial] = json_decode((string)hex2bin(substr($identity, 4)), true) ?: ['?', '?', '?'];
+  return [$identity, "Missing: USB $vid:$pid, serial $serial", 'PWM controller'];
+}
+
+// A saved temperature source that is not there now: a file path that does not
+// exist, or a tool-backed one (storcli:, nvidia:, ...) the page did not list.
+function fcp_sensor_missing(string $sensor): bool {
+  return $sensor[0] === '/' ? !file_exists($sensor) : true;
+}
+
 function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors = []) {
   $curve_error = '';
   try { $curve_rules = fcp_curve_rules($cfg); }
@@ -212,8 +243,9 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                   <?= $display ?>
                 </option>
               <?php endforeach; ?>
-              <?php if (($cfg['controller'] ?? '') !== '' && !in_array($cfg['controller'], array_column($pwms, 'sensor'), true)): ?>
-                <option value="<?=htmlspecialchars($cfg['controller'])?>" data-missing="PWM controller" selected>Missing: <?=htmlspecialchars($cfg['controller'])?></option>
+              <?php [$saved_value, $saved_text, $saved_flag] = fcp_saved_controller_option($cfg, $pwms); ?>
+              <?php if ($saved_value !== ''): ?>
+                <option value="<?=htmlspecialchars($saved_value)?>" data-saved="1" <?=$saved_flag !== '' ? 'data-missing="'.htmlspecialchars($saved_flag).'"' : ''?> selected><?=htmlspecialchars($saved_text)?></option>
               <?php endif; ?>
             </select>
           </td>
@@ -303,7 +335,8 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                 <option value="<?=htmlspecialchars($path)?>" <?=($cfg['cpu_sensor'] ?? '') == $path ? 'selected' : ''?>><?=htmlspecialchars($label)?></option>
               <?php endforeach; ?>
               <?php if (($cfg['cpu_sensor'] ?? '') !== '' && !array_key_exists($cfg['cpu_sensor'], $cpu_sensors)): ?>
-                <option value="<?=htmlspecialchars($cfg['cpu_sensor'])?>" data-missing="CPU sensor" selected>Missing: <?=htmlspecialchars($cfg['cpu_sensor'])?></option>
+                <?php $cpu_gone = fcp_sensor_missing($cfg['cpu_sensor']); ?>
+                <option value="<?=htmlspecialchars($cfg['cpu_sensor'])?>" <?=$cpu_gone ? 'data-missing="CPU sensor"' : ''?> selected><?=$cpu_gone ? 'Not detected: ' : ''?><?=htmlspecialchars($cfg['cpu_sensor'])?></option>
               <?php endif; ?>
             </select>
           </td>
@@ -345,9 +378,9 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
               <?php endforeach; ?>
               <?php $aux_missing = array_diff($aux_selected, array_column(array_merge([], ...array_values($aux_sensors)), 'path')); ?>
               <?php if ($aux_missing): ?>
-                <optgroup label="Missing">
+                <optgroup label="Saved, not listed">
                   <?php foreach ($aux_missing as $path): ?>
-                    <option value="<?=htmlspecialchars($path)?>" data-missing="auxiliary sensor" selected><?=htmlspecialchars($path)?></option>
+                    <option value="<?=htmlspecialchars($path)?>" <?=fcp_sensor_missing($path) ? 'data-missing="auxiliary sensor"' : ''?> selected><?=htmlspecialchars($path)?></option>
                   <?php endforeach; ?>
                 </optgroup>
               <?php endif; ?>

@@ -55,8 +55,10 @@ fanctrlplus2.start_fans() {
     fi
 
     # Serial resolution can leave an absent/ambiguous controller unassigned.
+    # A /sys/class/hwmon path names an index, whatever chip holds it, so it
+    # is not driven until the user picks the controller again.
     controller=$(grep -Po '^controller="\K[^"]+' "$cfg")
-    if [[ -z "$controller" || ! -w "$controller" ]]; then
+    if [[ -z "$controller" || ! -w "$controller" || "$controller" == */class/hwmon/* ]]; then
       [[ -n "$custom_safe" ]] && missing=1
       (( quiet )) || [[ -z "$raw_custom" ]] ||
         fcp_warn_not_started "$cfg" "$raw_custom" "$controller" "/var/tmp/$plugin/faults_$raw_custom"

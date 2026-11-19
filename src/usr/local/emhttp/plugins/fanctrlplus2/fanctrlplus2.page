@@ -928,6 +928,9 @@ $(function() {
 
       $('.pwm-controller').each(function () {
         const selected = $(this).val();
+        // The saved controller the list lacks (missing, or saved by hwmon
+        // number) stays, so a label save does not drop it.
+        const saved = $(this).find('option[data-saved]').detach();
         $(this).empty().append('<option value="">-- Select PWM Controller --</option>');
 
         pwmList.forEach(pwm => {
@@ -940,6 +943,7 @@ $(function() {
           $(this).append($('<option>').val(pwm.sensor).text(display)
             .prop({selected: isSelected, disabled: isUsed}));
         });
+        $(this).append(saved.prop('selected', saved.val() === selected));
       });
 
       updatePWMLabelMap();
@@ -1241,7 +1245,7 @@ $(function() {
         missing.push(`Fan ${name}: ${this.dataset.missing} ${this.value}`);
       });
     });
-    if (missing.length && !confirm(`These are not present on this system:\n\n${missing.join('\n')}\n\nThe fan cannot use them until they are back. Save anyway?`)) {
+    if (missing.length && !confirm(`These are not detected on this system now:\n\n${missing.join('\n')}\n\nThe fan cannot use them until they are back and fan control restarts, or until you select others. Save anyway?`)) {
       return;
     }
 

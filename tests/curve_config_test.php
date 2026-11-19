@@ -255,6 +255,31 @@ $check(($reply['status'] ?? '') === 'ok', 'Saving unchanged displayed percentage
 $rawSaved = parse_ini_file("$cfgDir/fanctrlplus2_Raw.cfg");
 $check($rawSaved['max'] === '100' && $rawSaved['idle'] === '76', 'Unedited raw PWM values must survive percentage display rounding.');
 
+// Saving keeps a saved binding the page showed unchanged: a missing controller
+// keeps its identity, a blanked one stays blank, and a disabled source's
+// sensor (its select is not posted) stays saved.
+$bindingSave = function (array $saved, callable $edit) use ($write, $save, $request, $rawLegacy, $rawRules, $cfgDir) {
+    $write('fanctrlplus2_Raw.cfg', array_replace($rawLegacy, $saved));
+    $post = $request([['file' => 'fanctrlplus2_Raw.cfg', 'custom' => 'Raw', 'pwm' => '30', 'max' => '39', 'idle' => '30', 'curve' => json_encode($rawRules)]]);
+    $edit($post);
+    $reply = $save($post);
+    return ($reply['status'] ?? '') === 'ok' ? parse_ini_file("$cfgDir/fanctrlplus2_Raw.cfg") : $reply;
+};
+$gonePwm = '/sys/devices/platform/it87.2624/hwmon/hwmon2/pwm2';
+$usbKey = 'usb:' . bin2hex(json_encode(['3904', 'f001', 'ABC123', '/interface:1.0/hwmon/hwmon*/pwm1']));
+$saved = $bindingSave(['controller' => $gonePwm, 'controller_identity' => $usbKey], function (&$post) use ($gonePwm) { $post['controller'][0] = $gonePwm; });
+$check(($saved['controller'] ?? '') === $gonePwm && ($saved['controller_identity'] ?? '') === $usbKey, 'Saving an unchanged missing controller must keep it and its USB identity.');
+$saved = $bindingSave(['controller' => '', 'controller_identity' => $gonePwm], function (&$post) use ($gonePwm) { $post['controller'][0] = $gonePwm; });
+$check(($saved['controller'] ?? null) === '' && ($saved['controller_identity'] ?? '') === $gonePwm, 'Saving a blanked controller shown by its identity must keep it blank.');
+$cpuPath = '/sys/devices/platform/coretemp.0/hwmon/hwmon1/temp1_input';
+$saved = $bindingSave(['cpu_sensor' => $cpuPath, 'aux_sensor' => 'storcli:c0:roc'], function (&$post) {
+    unset($post['cpu_sensor'][0]);
+});
+$check(($saved['cpu_sensor'] ?? '') === $cpuPath && ($saved['aux_sensor'] ?? '') === 'storcli:c0:roc', 'Disabled sources must keep their saved sensors.');
+$saved = $bindingSave(['aux_sensor' => 'storcli:c0:roc'], function (&$post) { $post['aux_enable'][0] = '1'; });
+$check(($saved['aux_sensor'] ?? null) === '', 'An enabled aux source with nothing selected must save no sensor.');
+$write('fanctrlplus2_Raw.cfg', $rawLegacy);
+
 $write('fanctrlplus2_JBOD.cfg', $legacyFan);
 $cpuOnly = ['cpu' => $with(['points' => [[40, 120], [70, 255]]]), 'aux' => $contract];
 $reply = $save($request([['file' => 'fanctrlplus2_JBOD.cfg', 'custom' => 'JBOD', 'cpu' => '1', 'idle' => '40', 'groups' => [], 'curve' => json_encode($cpuOnly)]]));

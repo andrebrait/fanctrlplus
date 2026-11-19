@@ -110,10 +110,12 @@ file_put_contents("$boot/fanctrlplus2_array.cfg", "custom=\"array\"\ncontroller=
 // Configurations an older version blanked keep their binding in the identity.
 file_put_contents("$boot/fanctrlplus2_blanked.cfg", "custom=\"blanked\"\ncontroller=\"\"\ncontroller_identity=\"$it87\"\n");
 migrate_cfg_and_labels('fanctrlplus2', $boot, "$class/hwmon*");
-foreach (['array', 'blanked'] as $name) {
-    if (parse_ini_file("$boot/fanctrlplus2_$name.cfg")['controller'] !== $it87) {
-        $failures[] = "A missing chip's fan ($name) must keep its saved controller, not move to another chip's channel.";
-    }
+if (parse_ini_file("$boot/fanctrlplus2_array.cfg")['controller'] !== $it87) {
+    $failures[] = "A missing chip's fan must keep its saved controller, not move to another chip's channel.";
+}
+$blanked = parse_ini_file("$boot/fanctrlplus2_blanked.cfg");
+if ($blanked['controller'] !== '' || $blanked['controller_identity'] !== $it87) {
+    $failures[] = 'A blanked controller must stay blank (it may have lost a conflict) and keep its identity, not move to another chip.';
 }
 unlink("$class/hwmon2");
 rename("$sys/devices/platform/nct6775.656/hwmon/hwmon2", "$sys/devices/platform/nct6775.656/hwmon/hwmon3");
@@ -122,6 +124,34 @@ $loaded = $chip('it87.2624', 'hwmon2', 'it8686');
 migrate_cfg_and_labels('fanctrlplus2', $boot, "$class/hwmon*");
 if (parse_ini_file("$boot/fanctrlplus2_array.cfg")['controller'] !== $loaded) {
     $failures[] = 'Once its chip loads, the fan must bind to it again.';
+}
+
+// Legacy /sys/class bindings name an index, not a device. A controller is
+// never resolved through one; a sensor is pinned to the device holding it.
+$legacy = "$root/legacy";
+@mkdir($legacy);
+$temp = "$sys/devices/platform/it87.2624/hwmon/hwmon2/temp1_input";
+touch($temp);
+file_put_contents("$legacy/fanctrlplus2_old.cfg", implode("\n", [
+    'custom="old"',
+    "controller=\"$class/hwmon2/pwm2\"",
+    "cpu_sensor=\"$class/hwmon2/temp1_input\"",
+    "aux_sensor=\"storcli:c0:roc,$class/hwmon2/temp1_input,$class/hwmon7/temp1_input\"",
+    'note="a \\` b"',
+]) . "\n");
+migrate_cfg_and_labels('fanctrlplus2', $legacy, "$class/hwmon*");
+$cfgLegacy = parse_ini_file("$legacy/fanctrlplus2_old.cfg");
+if ($cfgLegacy['controller'] !== "$class/hwmon2/pwm2") {
+    $failures[] = 'A /sys/class controller must be kept as saved, for the user to pick again, not resolved to the chip at that index.';
+}
+if ($cfgLegacy['cpu_sensor'] !== $temp) {
+    $failures[] = 'A /sys/class CPU sensor must be pinned to the device holding that index, got ' . $cfgLegacy['cpu_sensor'];
+}
+if ($cfgLegacy['aux_sensor'] !== "storcli:c0:roc,$temp,$class/hwmon7/temp1_input") {
+    $failures[] = 'Aux hwmon sensors must be pinned, other sources and absent ones kept, got ' . $cfgLegacy['aux_sensor'];
+}
+if (strpos(file_get_contents("$legacy/fanctrlplus2_old.cfg"), 'note="a \\` b"') === false) {
+    $failures[] = 'Pinning sensors must not rewrite unrelated configuration lines.';
 }
 
 exec('rm -rf ' . escapeshellarg($root));

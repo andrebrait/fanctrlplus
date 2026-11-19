@@ -172,11 +172,17 @@ foreach ($_POST['#file'] as $i => $file) {
   // Read before rename/overwrite: an empty runtime controller means the
   // saved binding is unresolved, not that the user selected another device.
   $previous = $plan['previous'];
-  // An unchanged controller keeps its identity: a missing one (kept by
-  // migration until the user picks another) cannot be identified again.
-  $controller_identity = $controller === '' || $controller === (string)($previous['controller'] ?? '')
-    ? (string)($previous['controller_identity'] ?? $previous['controller'] ?? '')
-    : (fcp_unique_pwm_identity($controller) ?? $controller);
+  // An unchanged controller keeps its binding: a missing one (kept by
+  // migration until the user picks another) cannot be identified again, and a
+  // blanked one is shown by its identity (fcp_saved_controller_option).
+  $previous_controller = (string)($previous['controller'] ?? '');
+  $previous_identity = (string)($previous['controller_identity'] ?? '');
+  if ($controller === $previous_controller || ($previous_controller === '' && $controller === $previous_identity)) {
+    $controller = $previous_controller;
+  }
+  $controller_identity = ($controller === '' || $controller === $previous_controller) && $previous_identity !== ''
+    ? $previous_identity
+    : ($controller === '' ? $previous_controller : (fcp_unique_pwm_identity($controller) ?? $controller));
 
   // Rename the cfg file when Custom Name changes.
   if ($old_file !== $expected_file) {
@@ -237,11 +243,14 @@ foreach ($_POST['#file'] as $i => $file) {
 
   // CPU fallback
   $cpu_enable = $_POST['cpu_enable'][$i] ?? '0';
-  $cpu_sensor = $_POST['cpu_sensor'][$i] ?? '';
+  // A disabled select is not posted: keep the sensor saved for when the
+  // source is enabled again.
+  $cpu_sensor = $_POST['cpu_sensor'][$i] ?? (string)($plan['previous']['cpu_sensor'] ?? '');
 
   // Aux sensor fallback
   $aux_enable = $_POST['aux_enable'][$i] ?? '0';
-  $aux_sensor = isset($_POST['aux_sensor'][$i]) ? implode(',', $_POST['aux_sensor'][$i]) : '';
+  $aux_sensor = isset($_POST['aux_sensor'][$i]) ? implode(',', $_POST['aux_sensor'][$i])
+    : ($aux_enable === '1' ? '' : (string)($plan['previous']['aux_sensor'] ?? ''));
 
   // Build the configuration contents.
   $cfg = [

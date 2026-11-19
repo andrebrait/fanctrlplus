@@ -89,12 +89,24 @@ function find_moved_pwm_path(string $old_path): ?string {
 // Where a saved path-only binding lives now: only the same device, never
 // another chip with the same channel name, which a fan must not be moved to
 // behind the user's back (a chip whose driver has not loaded yet, #41). A
-// legacy /sys/class path names an index, so it is pinned to the device that
-// holds that index now.
+// legacy /sys/class path names an index, not a device, so it is never
+// resolved: the user picks the controller again (rc.fanctrlplus2 refuses it).
 function current_pwm_path(string $old_path): ?string {
-    if (strpos($old_path, '/class/hwmon/') === false) return find_moved_pwm_path($old_path);
-    $real = realpath($old_path);
-    return $real !== false && is_file($real) ? $real : null;
+    return fcp_class_hwmon_path($old_path) ? null : find_moved_pwm_path($old_path);
+}
+
+function fcp_class_hwmon_path(string $path): bool {
+    return strpos($path, '/class/hwmon/') !== false;
+}
+
+// A hwmon temperature sensor saved by its /sys/class/hwmon index is pinned
+// to the device holding that index. Migration runs only once every plugin
+// has installed (rc.fanctrlplus2 boot), so the drivers have bound their chips
+// by then; once pinned, a sensor follows its device and is never rebound.
+function fcp_pin_sensor(string $path): string {
+    if (!fcp_class_hwmon_path($path)) return $path;
+    $real = realpath($path);
+    return $real !== false && is_file($real) ? $real : $path;
 }
 
 // A fan is a USB controller plus its interface/hwmon channel, not a USB port.
@@ -239,41 +251,18 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
     }
     foreach ($configs as $cfgfile => $ini) {
         $original = $ini;
-        $old_path = trim((string)($ini['controller'] ?? ''), " \t\n\r\0\x0B\"'");
-        $identity = (string)($ini['controller_identity'] ?? '');
-        if ($identity === '' && !preg_match('#/pwm\d+$#', $old_path)) continue;
-        $source = $identity !== '' ? $identity : $old_path;
-        $new_path = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : current_pwm_path($source);
-        if ($new_path !== null && isset($in_use[$new_path]) && $in_use[$new_path] !== $cfgfile) {
-            log_migrate("migrate cfg: keep $old_path in $cfgfile, $new_path is already controlled");
-            if ($identity === '' && !is_file($old_path)) continue;
-            // A live losing path must also stop. Retain its binding for
-            // recovery when the winning assignment is removed.
-            if ($identity === '') $identity = fcp_unique_pwm_identity($old_path, $identities) ?? $old_path;
-            $ini['controller_identity'] = $identity;
-            $new_path = null;
+        foreach (['cpu_sensor', 'aux_sensor'] as $k) {
+            if (($ini[$k] ?? '') === '') continue;
+            $ini[$k] = implode(',', array_map('fcp_pin_sensor', explode(',', (string)$ini[$k])));
+            if ($ini[$k] !== $original[$k]) log_migrate("migrate cfg: $cfgfile $k: {$original[$k]} → {$ini[$k]}");
         }
-        if ($new_path === null) {
-            log_migrate("migrate cfg: no match for $cfgfile, identity=$identity");
-            // Never drive a replacement at the old path. Keep the identity
-            // so a disconnected/ambiguous controller can recover later.
-            if ($identity === '') continue;
-            // A saved path that no longer exists stays, so the settings page
-            // shows it as missing until the user picks another controller.
-            // One that exists now belongs to another fan or device: blank it.
-            $saved = $old_path !== '' ? $old_path : (strpos($identity, 'usb:') === 0 ? '' : $identity);
-            $ini['controller'] = $saved !== '' && !file_exists($saved) ? $saved : '';
-        } else {
-            $in_use[$new_path] = $cfgfile;
-            $ini['controller'] = $new_path;
-            $ini['controller_identity'] = fcp_unique_pwm_identity($new_path, $identities) ?? $new_path;
-            if ($new_path !== $old_path) log_migrate("migrate cfg: $cfgfile controller: $old_path → $new_path");
-        }
+        fcp_migrate_controller($ini, $cfgfile, $in_use, $identities);
         if ($ini === $original) continue;
-        // Only these two fields changed. Re-serializing the entire INI would
+        // Only these fields change. Re-serializing the entire INI would
         // re-escape free-text values that are also sourced by the shell.
         $buf = (string)file_get_contents($cfgfile);
-        foreach (['controller', 'controller_identity'] as $k) {
+        foreach (['controller', 'controller_identity', 'cpu_sensor', 'aux_sensor'] as $k) {
+            if (($ini[$k] ?? null) === ($original[$k] ?? null)) continue;
             $v = str_replace(["\\", '"', '$', '`', "\r", "\n"], ["\\\\", '\\"', '\\$', '\\`', '', ''], (string)$ini[$k]);
             $line = "$k=\"$v\"";
             $buf = preg_replace_callback('/^[ \t]*'.$k.'[ \t]*=.*$/m', function () use ($line) { return $line; }, $buf, -1, $count);
@@ -282,6 +271,39 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
         safe_rewrite($cfgfile, $buf);
     }
 }
+// Resolves one configuration's controller in $ini. A saved path that no longer
+// exists, or a /sys/class one, is kept for the settings page to show, until
+// the user picks another controller; nothing is moved to another device.
+function fcp_migrate_controller(array &$ini, string $cfgfile, array &$in_use, array $identities): void {
+    $old_path = trim((string)($ini['controller'] ?? ''), " \t\n\r\0\x0B\"'");
+    $identity = (string)($ini['controller_identity'] ?? '');
+    if ($identity === '' && !preg_match('#/pwm\d+$#', $old_path)) return;
+    $source = $identity !== '' ? $identity : $old_path;
+    $new_path = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : current_pwm_path($source);
+    if ($new_path !== null && isset($in_use[$new_path]) && $in_use[$new_path] !== $cfgfile) {
+        log_migrate("migrate cfg: keep $old_path in $cfgfile, $new_path is already controlled");
+        if ($identity === '' && !is_file($old_path)) return;
+        // A live losing path must also stop. Retain its binding for
+        // recovery when the winning assignment is removed.
+        if ($identity === '') $identity = fcp_unique_pwm_identity($old_path, $identities) ?? $old_path;
+        $ini['controller_identity'] = $identity;
+        $new_path = null;
+    }
+    if ($new_path === null) {
+        log_migrate("migrate cfg: no match for $cfgfile, identity=$identity");
+        // Never drive a replacement at the old path. Keep the identity
+        // so a disconnected/ambiguous controller can recover later.
+        if ($identity === '') return;
+        // A path that exists now belongs to another fan or device: blank it.
+        if (file_exists($old_path) && !fcp_class_hwmon_path($old_path)) $ini['controller'] = '';
+        return;
+    }
+    $in_use[$new_path] = $cfgfile;
+    $ini['controller'] = $new_path;
+    $ini['controller_identity'] = fcp_unique_pwm_identity($new_path, $identities) ?? $new_path;
+    if ($new_path !== $old_path) log_migrate("migrate cfg: $cfgfile controller: $old_path → $new_path");
+}
+
 // ================================
 // END: Migrate hwmonX (cfg+labels)
 // ================================
@@ -696,7 +718,7 @@ function detect_cpu_sensors(): array {
 
       $tempC = round($c, 1) . '°C';
       $result[] = [
-        'path'     => $input,
+        'path'     => realpath($input) ?: $input,
         'label'    => "$chipName - $label ($tempC)",
         'priority' => $hit ? $prio : 998,
         'chip'     => $chipName,
@@ -713,7 +735,7 @@ function detect_cpu_sensors(): array {
         if ($c !== null && $c > 0) {
           $tempC = round($c, 1) . '°C';
           $result[] = [
-            'path'     => $input,
+            'path'     => realpath($input) ?: $input,
             'label'    => "$chipName - Tctl ($tempC)",
             'priority' => array_search('Tctl', $priority_order, true) !== false
                           ? array_search('Tctl', $priority_order, true)
@@ -796,7 +818,7 @@ function detect_aux_sensors(): array {
 
       $tempC = round($c, 1) . '°C';
       $result[] = [
-        'path'  => $input,
+        'path'  => realpath($input) ?: $input,
         'label' => "$chipName - $label ($tempC)",
         'chip'  => $chipName,
         'idx'   => $idxNum,
@@ -816,7 +838,7 @@ function detect_aux_sensors(): array {
 
         $tempC = round($c, 1) . '°C';
         $result[] = [
-          'path'  => $input,
+          'path'  => realpath($input) ?: $input,
           'label' => "$chipName - temp" . $idxNum . " ($tempC)",
           'chip'  => $chipName,
           'idx'   => $idxNum,
