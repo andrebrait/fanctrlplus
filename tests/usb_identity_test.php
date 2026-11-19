@@ -138,6 +138,19 @@ if ($identity !== '') {
     $check(($map[$keyA] ?? null) === $nonHid[0] && ($map[$keyB] ?? null) === $nonHid[1], 'Different VID:PID pairs must not become an ambiguous serial.');
 }
 
+// First run after the update: a fan saved by its USB serial, whose HID
+// instance changed, keeps the hub over a loser 2026.11.12 blanked on the
+// hub's hwmon number, whatever the file order.
+$hub = $device('9-9', 'hwmon77', 'HUBSERIAL');
+$stale = str_replace('F001.0008', 'F001.0003', $hub);
+$hubCfg = "$root/hubcfg";
+mkdir($hubCfg);
+file_put_contents("$hubCfg/fanctrlplus2_alose.cfg", "custom=\"alose\"\ncontroller=\"\"\ncontroller_identity=\"$hwmon/hwmon77/pwm10\"\n");
+file_put_contents("$hubCfg/fanctrlplus2_zwin.cfg", "custom=\"zwin\"\ncontroller=\"$stale\"\ncontroller_identity=\"".fcp_pwm_identity($hub)."\"\n");
+migrate_cfg_and_labels('fanctrlplus2', $hubCfg, "$hwmon/hwmon*");
+$check(parse_ini_file("$hubCfg/fanctrlplus2_zwin.cfg")['controller'] === $hub && parse_ini_file("$hubCfg/fanctrlplus2_alose.cfg")['controller'] === '',
+    'A fan saved by USB serial must keep its hub over a blanked loser naming its hwmon number.');
+
 exec('rm -rf '.escapeshellarg($root));
 if ($failures) { fwrite(STDERR, implode("\n", $failures)."\n"); exit(1); }
 echo "USB serial identity tests passed\n";
