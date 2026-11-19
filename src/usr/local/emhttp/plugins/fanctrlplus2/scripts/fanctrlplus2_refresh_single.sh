@@ -29,6 +29,11 @@ fail() {
 [[ "$controller" == */class/hwmon/* ]] &&
   fail "The PWM controller is saved by its hwmon number ($controller), which may now belong to another chip. Select the controller again on the settings page. Nothing was written."
 
+# A saved controller that is not there (migration keeps it until the user
+# picks another): nothing to write to.
+[[ -n "$controller" && -e "$controller" ]] ||
+  fail "The PWM controller ${controller:-for this fan} is not detected now. Select another on the settings page, or wait for it to return. Nothing was written."
+
 # A USB controller kept while unresolved (migration keeps its last path) may
 # have another device at that path now: drive it only as the saved device.
 if [[ "${controller_identity:-}" == usb:* ]] &&

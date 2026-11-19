@@ -345,6 +345,12 @@ expect_equal "1 77" "$rc $(cat "$tmp/class/hwmon/hwmon2/pwm1")" "Run Now refuses
 expect_equal yes "$(said 'saved by its hwmon number')" "The refusal says to select the controller again."
 write_cfg ''
 
+# A saved controller that is not there is refused with a reason, not a write error.
+write_cfg ''
+sed -i "s#^controller=.*#controller=\"$tmp/gone/pwm1\"#" "$FCP_CONFIG_DIR/fanctrlplus2_$custom.cfg"
+run_manual 50000
+expect_equal "1 yes" "$rc $(said 'is not detected now')" "Run Now refuses a missing controller with a reason."
+
 # A USB controller kept while unresolved: another device may sit at its path.
 write_cfg 'controller_identity="usb:00"'
 printf '%s\n' 77 > "$tmp/pwm1"
