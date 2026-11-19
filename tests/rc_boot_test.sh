@@ -124,6 +124,22 @@ expect_equal 'A B' "$(running)" "A controller that appears within the grace peri
 expect_equal "$pid_a" "$(cat "$tmp/run/fanctrlplus2_A.pid")" "The retry leaves running fans alone."
 expect_equal 0 "$(warnings)" "A driver that loads within the grace period warns nothing (#41)."
 
+# ===== Boot, a late driver whose channels sit on the parent device =====
+# A long grace period, so a start before it ends comes from the retry.
+rc_long="$tmp/rc_long.fanctrlplus2"
+sed -e "s#^boot_wait_seconds=.*#boot_wait_seconds=30#" -e "s#^rc_script=.*#rc_script=$rc_long#" "$rc" > "$rc_long"
+chmod +x "$rc_long"
+reset
+"$rc_long" start >/dev/null 2>&1
+touch "$tmp/emhttpd_up"
+wait_running A
+touch "$tmp/hw/pwm2"
+mkdir -p "$tmp/hwmon/hwmon2/device"
+touch "$tmp/hwmon/hwmon2/device/pwm2"
+wait_running 'A B'
+expect_equal 'A B' "$(running)" "A channel appearing on the parent device triggers a retry within the grace period."
+pkill -f "$rc_long boot\$"
+
 # ===== Boot, the driver never loads =====
 reset
 "$rc" start >/dev/null 2>&1
