@@ -318,17 +318,115 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
             if ($new_path !== $old_path) log_migrate("migrate cfg: $cfgfile controller: $old_path → $new_path");
         }
         if ($ini === $original) continue;
-        // Only these two fields changed. Re-serializing the entire INI would
-        // re-escape free-text values that are also sourced by the shell.
-        $buf = (string)file_get_contents($cfgfile);
-        foreach (['controller', 'controller_identity'] as $k) {
-            $v = str_replace(["\\", '"', '$', '`', "\r", "\n"], ["\\\\", '\\"', '\\$', '\\`', '', ''], (string)$ini[$k]);
-            $line = "$k=\"$v\"";
-            $buf = preg_replace_callback('/^[ \t]*'.$k.'[ \t]*=.*$/m', function () use ($line) { return $line; }, $buf, -1, $count);
-            if ($count === 0) $buf = rtrim($buf, "\n")."\n".$line."\n";
-        }
-        safe_rewrite($cfgfile, $buf);
+        fcp_rewrite_cfg_fields($cfgfile, ['controller' => $ini['controller'], 'controller_identity' => $ini['controller_identity']]);
     }
+
+    fcp_migrate_sensors($cfgfiles, fcp_sensor_identity_map($hwmon_glob));
+}
+
+// Only the given fields change. Re-serializing the entire INI would
+// re-escape free-text values that are also sourced by the shell.
+function fcp_rewrite_cfg_fields(string $cfgfile, array $fields): void {
+    $buf = (string)file_get_contents($cfgfile);
+    foreach ($fields as $k => $v) {
+        $v = str_replace(["\\", '"', '$', '`', "\r", "\n"], ["\\\\", '\\"', '\\$', '\\`', '', ''], (string)$v);
+        $line = "$k=\"$v\"";
+        $buf = preg_replace_callback('/^[ \t]*'.$k.'[ \t]*=.*$/m', function () use ($line) { return $line; }, $buf, -1, $count);
+        if ($count === 0) $buf = rtrim($buf, "\n")."\n".$line."\n";
+    }
+    safe_rewrite($cfgfile, $buf);
+}
+
+// A temperature input is the tempN channel of a named hwmon chip on a device.
+// Its /sys/class/hwmon/hwmonN path follows probe order instead, so on a box
+// with NVMe drives (which register hwmon devices too) the CPU or board
+// sensor can come up under another hwmonN after a reboot, and the saved path
+// then names a different sensor. The identity is readable, and holds nothing
+// a cfg value, the shell or the comma-separated aux list would need to
+// escape; a chip whose name or device path holds anything else keeps its
+// path binding.
+const FCP_SENSOR_IDENTITY = '#^hwmon:([A-Za-z0-9_]+):(temp\d+):([A-Za-z0-9_.:/-]+)$#D';
+
+function fcp_sensor_identity(string $path): ?string {
+    if (!preg_match('#/(temp\d+)_input$#', $path, $t)) return null;
+    $hwmon = realpath(dirname($path));
+    if ($hwmon === false || !is_file("$hwmon/{$t[1]}_input")) return null;
+    // The device the hwmon node belongs to, without the hwmonN index:
+    // platform/coretemp.0/hwmon/hwmon4 and .../nvme/nvme0/hwmon1 alike.
+    if (!preg_match('#/devices/(.+?)(?:/hwmon)?/hwmon\d+$#', $hwmon, $d)) return null;
+    if (preg_match('#(?:^|/)\.\.?(?:/|$)#', $d[1])) return null;
+    $key = 'hwmon:'.trim((string)@file_get_contents("$hwmon/name")).":{$t[1]}:{$d[1]}";
+    return preg_match(FCP_SENSOR_IDENTITY, $key) ? $key : null;
+}
+
+// Every temperature input under the hwmon glob, by identity, at the
+// /sys/class/hwmon path the settings page lists. Two inputs that share an
+// identity pin neither one (null), so neither is guessed.
+function fcp_sensor_identity_map(string $hwmon_glob = '/sys/class/hwmon/hwmon*'): array {
+    $map = [];
+    foreach (glob($hwmon_glob) ?: [] as $hwmon) {
+        foreach (glob("$hwmon/temp*_input") ?: [] as $input) {
+            $key = fcp_sensor_identity($input);
+            if ($key === null) continue;
+            $map[$key] = array_key_exists($key, $map) ? null : $input;
+        }
+    }
+    return $map;
+}
+
+// What to save for one selected sensor: its identity while that uniquely
+// names this input, else the value itself (a path binding, or a sensor such
+// as storcli:c0:roc or custom:ambient, which is already stable).
+function fcp_sensor_binding(string $sensor, array $identities): string {
+    if (preg_match(FCP_SENSOR_IDENTITY, $sensor)) return $sensor;
+    $key = fcp_sensor_identity($sensor);
+    if ($key === null || ($identities[$key] ?? null) === null) return $sensor;
+    return realpath($identities[$key]) === realpath($sensor) ? $key : $sensor;
+}
+
+// Resolve every fan's CPU and aux sensors again, as the controller is above.
+// cpu_sensor_identity and aux_sensor_identity hold the bindings and win over
+// the runtime paths; a config without them gets them recorded from its
+// current paths. A missing or ambiguous identity is not replaced by another
+// sensor: the runtime value becomes the identity itself, which has no
+// reading, so the fan's missing-sensor warning names it, and the binding
+// stays saved until the sensor is back.
+function fcp_migrate_sensors(array $cfgfiles, array $identities): void {
+    foreach ($cfgfiles as $cfgfile) {
+        $ini = @parse_ini_file($cfgfile);
+        if (!$ini) continue;
+        $fields = [];
+        foreach (['cpu_sensor', 'aux_sensor'] as $k) {
+            $saved = (string)($ini["{$k}_identity"] ?? $ini[$k] ?? '');
+            $paths = []; $bindings = [];
+            foreach ($saved === '' ? [] : explode(',', $saved) as $entry) {
+                if ($entry === '') continue;
+                if (preg_match(FCP_SENSOR_IDENTITY, $entry)) {
+                    $path = $identities[$entry] ?? null;
+                    if ($path === null) log_migrate("migrate sensor: no match for $entry in $cfgfile, keep identity");
+                    $paths[] = $path ?? $entry;
+                    $bindings[] = $entry;
+                } else {
+                    $paths[] = $entry;
+                    $bindings[] = fcp_sensor_binding($entry, $identities);
+                }
+            }
+            $fields[$k] = implode(',', $paths);
+            $fields["{$k}_identity"] = implode(',', $bindings);
+        }
+        $changed = array_filter($fields, fn($v, $k) => (string)($ini[$k] ?? '') !== $v, ARRAY_FILTER_USE_BOTH);
+        if (!$changed) continue;
+        foreach (['cpu_sensor', 'aux_sensor'] as $k) {
+            if (isset($changed[$k])) log_migrate("migrate cfg: $cfgfile $k: ".($ini[$k] ?? '')." → {$fields[$k]}");
+        }
+        fcp_rewrite_cfg_fields($cfgfile, $changed);
+    }
+}
+
+// How the settings page lists a saved sensor it did not find this time.
+function fcp_sensor_unavailable_label(string $sensor): string {
+    if (preg_match(FCP_SENSOR_IDENTITY, $sensor, $m)) return "Not found: {$m[1]} - {$m[2]} ({$m[3]})";
+    return "No reading: $sensor";
 }
 // ================================
 // END: Migrate hwmonX (cfg+labels)
