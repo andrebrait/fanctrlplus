@@ -1,0 +1,134 @@
+#!/bin/bash
+# rc.fanctrlplus2 start at boot (#41): waits for emhttpd, which Unraid starts
+# once every plugin has installed, then gives a missing controller a grace
+# period before warning. Runs a copy of the rc script with its absolute paths
+# pointed into a temporary directory, and stubs for pgrep -x emhttpd, php and
+# logger.
+
+set -u
+
+root=$(cd "$(dirname "$0")/.." && pwd)
+tmp=$(mktemp -d)
+cleanup() {
+  pkill -f "$tmp/" 2>/dev/null
+  rm -rf "$tmp"
+}
+trap cleanup EXIT
+
+scripts="$root/src/usr/local/emhttp/plugins/fanctrlplus2/scripts"
+mkdir -p "$tmp/cfg" "$tmp/run" "$tmp/hw" "$tmp/bin" "$tmp/var"
+
+printf '#!/bin/bash\nexec sleep 300\n' > "$tmp/loop.sh"
+printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> %q\n' "$tmp/notify.log" > "$tmp/notify"
+printf '#!/bin/bash\nexit 0\n' > "$tmp/bin/php"
+printf '#!/bin/bash\nexit 0\n' > "$tmp/bin/logger"
+cat > "$tmp/bin/pgrep" <<EOF
+#!/bin/bash
+if [[ "\$1" == -x && "\$2" == emhttpd ]]; then [[ -e $tmp/emhttpd_up ]]; exit; fi
+exec /usr/bin/pgrep "\$@"
+EOF
+chmod +x "$tmp/loop.sh" "$tmp/notify" "$tmp/bin/"*
+export PATH="$tmp/bin:$PATH" fcp_notify_bin="$tmp/notify"
+
+rc="$tmp/rc.fanctrlplus2"
+sed -e "s#^cfg_path=.*#cfg_path=$tmp/cfg#" \
+    -e "s#^loop_script=.*#loop_script=$tmp/loop.sh#" \
+    -e "s#^dashboard_updater=.*#dashboard_updater=$tmp/none#" \
+    -e "s#^pid_dir=.*#pid_dir=$tmp/run#" \
+    -e "s#^rc_script=.*#rc_script=$rc#" \
+    -e "s#^config_lock=.*#config_lock=$tmp/run/lock#" \
+    -e "s#^boot_wait_seconds=.*#boot_wait_seconds=3#" \
+    -e "s#^boot_retry_seconds=.*#boot_retry_seconds=1#" \
+    -e "s#^user_stopped=.*#user_stopped=$tmp/run/user_stopped#" \
+    -e "s#^source .*#source $scripts/disk_group_control.sh#" \
+    -e "s#^  script=.*#  script=$tmp/none#" \
+    -e "s#/var/tmp/\$plugin#$tmp/var#g" \
+    "$scripts/rc.fanctrlplus2" > "$rc"
+chmod +x "$rc"
+
+failures=0
+expect_equal() {
+  local expected="$1" actual="$2" message="$3"
+  [[ "$expected" == "$actual" ]] && return
+  printf '%s\nExpected: %s\nActual: %s\n' "$message" "$expected" "$actual" >&2
+  failures=$((failures + 1))
+}
+
+fan() {
+  printf 'service="1"\ncustom="%s"\ncontroller="%s"\n' "$1" "$tmp/hw/$2" > "$tmp/cfg/fanctrlplus2_$1.cfg"
+}
+fan A pwm1
+fan B pwm2
+
+reset() {
+  "$rc" stop >/dev/null 2>&1
+  pkill -f "$tmp/loop.sh" 2>/dev/null
+  rm -rf "$tmp/run/"* "$tmp/var/"* "$tmp/notify.log" "$tmp/emhttpd_up" "$tmp/hw/"*
+  touch "$tmp/hw/pwm1"
+}
+running() { ls "$tmp/run" | grep -o '^fanctrlplus2_[A-Z]' | cut -d_ -f2 | xargs; }
+warnings() { grep -c 'has lost its PWM controller' "$tmp/notify.log" 2>/dev/null || echo 0; }
+# Waits up to 10 seconds for running() to print $1.
+wait_running() { local i; for i in {1..50}; do [[ "$(running)" == "$1" ]] && return; sleep 0.2; done; }
+
+# ===== Outside boot: start does not fail for a missing controller =====
+reset
+touch "$tmp/emhttpd_up"
+"$rc" start >/dev/null 2>&1
+expect_equal 0 $? "A missing controller is warned about, not a failed start: a restore would roll back."
+expect_equal A "$(running)" "The fan with a controller starts."
+expect_equal 1 "$(warnings)" "Outside boot, a missing controller warns at once."
+
+# ===== Boot, the driver loads late =====
+reset
+"$rc" start >/dev/null 2>&1
+sleep 1
+expect_equal '' "$(running)" "Before emhttpd runs, plugins are still installing and nothing starts."
+touch "$tmp/emhttpd_up"
+wait_running A
+expect_equal A "$(running)" "Once emhttpd runs, the fan with a controller starts."
+pid_a=$(cat "$tmp/run/fanctrlplus2_A.pid")
+touch "$tmp/hw/pwm2"
+wait_running 'A B'
+expect_equal 'A B' "$(running)" "A controller that appears within the grace period starts its fan."
+expect_equal "$pid_a" "$(cat "$tmp/run/fanctrlplus2_A.pid")" "The retry leaves running fans alone."
+expect_equal 0 "$(warnings)" "A driver that loads within the grace period warns nothing (#41)."
+
+# ===== Boot, the driver never loads =====
+reset
+"$rc" start >/dev/null 2>&1
+touch "$tmp/emhttpd_up"
+wait_running A
+expect_equal 0 "$(warnings)" "No warning during the grace period."
+sleep 5
+expect_equal 1 "$(warnings)" "A controller still missing after the grace period warns once."
+
+# ===== Boot, emhttpd never starts =====
+reset
+"$rc" start >/dev/null 2>&1
+wait_running A
+expect_equal A "$(running)" "Without emhttpd, fans start once the wait runs out."
+
+# ===== A stop during the boot wait =====
+reset
+"$rc" start >/dev/null 2>&1
+"$rc" start >/dev/null 2>&1
+expect_equal 1 "$(pgrep -fc "$rc boot\$")" "A second start during the boot wait does not add another."
+"$rc" stop >/dev/null 2>&1
+touch "$tmp/emhttpd_up"
+sleep 3
+expect_equal '' "$(running)" "A stop during the boot wait is not undone."
+expect_equal 0 "$(pgrep -fc "$rc boot\$")" "The stop ends the boot start."
+
+# ===== The boot-time stop leaves the BIOS in control =====
+reset
+echo 2 > "$tmp/hw/pwm1_enable"
+echo 77 > "$tmp/hw/pwm1"
+"$rc" stop >/dev/null 2>&1
+expect_equal '2 77' "$(cat "$tmp/hw/pwm1_enable") $(cat "$tmp/hw/pwm1")" "Before emhttpd, stop does not set the fans to 50%."
+
+if (( failures )); then
+  printf '%d rc boot test(s) failed\n' "$failures" >&2
+  exit 1
+fi
+echo "rc boot tests passed"
