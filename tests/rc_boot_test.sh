@@ -92,6 +92,7 @@ expect_equal A "$(running)" "A fan saved by its hwmon number is not started unti
 expect_equal 1 "$(warnings)" "The fan saved by its hwmon number is warned about."
 echo 2 > "$tmp/class/hwmon/hwmon3/pwm2_enable"
 echo 77 > "$tmp/class/hwmon/hwmon3/pwm2"
+touch "$tmp/run/fanctrlplus2_B.pid"  # as if B ran before an upgrade kept its class path
 "$rc" stop >/dev/null 2>&1
 expect_equal '2 77' "$(cat "$tmp/class/hwmon/hwmon3/pwm2_enable") $(cat "$tmp/class/hwmon/hwmon3/pwm2")" "Stop must not set 50% on a hwmon number that may belong to another chip."
 reset

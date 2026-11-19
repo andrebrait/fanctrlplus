@@ -122,11 +122,12 @@ fanctrlplus2.locked() {
 fanctrlplus2.boot() {
   local deadline=$((SECONDS + boot_wait_seconds))
   until pgrep -x emhttpd >/dev/null || (( SECONDS >= deadline )); do sleep 2; done
-  fanctrlplus2.locked start-now quiet && return
   # Retry when a chip appears (the hwmon list changes), not every round:
-  # each retry runs the migration.
+  # each retry runs the migration. Listed before the first attempt, so a chip
+  # appearing during it still counts.
   local seen now
   seen=$(ls "$hwmon_dir" 2>/dev/null)
+  fanctrlplus2.locked start-now quiet && return
   deadline=$((SECONDS + boot_wait_seconds))
   while (( SECONDS < deadline )); do
     sleep "$boot_retry_seconds"

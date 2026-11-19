@@ -345,6 +345,14 @@ expect_equal "1 77" "$rc $(cat "$tmp/class/hwmon/hwmon2/pwm1")" "Run Now refuses
 expect_equal yes "$(said 'saved by its hwmon number')" "The refusal says to select the controller again."
 write_cfg ''
 
+# A USB controller kept while unresolved: another device may sit at its path.
+write_cfg 'controller_identity="usb:00"'
+printf '%s\n' 77 > "$tmp/pwm1"
+run_manual 50000
+expect_equal "1 77" "$rc $(cat "$tmp/pwm1")" "Run Now refuses a path that is not the saved USB controller."
+expect_equal yes "$(said 'not the USB controller saved')" "The refusal names the missing USB controller."
+write_cfg ''
+
 if (( failures > 0 )); then
   exit 1
 fi
