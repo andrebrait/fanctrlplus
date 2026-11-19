@@ -45,7 +45,7 @@ if (find_moved_pwm_path("$twin/0003:3904:F001.000A/hwmon/hwmon9/pwm1") !== "$twi
 
 $make("$root/class/hwmon/hwmon3/pwm2");
 if (find_moved_pwm_path("$root/class/hwmon/hwmon5/pwm2") !== null) {
-    $failures[] = 'A /sys/class path carries no device identity and must be left to the chip-name fallback.';
+    $failures[] = 'A /sys/class path carries no device identity, so it cannot be followed to another index.';
 }
 if (find_moved_pwm_path("$root/devices/platform/nct6775.*/hwmon/hwmon4/pwm2") !== null) {
     $failures[] = 'A saved path must not be used as a glob pattern.';
@@ -87,6 +87,41 @@ if ($controller('old') !== "$old/pwm9") {
 }
 if ($controller('rear') !== "$new/pwm8" || $controller('rear2') !== "$older/pwm8") {
     $failures[] = 'Exactly one of two stale fans on the same PWM must be migrated to its current path.';
+}
+
+// #41: a chip whose driver has not loaded yet. Another chip now holds its
+// hwmon index and has a channel of the same name; the fan must not move there.
+$sys = "$root/chips";
+$class = "$sys/class/hwmon";
+@mkdir($class, 0777, true);
+$chip = function (string $device, string $index, string $name) use ($sys, $class): string {
+    $dir = "$sys/devices/platform/$device/hwmon/$index";
+    @mkdir($dir, 0777, true);
+    file_put_contents("$dir/name", "$name\n");
+    touch("$dir/pwm2");
+    symlink($dir, "$class/$index");
+    return "$dir/pwm2";
+};
+$other = $chip('nct6775.656', 'hwmon2', 'nct6798');
+$it87 = "$sys/devices/platform/it87.2624/hwmon/hwmon2/pwm2";
+$boot = "$root/boot";
+@mkdir($boot);
+file_put_contents("$boot/fanctrlplus2_array.cfg", "custom=\"array\"\ncontroller=\"$it87\"\ncontroller_identity=\"$it87\"\n");
+// Configurations an older version blanked keep their binding in the identity.
+file_put_contents("$boot/fanctrlplus2_blanked.cfg", "custom=\"blanked\"\ncontroller=\"\"\ncontroller_identity=\"$it87\"\n");
+migrate_cfg_and_labels('fanctrlplus2', $boot, "$class/hwmon*");
+foreach (['array', 'blanked'] as $name) {
+    if (parse_ini_file("$boot/fanctrlplus2_$name.cfg")['controller'] !== $it87) {
+        $failures[] = "A missing chip's fan ($name) must keep its saved controller, not move to another chip's channel.";
+    }
+}
+unlink("$class/hwmon2");
+rename("$sys/devices/platform/nct6775.656/hwmon/hwmon2", "$sys/devices/platform/nct6775.656/hwmon/hwmon3");
+symlink("$sys/devices/platform/nct6775.656/hwmon/hwmon3", "$class/hwmon3");
+$loaded = $chip('it87.2624', 'hwmon2', 'it8686');
+migrate_cfg_and_labels('fanctrlplus2', $boot, "$class/hwmon*");
+if (parse_ini_file("$boot/fanctrlplus2_array.cfg")['controller'] !== $loaded) {
+    $failures[] = 'Once its chip loads, the fan must bind to it again.';
 }
 
 exec('rm -rf ' . escapeshellarg($root));

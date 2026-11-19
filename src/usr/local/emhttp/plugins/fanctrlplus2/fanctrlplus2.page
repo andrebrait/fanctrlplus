@@ -1232,6 +1232,19 @@ $(function() {
       return;
     }
 
+    // Saved controllers and sensors that are not present are kept until
+    // changed, but the fan cannot use them meanwhile.
+    const missing = [];
+    $('.fan-block').each(function () {
+      const name = $(this).find('.custom-name-input').val();
+      $(this).find('select:enabled option[data-missing]:selected').each(function () {
+        missing.push(`Fan ${name}: ${this.dataset.missing} ${this.value}`);
+      });
+    });
+    if (missing.length && !confirm(`These are not present on this system:\n\n${missing.join('\n')}\n\nThe fan cannot use them until they are back. Save anyway?`)) {
+      return;
+    }
+
     $('.interval-input').each(function(){
       this.value = stripUnit(this.value);
     });

@@ -66,58 +66,6 @@ function fcp_parse_history_line(string $line): ?array {
 // =============================
 // Migrate hwmonX configuration and label paths.
 // =============================
-function normalize_chip_name(string $chip): string {
-    // Remove a trailing numeric suffix.
-    $chip = preg_replace('/\.\d+$/', '', $chip);
-    // Remove ISA address fragments such as -isa-XXXX.
-    $chip = preg_replace('/-isa-[0-9a-fA-Fx]+$/', '', $chip);
-    return $chip;
-}
-
-function extract_chip_and_pwm_from_path(string $old_path): ?array {
-    $old_path = trim($old_path, " \t\n\r\0\x0B\"'");
-
-    // Extract pwmN from the path first.
-    preg_match_all('/pwm(\d+)/', $old_path, $pm);
-    if (empty($pm[1])) return null;
-    $pwmN = 'pwm' . end($pm[1]);
-
-    // Prefer a platform node such as nct6775.672 when available.
-    if (preg_match('#/platform/([^/]+)/#', $old_path, $m)) {
-        $platform = $m[1];
-        // Find the matching pwmN under platform/$platform/hwmon/*.
-        foreach (glob("/sys/devices/platform/$platform/hwmon/hwmon*") as $dir) {
-            if (is_file("$dir/$pwmN") && is_file("$dir/name")) {
-                $chip = normalize_chip_name(trim(@file_get_contents("$dir/name")));
-                if ($chip !== '') {
-                    return [$chip, $pwmN];
-                }
-            }
-        }
-    }
-
-    // Fall back to hwmonX under /sys/class/hwmon when no platform node exists.
-    preg_match_all('/hwmon(\d+)/', $old_path, $hm);
-    if (!empty($hm[1])) {
-        $hwmon = 'hwmon' . end($hm[1]);
-        $name_file = "/sys/class/hwmon/$hwmon/name";
-        if (is_file($name_file)) {
-            $chip = normalize_chip_name(trim(@file_get_contents($name_file)));
-            if ($chip !== '') return [$chip, $pwmN];
-        }
-    }
-
-    // Last resort: scan every hwmon* directory.
-    foreach (glob("/sys/class/hwmon/hwmon*") as $dir) {
-        if (is_file("$dir/$pwmN") && is_file("$dir/name")) {
-            $chip = normalize_chip_name(trim(@file_get_contents("$dir/name")));
-            if ($chip !== '') return [$chip, $pwmN];
-        }
-    }
-
-    return null;
-}
-
 // Find where a saved /sys/devices pwm path lives now. The hwmonN index follows
 // probe order and a USB HID device gets a new instance suffix
 // (0003:VID:PID.NNNN) each time it enumerates, so both are wildcarded; the
@@ -138,13 +86,15 @@ function find_moved_pwm_path(string $old_path): ?string {
     return count($matches) === 1 ? $matches[0] : null;
 }
 
-// Path-only entries cannot recover a serial after the device has moved.
-// Keep the same-port migration for those legacy/no-serial entries.
-function current_pwm_path(string $old_path, array $pwm_map): ?string {
-    $moved = find_moved_pwm_path($old_path);
-    if ($moved !== null || preg_match(FCP_HID_INSTANCE, $old_path) || preg_match('#/usb\d+/#', $old_path)) return $moved;
-    $pair = extract_chip_and_pwm_from_path($old_path);
-    return $pair ? ($pwm_map[$pair[0].':'.$pair[1]] ?? null) : null;
+// Where a saved path-only binding lives now: only the same device, never
+// another chip with the same channel name, which a fan must not be moved to
+// behind the user's back (a chip whose driver has not loaded yet, #41). A
+// legacy /sys/class path names an index, so it is pinned to the device that
+// holds that index now.
+function current_pwm_path(string $old_path): ?string {
+    if (strpos($old_path, '/class/hwmon/') === false) return find_moved_pwm_path($old_path);
+    $real = realpath($old_path);
+    return $real !== false && is_file($real) ? $real : null;
 }
 
 // A fan is a USB controller plus its interface/hwmon channel, not a USB port.
@@ -220,8 +170,6 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
     $cfgpath   = $cfgpath ?: "/boot/config/plugins/$plugin";
     $labelFile = "$cfgpath/pwm_labels.cfg";
     $pwms = list_pwm($hwmon_glob);
-    $pwm_map = [];
-    foreach ($pwms as $pwm) $pwm_map[normalize_chip_name($pwm['chip']).':'.$pwm['name']] = $pwm['sensor'];
     $identities = fcp_pwm_identity_map($pwms);
 
     // --- labels ---
@@ -244,7 +192,7 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
             }
 
             $stable = strpos($old_path, 'usb:') === 0;
-            $new_path = $stable ? ($identities[$old_path] ?? null) : current_pwm_path($old_path, $pwm_map);
+            $new_path = $stable ? ($identities[$old_path] ?? null) : current_pwm_path($old_path);
             if ($new_path === null) { log_migrate("migrate label: no match, keep $old_path"); $out[]=$line; continue; }
             $is_current = $stable || $new_path === $old_path;
             $key = fcp_unique_pwm_identity($new_path, $identities) ?? $new_path;
@@ -295,7 +243,7 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
         $identity = (string)($ini['controller_identity'] ?? '');
         if ($identity === '' && !preg_match('#/pwm\d+$#', $old_path)) continue;
         $source = $identity !== '' ? $identity : $old_path;
-        $new_path = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : current_pwm_path($source, $pwm_map);
+        $new_path = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : current_pwm_path($source);
         if ($new_path !== null && isset($in_use[$new_path]) && $in_use[$new_path] !== $cfgfile) {
             log_migrate("migrate cfg: keep $old_path in $cfgfile, $new_path is already controlled");
             if ($identity === '' && !is_file($old_path)) continue;
@@ -310,7 +258,11 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
             // Never drive a replacement at the old path. Keep the identity
             // so a disconnected/ambiguous controller can recover later.
             if ($identity === '') continue;
-            $ini['controller'] = '';
+            // A saved path that no longer exists stays, so the settings page
+            // shows it as missing until the user picks another controller.
+            // One that exists now belongs to another fan or device: blank it.
+            $saved = $old_path !== '' ? $old_path : (strpos($identity, 'usb:') === 0 ? '' : $identity);
+            $ini['controller'] = $saved !== '' && !file_exists($saved) ? $saved : '';
         } else {
             $in_use[$new_path] = $cfgfile;
             $ini['controller'] = $new_path;

@@ -203,6 +203,13 @@ Restart the service after a driver reload or port move. If multiple
 configurations resolve to one channel, the already-current assignment wins;
 blocked bindings remain saved for recovery when the conflicting assignment
 is removed.
+A controller on a motherboard chip follows only that chip when its hwmon
+number changes. When the chip is absent, for example because its driver is not
+loaded, the fan keeps its saved controller and is not moved to another chip
+with a channel of the same name.
+The settings page shows a saved controller, CPU sensor, or auxiliary sensor
+that is not present as "Missing" and keeps it selected; saving asks for
+confirmation first, and the fan cannot use it until it is back.
 Saving a configuration without a resolved controller, including a rename,
 retains its binding. Selecting a different controller replaces the binding.
 Clearing a label also removes its dormant USB identity entry, so it cannot

@@ -172,7 +172,9 @@ foreach ($_POST['#file'] as $i => $file) {
   // Read before rename/overwrite: an empty runtime controller means the
   // saved binding is unresolved, not that the user selected another device.
   $previous = $plan['previous'];
-  $controller_identity = $controller === ''
+  // An unchanged controller keeps its identity: a missing one (kept by
+  // migration until the user picks another) cannot be identified again.
+  $controller_identity = $controller === '' || $controller === (string)($previous['controller'] ?? '')
     ? (string)($previous['controller_identity'] ?? $previous['controller'] ?? '')
     : (fcp_unique_pwm_identity($controller) ?? $controller);
 

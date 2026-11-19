@@ -212,6 +212,9 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                   <?= $display ?>
                 </option>
               <?php endforeach; ?>
+              <?php if (($cfg['controller'] ?? '') !== '' && !in_array($cfg['controller'], array_column($pwms, 'sensor'), true)): ?>
+                <option value="<?=htmlspecialchars($cfg['controller'])?>" data-missing="PWM controller" selected>Missing: <?=htmlspecialchars($cfg['controller'])?></option>
+              <?php endif; ?>
             </select>
           </td>
         </tr>
@@ -299,6 +302,9 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
               <?php foreach ($cpu_sensors as $path => $label): ?>
                 <option value="<?=htmlspecialchars($path)?>" <?=($cfg['cpu_sensor'] ?? '') == $path ? 'selected' : ''?>><?=htmlspecialchars($label)?></option>
               <?php endforeach; ?>
+              <?php if (($cfg['cpu_sensor'] ?? '') !== '' && !array_key_exists($cfg['cpu_sensor'], $cpu_sensors)): ?>
+                <option value="<?=htmlspecialchars($cfg['cpu_sensor'])?>" data-missing="CPU sensor" selected>Missing: <?=htmlspecialchars($cfg['cpu_sensor'])?></option>
+              <?php endif; ?>
             </select>
           </td>
         </tr>
@@ -337,6 +343,14 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                   <?php endforeach; ?>
                 </optgroup>
               <?php endforeach; ?>
+              <?php $aux_missing = array_diff($aux_selected, array_column(array_merge([], ...array_values($aux_sensors)), 'path')); ?>
+              <?php if ($aux_missing): ?>
+                <optgroup label="Missing">
+                  <?php foreach ($aux_missing as $path): ?>
+                    <option value="<?=htmlspecialchars($path)?>" data-missing="auxiliary sensor" selected><?=htmlspecialchars($path)?></option>
+                  <?php endforeach; ?>
+                </optgroup>
+              <?php endif; ?>
             </select>
           </td>
         </tr>
