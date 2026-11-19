@@ -416,6 +416,12 @@ expect_equal "50" "$(aux_hottest_reading <<< "$readings")" \
 expect_equal "" "$(aux_unread_sensors <<< "$(aux_temp_readings "$tmp/temp3_input")")" \
   "When every sensor reads, none is named."
 
+# A sensor saved by hwmon number is never read: another chip may hold it.
+mkdir -p "$tmp/class/hwmon/hwmon7"
+echo 45000 > "$tmp/class/hwmon/hwmon7/temp1_input"
+expect_equal "$tmp/class/hwmon/hwmon7/temp1_input" "$(aux_unread_sensors <<< "$(aux_temp_readings "$tmp/class/hwmon/hwmon7/temp1_input")")" \
+  "A /sys/class/hwmon sensor must be reported unread, not read by number."
+
 if (( failures > 0 )); then
   printf '%d aux sensor assertion(s) failed.\n' "$failures" >&2
   exit 1

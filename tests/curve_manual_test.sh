@@ -359,6 +359,17 @@ expect_equal "1 77" "$rc $(cat "$tmp/pwm1")" "Run Now refuses a path that is not
 expect_equal yes "$(said 'not the USB controller saved')" "The refusal names the missing USB controller."
 write_cfg ''
 
+# A CPU sensor saved by its hwmon number is never read: another chip may hold it.
+write_cfg "$rule_latch"
+mkdir -p "$tmp/class/hwmon/hwmon3"
+printf '60000\n' > "$tmp/class/hwmon/hwmon3/temp1_input"
+sed -i "s#^cpu_sensor=.*#cpu_sensor=\"$tmp/class/hwmon/hwmon3/temp1_input\"#" "$FCP_CONFIG_DIR/fanctrlplus2_$custom.cfg"
+fresh 100
+run_manual 60000
+# No reading: the run applies the no-source output (0 here), not the 60 °C emergency.
+expect_equal "0 0" "$rc $(cat "$tmp/pwm1")" "Run Now must not read a CPU sensor saved by its hwmon number."
+write_cfg ''
+
 if (( failures > 0 )); then
   exit 1
 fi

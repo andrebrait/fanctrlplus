@@ -81,7 +81,8 @@ while true; do
   # observation of it while this one waits, and an older sample must not undo
   # that (see the observation time in curve_control.sh).
   cpu_sampled=0
-  if [[ "${cpu_enable:-0}" == "1" && -n "$cpu_sensor" && -f "$cpu_sensor" ]]; then
+  # A /sys/class/hwmon sensor is never read: see aux_sensors.sh.
+  if [[ "${cpu_enable:-0}" == "1" && -f "$cpu_sensor" && "$cpu_sensor" != */class/hwmon/* ]]; then
     fcp_stamp_now
     cpu_stamp=$fcp_now
     cpu_raw=$(cat "$cpu_sensor")

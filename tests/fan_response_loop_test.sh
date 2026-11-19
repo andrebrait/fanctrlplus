@@ -89,4 +89,10 @@ grep -q 'RPM changed from 1000 to 3300' "$tmp/notifications" || { echo 'The real
 
 run 40000 30000 3300 1000 1
 grep -q 'RPM changed from 3300 to 1000' "$tmp/notifications" || { echo 'Leaving full speed reported as mode 0 lost the RPM baseline.' >&2; exit 1; }
+# A CPU sensor saved by its hwmon number is never read: another chip may hold it.
+mkdir -p "$tmp/class/hwmon/hwmon3"
+echo 40000 > "$tmp/class/hwmon/hwmon3/temp1_input"
+sed -i "s#^cpu_sensor=.*#cpu_sensor=\"$tmp/class/hwmon/hwmon3/temp1_input\"#" "$tmp/fan.cfg"
+run 40000 40000 1000 1000 ''
+[[ $(cat "$tmp/pwm1") == 77 ]] || { echo "The loop must hold Idle (77) without reading a CPU sensor saved by its hwmon number, got $(cat "$tmp/pwm1")." >&2; exit 1; }
 echo 'fan response loop test passed'

@@ -36,6 +36,9 @@ $check(strpos($option($html, 'hwmon:present'), 'data-missing') === false, 'A lis
 $class = '/sys/class/hwmon/hwmon2/pwm2';
 $opt = $option($render(['controller' => $class]), $class);
 $check($flagged($opt) && strpos($opt, 'Select again') !== false, 'A controller saved by hwmon number must be flagged for selecting again.');
+$classTemp = '/sys/class/hwmon/hwmon2/temp1_input';
+$html = $render(['controller' => $pwms[0]['sensor'], 'cpu_enable' => '1', 'cpu_sensor' => $classTemp, 'aux_enable' => '1', 'aux_sensor' => $classTemp]);
+$check(substr_count($html, "Select again: $classTemp (saved by hwmon number)") === 2, 'CPU and aux sensors saved by hwmon number must ask to be selected again.');
 
 // Blanked controllers (unresolved, or a conflict loser) show their identity
 // only when that device is absent.

@@ -141,6 +141,13 @@ function fcp_sensor_missing(string $sensor): bool {
   return !str_starts_with($sensor, '/') || find_moved_pwm_path($sensor) === null;
 }
 
+// The option text for a saved sensor the page did not list. One saved by its
+// hwmon number is never read again, so it asks to be selected again.
+function fcp_saved_sensor_text(string $sensor): string {
+  if (fcp_class_hwmon_path($sensor)) return "Select again: $sensor (saved by hwmon number)";
+  return (fcp_sensor_missing($sensor) ? 'Not detected: ' : '') . $sensor;
+}
+
 function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $aux_sensors = []) {
   $curve_error = '';
   try { $curve_rules = fcp_curve_rules($cfg); }
@@ -358,7 +365,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
               <?php endforeach; ?>
               <?php if (($cfg['cpu_sensor'] ?? '') !== '' && !array_key_exists($cfg['cpu_sensor'], $cpu_sensors)): ?>
                 <?php $cpu_gone = fcp_sensor_missing($cfg['cpu_sensor']); ?>
-                <option value="<?=htmlspecialchars($cfg['cpu_sensor'])?>" <?=$cpu_gone ? 'data-missing="CPU sensor"' : ''?> selected><?=$cpu_gone ? 'Not detected: ' : ''?><?=htmlspecialchars($cfg['cpu_sensor'])?></option>
+                <option value="<?=htmlspecialchars($cfg['cpu_sensor'])?>" <?=$cpu_gone ? 'data-missing="CPU sensor"' : ''?> selected><?=htmlspecialchars(fcp_saved_sensor_text($cfg['cpu_sensor']))?></option>
               <?php endif; ?>
             </select>
           </td>
@@ -402,7 +409,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
               <?php if ($aux_missing): ?>
                 <optgroup label="Saved, not listed">
                   <?php foreach ($aux_missing as $path): ?>
-                    <option value="<?=htmlspecialchars($path)?>" <?=fcp_sensor_missing($path) ? 'data-missing="auxiliary sensor"' : ''?> selected><?=htmlspecialchars($path)?></option>
+                    <option value="<?=htmlspecialchars($path)?>" <?=fcp_sensor_missing($path) ? 'data-missing="auxiliary sensor"' : ''?> selected><?=htmlspecialchars(fcp_saved_sensor_text($path))?></option>
                   <?php endforeach; ?>
                 </optgroup>
               <?php endif; ?>
