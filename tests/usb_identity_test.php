@@ -151,6 +151,18 @@ migrate_cfg_and_labels('fanctrlplus2', $hubCfg, "$hwmon/hwmon*");
 $check(parse_ini_file("$hubCfg/fanctrlplus2_zwin.cfg")['controller'] === $hub && parse_ini_file("$hubCfg/fanctrlplus2_alose.cfg")['controller'] === '',
     'A fan saved by USB serial must keep its hub over a blanked loser naming its hwmon number.');
 
+// Devices no class path names migrate as before the update: an owner blanked
+// while its serial was ambiguous, sorting first, recovers its hub from a loser
+// still holding the hub's stale path.
+$own = $device('9-8', 'hwmon78', 'OWNSERIAL');
+$ownCfg = "$root/owncfg";
+mkdir($ownCfg);
+$ownId = fcp_pwm_identity($own);
+file_put_contents("$ownCfg/fanctrlplus2_aown.cfg", "custom=\"aown\"\ncontroller=\"\"\ncontroller_identity=\"$ownId\"\n");
+file_put_contents("$ownCfg/fanctrlplus2_zlose.cfg", "custom=\"zlose\"\ncontroller=\"".str_replace('F001.0008', 'F001.0003', $own)."\"\ncontroller_identity=\"$ownId\"\n");
+migrate_cfg_and_labels('fanctrlplus2', $ownCfg, "$hwmon/hwmon*");
+$check(parse_ini_file("$ownCfg/fanctrlplus2_aown.cfg")['controller'] === $own, 'An owner blanked by an ambiguous serial must recover its hub as before the update.');
+
 exec('rm -rf '.escapeshellarg($root));
 if ($failures) { fwrite(STDERR, implode("\n", $failures)."\n"); exit(1); }
 echo "USB serial identity tests passed\n";

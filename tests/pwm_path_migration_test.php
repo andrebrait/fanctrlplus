@@ -255,19 +255,6 @@ file_put_contents("$noflag/fanctrlplus2_x.cfg", "custom=\"x\"\ncontroller=\"$cla
 migrate_cfg_and_labels('fanctrlplus2', $noflag, "$class/hwmon*");
 $got = parse_ini_file("$noflag/fanctrlplus2_x.cfg")['controller'];
 if ($got !== "$class/hwmon2/pwm2") $failures[] = "Without a writable flag, nothing may be converted by number, got $got";
-// After the first run too, a fan whose chip moved keeps it over a loser
-// 2026.11.12 blanked on the same device, whatever the file order.
-$later = "$root/later";
-@mkdir($later);
-touch("$later/.hwmon_numbers_converted");
-@mkdir("$sys/devices/platform/it87.9999/hwmon/hwmon5", 0777, true);
-touch("$sys/devices/platform/it87.9999/hwmon/hwmon5/pwm1");
-$oldDev = "$sys/devices/platform/it87.9999/hwmon/hwmon4/pwm1";
-file_put_contents("$later/fanctrlplus2_alose.cfg", "custom=\"alose\"\ncontroller=\"\"\ncontroller_identity=\"$oldDev\"\n");
-file_put_contents("$later/fanctrlplus2_zwin.cfg", "custom=\"zwin\"\ncontroller=\"$oldDev\"\n");
-migrate_cfg_and_labels('fanctrlplus2', $later, "$class/hwmon*");
-$w = parse_ini_file("$later/fanctrlplus2_zwin.cfg")['controller']; $l = parse_ini_file("$later/fanctrlplus2_alose.cfg")['controller'];
-if ($w !== "$sys/devices/platform/it87.9999/hwmon/hwmon5/pwm1" || $l !== '') $failures[] = "A moved fan must keep its device over a blanked loser on later runs, got zwin=$w alose=$l";
 // Anything at the flag path, even a directory, means the conversion ran.
 $dirflag = "$root/dirflag";
 @mkdir("$dirflag/.hwmon_numbers_converted", 0777, true);

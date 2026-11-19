@@ -207,22 +207,31 @@ function migrate_cfg_and_labels(string $plugin, string $cfgpath = '', string $hw
         if (!$ini) continue;
         $configs[$cfgfile] = $ini;
         $path = (string)($ini['controller'] ?? '');
-        $identity = (string)($ini['controller_identity'] ?? '');
-        $source = $identity !== '' ? $identity : $path;
+        $source = fcp_controller_source($ini);
         $resolved = strpos($source, 'usb:') === 0 ? ($identities[$source] ?? null) : (is_file($source) ? $source : null);
         // Already-current manual assignments win over stale migrated ones.
         if ($resolved === $path && $path !== '' && !isset($in_use[$path])) $in_use[$path] = $cfgfile;
     }
-    // Then fans still saved on a device claim it: first those whose saved
-    // device moved (it names a device), then, on the first run, those saved on
-    // a class path (it names a number). Blanked losers claim nothing here, so
-    // file order cannot hand them a fan's device.
-    foreach ([false, true] as $by_class) foreach ($configs as $cfgfile => $ini) {
-        if ((string)($ini['controller'] ?? '') === '') continue;
-        $source = fcp_controller_source($ini);
-        if (fcp_class_hwmon_path($source) !== $by_class || !preg_match('#^usb:|/pwm\d+$#', $source)) continue;
-        $device = fcp_controller_target($source, $identities, $by_number);
-        if ($device !== null) $in_use[$device] ??= $cfgfile;
+    // Then, on the first run, a device some class path names (a number) goes
+    // to a fan saved on it: first one whose saved device moved there (it names
+    // a device), then one saved on that class path. Blanked losers claim
+    // nothing, so file order cannot hand them a fan's device. Devices no class
+    // path names are left to the migration below, as on later runs.
+    if ($by_number) {
+        $target = [];
+        foreach ($configs as $cfgfile => $ini) {
+            $source = fcp_controller_source($ini);
+            if (preg_match('#^usb:|/pwm\d+$#', $source)) $target[$cfgfile] = fcp_controller_target($source, $identities, true);
+        }
+        $named = [];
+        foreach ($target as $cfgfile => $device) {
+            if ($device !== null && fcp_class_hwmon_path(fcp_controller_source($configs[$cfgfile]))) $named[$device] = true;
+        }
+        foreach ([false, true] as $by_class) foreach ($target as $cfgfile => $device) {
+            $ini = $configs[$cfgfile];
+            if ($device === null || !isset($named[$device]) || (string)($ini['controller'] ?? '') === '') continue;
+            if (fcp_class_hwmon_path(fcp_controller_source($ini)) === $by_class) $in_use[$device] ??= $cfgfile;
+        }
     }
     foreach ($configs as $cfgfile => $ini) {
         $original = $ini;
