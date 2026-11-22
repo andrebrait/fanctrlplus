@@ -35,7 +35,7 @@ header('Cache-Control: no-store, max-age=0');
 $op = $_GET['op'] ?? $_POST['op'] ?? '';
 
 // Serialize restore/export with every HTTP writer of these configuration files.
-if (in_array($op, ['savelabel','newtemp','delete','setsyslog','setnotify','saveorder','start','stop','fcp_airflow_toggle','fcp_history_toggle'], true)) {
+if (in_array($op, ['savelabel','newtemp','delete','setsyslog','setnotify','setfooter','saveorder','start','stop','fcp_airflow_toggle','fcp_history_toggle'], true)) {
   try { $config_lock = fcp_config_lock($cfg_dir); }
   catch (Throwable $error) { http_response_code(500); json_response(['status'=>'error','message'=>$error->getMessage()]); }
   register_shutdown_function(function () use ($config_lock) {

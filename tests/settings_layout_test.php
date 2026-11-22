@@ -73,6 +73,9 @@ $logic = file_get_contents($sourceRoot . '/include/FanctrlLogic.php');
 if (!preg_match("/case 'setfooter':\s*\\\$key = substr\(\\\$op, 3\);/", $logic)) {
   $failures[] = 'FanctrlLogic.php must save the Footer switch under the footer key.';
 }
+if (!str_contains($logic, "'setnotify','setfooter','saveorder'")) {
+  $failures[] = 'setfooter must hold the configuration lock, like the other switches.';
+}
 $footerPage = file_get_contents($sourceRoot . '/FanctrlPlus2Footer.page');
 $endpoint = file_get_contents($sourceRoot . '/Fanctrl2Dashboard.php');
 if (!str_contains($footerPage, 'Menu="Buttons"') || !str_contains($footerPage, "showFooter(\$footer, 'fcp-footer')")
