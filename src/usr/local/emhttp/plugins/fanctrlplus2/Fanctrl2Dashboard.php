@@ -64,7 +64,8 @@ foreach (glob("$cfg_path/{$plugin}_*.cfg") as $file) {
     'temp_origin' => $temp_origin,
     'rpm_val'     => $rpm_val,
     'percent'     => $pct_val,
-    'status'      => $status
+    'status'      => $status,
+    'footer'      => ($cfg['footer'] ?? '0') === '1'
   ];
 }
 

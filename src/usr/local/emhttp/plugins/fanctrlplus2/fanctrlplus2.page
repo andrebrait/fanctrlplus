@@ -1282,8 +1282,9 @@ $(function() {
     $area.find('.switch-button-button').css('left', checked ? '12px' : '-1px');
 
     // Persist the relevant switch.
-    if ($input.hasClass('syslog-switch') || $input.hasClass('notify-switch')) {
-      saveFanSwitchState($input.hasClass('syslog-switch') ? 'setsyslog' : 'setnotify', $input.data('cfg'), checked);
+    var fanKey = ['syslog', 'notify', 'footer'].find(function(k) { return $input.hasClass(k + '-switch'); });
+    if (fanKey) {
+      saveFanSwitchState('set' + fanKey, $input.data('cfg'), checked);
     } else if ($input.hasClass('fcp-airflow-switch')) {
       saveAirflowSwitchState(checked);
     } else if ($input.hasClass('fcp-history-switch')) {
@@ -1292,7 +1293,7 @@ $(function() {
   });
 
   // Shared change handler for the per-fan and FCP Airflow/History switches.
-  $(document).on('change', '.syslog-switch, .notify-switch, .fcp-airflow-switch, .fcp-history-switch', function() {
+  $(document).on('change', '.syslog-switch, .notify-switch, .footer-switch, .fcp-airflow-switch, .fcp-history-switch', function() {
     var checked = $(this).prop('checked');
     var $area = $(this).closest('.switch-area');
 
@@ -1841,7 +1842,7 @@ $(function() {
 
     <p><strong>Identify PWM Controller:</strong> Use this tool to help locate which physical fan is linked to each PWM controller. After identification, adding a custom label makes it easier to recognize and configure later.</p>
 
-    <p><strong>Syslog &amp; Alerts:</strong> Enable or disable syslog logging for each fan individually. When enabled, changes in temperature and fan speed will be recorded in the system log. If a fan setup is already stable or updates too frequently, you can turn off its logging to reduce clutter. Problem alerts send Unraid notifications when a fan has a problem; turn them off for a fan whose controller raises false alarms.</p>
+    <p><strong>Syslog &amp; Alerts:</strong> Enable or disable syslog logging for each fan individually. When enabled, changes in temperature and fan speed will be recorded in the system log. If a fan setup is already stable or updates too frequently, you can turn off its logging to reduce clutter. Problem alerts send Unraid notifications when a fan has a problem; turn them off for a fan whose controller raises false alarms. Footer shows the fan's speed and PWM percentage in the status bar at the bottom of every page; it is off by default.</p>
 
     <p><strong>Notes:</strong></p>
     <ul>
@@ -2075,6 +2076,7 @@ $(function() {
           <p>This helps you track fan behavior in real time. However, if a particular fan changes frequently and generates too many log entries, you can <strong>disable logging</strong> for that fan.</p>
           <p><strong>Note:</strong> The plugin only writes to syslog when the <strong>PWM value changes by more than 5</strong> compared to the previous value — small changes are ignored to reduce log noise.</p>
           <p><strong>Problem Alerts</strong> are also <strong>enabled by default</strong>. Fan control keeps running either way; the alerts only send Unraid notifications. A fan gets one warning when, for at least 30 seconds, its PWM controller has disappeared, the BIOS or another program has taken it over, its controller reports a speed 10 or more percentage points away from the one set, or it reports 0 RPM while set above 40% after spinning earlier. A fan whose controller is missing when fan control starts, and a configured sensor without a reading for 60 seconds, also warn. Once the problem has stayed away for 30 seconds, a notice says so. Turn the alerts off for a fan whose controller raises false alarms, such as one with only a few speed steps.</p>
+          <p><strong>Footer</strong> is <strong>disabled by default</strong>. When on, the fan's speed and PWM percentage appear in the status bar at the bottom of every Unraid page, for example <code>1539 rpm (63%)</code>. Hover over a value to see the fan's name.</p>
           <p>When RPM has changed in the requested direction at least 30 seconds after a substantial speed change, a PWM mismatch warning includes that observation. It suggests that the fan may have responded despite the reported PWM; it does not prove which controller changed the fan.</p>
         </blockquote>
       </div>
@@ -2087,6 +2089,7 @@ $(function() {
                 <th class="name">Configured Fan</th>
                 <th class="switch">Syslog</th>
                 <th class="switch">Problem Alerts</th>
+                <th class="switch" title="Display on footer">Footer</th>
               </tr>
             </thead>
             <tbody>
@@ -2100,8 +2103,8 @@ $(function() {
               ?>
               <tr class="sortable" id="syslog-row-<?= $custom_id ?>">
                 <td class="name"><?= htmlspecialchars($cfg['custom']) ?></td>
-                <?php foreach (['syslog', 'notify'] as $switch):
-                  $is_on = ($cfg[$switch] ?? "1") != "0";
+                <?php foreach (['syslog' => '1', 'notify' => '1', 'footer' => '0'] as $switch => $default):
+                  $is_on = ($cfg[$switch] ?? $default) != "0";
                   $switch_id = "$switch-switch-" . htmlspecialchars($cfg['custom']);
                 ?>
                 <td class="switch">

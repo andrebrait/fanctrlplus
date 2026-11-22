@@ -271,10 +271,12 @@ switch ($op) {
     echo render_disk_group_row($fan_index, $group_index, $empty_group, $disks);
     exit;
 
-  // Per-fan switches: Syslog, and Problem Alerts (read by the loop on each alert).
+  // Per-fan switches: Syslog, Problem Alerts (read by the loop on each alert),
+  // and Footer (read by FanctrlPlus2Footer.page).
   case 'setsyslog':
   case 'setnotify':
-      $key = $op === 'setsyslog' ? 'syslog' : 'notify';
+  case 'setfooter':
+      $key = substr($op, 3);
       $cfg_file = basename($_POST['cfg']);
       $enabled = isset($_POST['enabled']) && $_POST['enabled'] == 1 ? 1 : 0;
 
