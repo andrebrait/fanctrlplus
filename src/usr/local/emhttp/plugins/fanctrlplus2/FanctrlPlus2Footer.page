@@ -7,7 +7,7 @@ Link="nav-user"
 // Pages load the script only while at least one fan has the switch on.
 $fcp_footer = false;
 foreach (glob('/boot/config/plugins/fanctrlplus2/fanctrlplus2_*.cfg') ?: [] as $fcp_footer_cfg) {
-  if (((@parse_ini_file($fcp_footer_cfg) ?: [])['footer'] ?? '0') === '1') {
+  if (((@parse_ini_file($fcp_footer_cfg) ?: [])['footer'] ?? '0') !== '0') {
     $fcp_footer = true;
     break;
   }

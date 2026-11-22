@@ -64,6 +64,22 @@ if (!preg_match('/\.fcp-history-switch\s*\{\s*display:\s*none/', $css)) {
   $failures[] = 'The raw History checkbox must be hidden (slider is the visible control).';
 }
 
+// The per-fan Footer switch (#45): off by default, saved by its own op, and
+// read by the footer page and the endpoint it polls.
+if (!str_contains($page, "'footer' => '0'") || !str_contains($page, "['syslog', 'notify', 'footer'].find(")) {
+  $failures[] = 'The Footer switch must default to off and save through its own op.';
+}
+$logic = file_get_contents($sourceRoot . '/include/FanctrlLogic.php');
+if (!preg_match("/case 'setfooter':\s*\\\$key = substr\(\\\$op, 3\);/", $logic)) {
+  $failures[] = 'FanctrlLogic.php must save the Footer switch under the footer key.';
+}
+$footerPage = file_get_contents($sourceRoot . '/FanctrlPlus2Footer.page');
+$endpoint = file_get_contents($sourceRoot . '/Fanctrl2Dashboard.php');
+if (!str_contains($footerPage, 'Menu="Buttons"') || !str_contains($footerPage, "showFooter(\$footer, 'fcp-footer')")
+    || !str_contains($endpoint, "'footer'      => (\$cfg['footer'] ?? '0') !== '0'")) {
+  $failures[] = 'The footer page must show the fans the endpoint flags with their Footer switch on.';
+}
+
 if ($failures) {
   fwrite(STDERR, implode("\n", $failures) . "\n");
   exit(1);
