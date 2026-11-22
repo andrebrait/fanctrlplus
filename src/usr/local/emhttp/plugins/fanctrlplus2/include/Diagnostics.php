@@ -8,7 +8,7 @@ const FCP_DIAG_MAX_EVENTS = 1000;
 
 // Numeric cfg settings that may be reported, with the range each may take.
 const FCP_DIAG_SETTINGS = [
-    'service'=>[0,1], 'syslog'=>[0,1], 'notify'=>[0,1], 'log_enable'=>[0,1], 'cpu_enable'=>[0,1], 'aux_enable'=>[0,1],
+    'service'=>[0,1], 'syslog'=>[0,1], 'notify'=>[0,1], 'footer'=>[0,1], 'log_enable'=>[0,1], 'cpu_enable'=>[0,1], 'aux_enable'=>[0,1],
     'pwm'=>[0,255], 'max'=>[0,255], 'idle'=>[0,255], 'idle_percent'=>[0,100],
     'low'=>[-100,300], 'high'=>[-100,300], 'cpu_min_temp'=>[-100,300], 'cpu_max_temp'=>[-100,300],
     'aux_min_temp'=>[-100,300], 'aux_max_temp'=>[-100,300],

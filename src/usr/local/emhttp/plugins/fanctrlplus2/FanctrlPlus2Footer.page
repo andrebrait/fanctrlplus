@@ -16,9 +16,12 @@ foreach (glob('/boot/config/plugins/fanctrlplus2/fanctrlplus2_*.cfg') ?: [] as $
 <?if ($fcp_footer):?>
 <script>
 $(function fcpFooter() {
+  var shown = true;
   $.getJSON('/plugins/fanctrlplus2/Fanctrl2Dashboard.php', function(data) {
     var $footer = $("<span id='fcp-footer' style='margin-right:24px'></span>");
-    (data.fans || []).filter(function(f) { return f.footer; }).forEach(function(f) {
+    var fans = (data.fans || []).filter(function(f) { return f.footer; });
+    shown = fans.length > 0;
+    fans.forEach(function(f) {
       var rpm = /^\d+$/.test(f.rpm_val) ? f.rpm_val : '⋅⋅⋅';
       var pct = typeof f.percent === 'number' ? ' (' + f.percent + '%)' : '';
       $('<span>').attr('title', f.label)
@@ -26,7 +29,10 @@ $(function fcpFooter() {
         .appendTo($footer);
     });
     showFooter($footer, 'fcp-footer');
-  }).always(function() { setTimeout(fcpFooter, 5000); });
+  }).always(function() {
+    // Every Footer switch turned off: stop polling until the next page load.
+    if (shown) setTimeout(fcpFooter, 5000);
+  });
 });
 </script>
 <?endif;?>
