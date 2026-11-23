@@ -31,7 +31,12 @@ $(function fcpFooter() {
     // showFooter() removes and prepends, so entries that other plugins also
     // refresh with it would keep swapping places. Prepend once, then update in place.
     var $old = $('#fcp-footer');
-    if ($old.length) $old.replaceWith($footer); else showFooter($footer, 'fcp-footer');
+    if (!shown) $old.remove();
+    else if ($old.length) $old.replaceWith($footer);
+    else showFooter($footer, 'fcp-footer');
+  }).fail(function() {
+    // No reading: show nothing rather than old values as if they were live.
+    $('#fcp-footer').remove();
   }).always(function() {
     // Every Footer switch turned off: stop polling until the next page load.
     if (shown) setTimeout(fcpFooter, 5000);
