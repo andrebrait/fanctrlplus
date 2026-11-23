@@ -283,6 +283,10 @@ $saved = $bindingSave(['cpu_sensor' => $cpuPath, 'aux_sensor' => 'storcli:c0:roc
 $check(($saved['cpu_sensor'] ?? '') === $cpuPath && ($saved['aux_sensor'] ?? '') === 'storcli:c0:roc', 'Disabled sources must keep their saved sensors.');
 $saved = $bindingSave(['aux_sensor' => 'storcli:c0:roc'], function (&$post) { $post['aux_enable'][0] = '1'; });
 $check(($saved['aux_sensor'] ?? null) === '', 'An enabled aux source with nothing selected must save no sensor.');
+$saved = $bindingSave(['footer' => '1'], function (&$post) {});
+$check(($saved['footer'] ?? '') === '1', 'Saving must keep the Footer switch, which is set outside the form.');
+$saved = $bindingSave([], function (&$post) {});
+$check(($saved['footer'] ?? '') === '0', 'The Footer switch must default to off.');
 $write('fanctrlplus2_Raw.cfg', $rawLegacy);
 
 $write('fanctrlplus2_JBOD.cfg', $legacyFan);

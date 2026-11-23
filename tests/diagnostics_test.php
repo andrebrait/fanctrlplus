@@ -56,6 +56,7 @@ disk_group_0_emergency_temp="55"
 disk_group_0_emergency_pwm="255"
 syslog="1"
 notify="1"
+footer="1"
 cpu_enable="1"
 cpu_sensor="/sys/devices/platform/coretemp.0/hwmon/hwmon2/temp1_input"
 cpu_curve="40:80,70:200"
@@ -165,8 +166,8 @@ $check($manifest['format'] === 'fanctrlplus2-diagnostics' && $manifest['version'
 $check(count($fans['fans']) === 3 && $fans['custom_sensor_scripts'] === 2 && $fans['skipped_configs'] === 2, 'Badly named files must not prevent diagnostics and must be counted.');
 [$broken, $legacy, $secret] = $fans['fans'];
 $check($broken === ['index'=>0, 'parsed'=>false], 'A configuration that fails to parse must be reported as unparsed and nothing else.');
-$check($same(array_intersect_key($secret, array_flip(['service','pwm','max','idle','interval_sec','disk_group_count','syslog','notify','cpu_enable','aux_enable'])),
-    ['service'=>1, 'pwm'=>102, 'max'=>255, 'idle'=>30, 'interval_sec'=>60, 'disk_group_count'=>1, 'syslog'=>1, 'notify'=>1, 'cpu_enable'=>1, 'aux_enable'=>1]), 'Numeric fan settings must be reported.');
+$check($same(array_intersect_key($secret, array_flip(['service','pwm','max','idle','interval_sec','disk_group_count','syslog','notify','footer','cpu_enable','aux_enable'])),
+    ['service'=>1, 'pwm'=>102, 'max'=>255, 'idle'=>30, 'interval_sec'=>60, 'disk_group_count'=>1, 'syslog'=>1, 'notify'=>1, 'footer'=>1, 'cpu_enable'=>1, 'aux_enable'=>1]), 'Numeric fan settings must be reported.');
 $check($secret['disk_groups'] === [['disks'=>2]] && !array_key_exists('disks', $secret), 'Disks are counted per group, never identified.');
 $check($secret['cpu_sensor_configured'] === true
     && $secret['aux_sensors'] === ['hwmon'=>1, 'custom'=>2, 'storcli'=>0, 'nvidia'=>1, 'mlx'=>0, 'other'=>0]

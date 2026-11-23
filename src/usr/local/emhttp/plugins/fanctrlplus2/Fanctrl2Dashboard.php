@@ -19,7 +19,13 @@ if (isset($_GET['op']) && $_GET['op'] === 'refresh' && is_string($_GET['custom']
     exit;
 }
 
-foreach (glob("$cfg_path/{$plugin}_*.cfg") as $file) {
+// The settings page's order, so the footer lists fans the same way.
+require_once __DIR__.'/include/OrderManager.php';
+$rank = array_flip(OrderManager::readOrder());
+$files = glob("$cfg_path/{$plugin}_*.cfg") ?: [];
+usort($files, fn($a, $b) => ($rank[basename($a)] ?? PHP_INT_MAX) <=> ($rank[basename($b)] ?? PHP_INT_MAX));
+
+foreach ($files as $file) {
   $cfg = parse_ini_file($file);
   $custom = $cfg['custom'] ?? basename($file, '.cfg');
   $label = $custom;
@@ -64,7 +70,8 @@ foreach (glob("$cfg_path/{$plugin}_*.cfg") as $file) {
     'temp_origin' => $temp_origin,
     'rpm_val'     => $rpm_val,
     'percent'     => $pct_val,
-    'status'      => $status
+    'status'      => $status,
+    'footer'      => ($cfg['footer'] ?? '0') !== '0'
   ];
 }
 

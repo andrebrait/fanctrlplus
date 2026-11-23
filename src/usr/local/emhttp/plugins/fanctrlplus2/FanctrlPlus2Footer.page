@@ -1,0 +1,46 @@
+Menu="Buttons"
+Link="nav-user"
+---
+<?php
+// Show the speed and PWM of each fan whose Footer switch is on in the status
+// bar at the bottom of every page, like Dynamix System Temperature does (#45).
+// Pages load the script only while at least one fan has the switch on.
+$fcp_footer = false;
+foreach (glob('/boot/config/plugins/fanctrlplus2/fanctrlplus2_*.cfg') ?: [] as $fcp_footer_cfg) {
+  if (((@parse_ini_file($fcp_footer_cfg) ?: [])['footer'] ?? '0') !== '0') {
+    $fcp_footer = true;
+    break;
+  }
+}
+?>
+<?if ($fcp_footer):?>
+<script>
+$(function fcpFooter() {
+  var shown = true;
+  $.getJSON('/plugins/fanctrlplus2/Fanctrl2Dashboard.php', function(data) {
+    var $footer = $("<span id='fcp-footer' style='margin-right:24px'></span>");
+    var fans = (data.fans || []).filter(function(f) { return f.footer; });
+    shown = fans.length > 0;
+    fans.forEach(function(f) {
+      var rpm = /^\d+$/.test(f.rpm_val) ? f.rpm_val : '⋅⋅⋅';
+      var pct = typeof f.percent === 'number' ? ' (' + f.percent + '%)' : '';
+      $('<span>').attr('title', f.label)
+        .append("<i class='fa fa-flag-o' style='margin:0 6px 0 24px'></i>", document.createTextNode(rpm + ' rpm' + pct))
+        .appendTo($footer);
+    });
+    // showFooter() removes and prepends, so entries that other plugins also
+    // refresh with it would keep swapping places. Prepend once, then update in place.
+    var $old = $('#fcp-footer');
+    if (!shown) $old.remove();
+    else if ($old.length) $old.replaceWith($footer);
+    else showFooter($footer, 'fcp-footer');
+  }).fail(function() {
+    // No reading: show nothing rather than old values as if they were live.
+    $('#fcp-footer').remove();
+  }).always(function() {
+    // Every Footer switch turned off: stop polling until the next page load.
+    if (shown) setTimeout(fcpFooter, 5000);
+  });
+});
+</script>
+<?endif;?>
