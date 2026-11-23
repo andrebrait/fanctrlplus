@@ -82,6 +82,10 @@ if (!str_contains($footerPage, 'Menu="Buttons"') || !str_contains($footerPage, "
     || !str_contains($endpoint, "'footer'      => (\$cfg['footer'] ?? '0') !== '0'")) {
   $failures[] = 'The footer page must show the fans the endpoint flags with their Footer switch on.';
 }
+// showFooter() re-prepends; calling it on every poll swaps places with other footer entries.
+if (!str_contains($footerPage, 'else if ($old.length) $old.replaceWith($footer);')) {
+  $failures[] = 'The footer entry must be updated in place after it is first shown.';
+}
 
 if ($failures) {
   fwrite(STDERR, implode("\n", $failures) . "\n");
