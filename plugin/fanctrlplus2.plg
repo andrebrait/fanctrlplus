@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="2026.11.19"
+  version="2026.11.23"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,17 @@
 
 <CHANGES>
 <![CDATA[
+### 2026.11.23
+
+## Fan speeds in the status bar
+
+A new Footer switch for each fan, under Syslog & Alerts, shows that fan's speed and PWM percentage in the status bar at the bottom of every Unraid page, for example `1539 rpm (63%)`. Hover over a value to see the fan's name. The switch is off by default, and a change shows from the next page load.
+
+Dynamix System Temperature shows a fan's PWM percentage only when Dynamix Auto Fan is installed, and Auto Fan should not run alongside FanCtrl Plus 2, because both would drive the same PWM controllers. With this switch you can remove Auto Fan and still see fan speeds and percentages in the footer (#45).
+
+This is software-based fan control, not independent thermal protection. Monitor actual fan speeds and temperatures. Back up your settings before updating. If rolling back, reinstall the older plugin manifest and restore your backup; do not uninstall, because uninstalling deletes the configuration.
+
+
 ### 2026.11.19
 
 ## Fan control starts once every plugin has installed
@@ -42,16 +53,6 @@ The fan curve tooltip now names the disk group, as the current-reading marker al
 
 This is software-based fan control, not independent thermal protection. Monitor actual fan speeds and temperatures. Back up your settings before updating. If rolling back, reinstall the older plugin manifest and restore your backup; do not uninstall, because uninstalling deletes the configuration.
 
-
-### 2026.11.10z
-
-## Fan alerts and support diagnostics
-
-Fan speed mismatch warnings now restart their waiting period when the requested PWM changes, reducing false warnings while a controller or fan catches up. The controller's readback must differ from the requested speed by 10 or more percentage points, including for MSI nct6687 system-fan warnings. When a substantial fan RPM response is observed, a warning can include it as supporting evidence; this does not prove which controller changed the fan. Other problem alerts remain active.
-
-A new "Download diagnostics" button in General Settings creates a ZIP containing anonymized fan settings, hardware readings, and structured fan-control events. It excludes raw logs, disk identifiers, fan and sensor names, and custom sensor scripts. Hardware characteristics can still identify a machine, so review the archive before sharing it.
-
-This is software-based fan control, not independent thermal protection. Monitor actual fan speeds and temperatures. Back up your settings before updating. If rolling back, reinstall the older plugin manifest and restore your backup; do not uninstall, because uninstalling deletes the configuration.
 
 
 For older releases, see https://github.com/andrebrait/fanctrlplus/releases
@@ -105,16 +106,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.19-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/2026.11.19/fanctrlplus2-2026.11.19-noarch-1.txz</URL>
-<SHA256>1ec7829e15c3d863443c09ed5903b45a3f2eb17470e9b289e9f2379bbef153a4</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.23-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/2026.11.23/fanctrlplus2-2026.11.23-noarch-1.txz</URL>
+<SHA256>672764b3ccc4db33c5f454a5014ee9534c4fedccffa4bc21d46a28c73f1d4478</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.19-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.23-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -137,7 +138,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 2026.11.19"
+echo " Version: 2026.11.23"
 echo "------------------------------------------------"
 echo ""
 exit 0
