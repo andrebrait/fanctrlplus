@@ -28,7 +28,10 @@ $(function fcpFooter() {
         .append("<i class='fa fa-flag-o' style='margin:0 6px 0 24px'></i>", document.createTextNode(rpm + ' rpm' + pct))
         .appendTo($footer);
     });
-    showFooter($footer, 'fcp-footer');
+    // showFooter() removes and prepends, so entries that other plugins also
+    // refresh with it would keep swapping places. Prepend once, then update in place.
+    var $old = $('#fcp-footer');
+    if ($old.length) $old.replaceWith($footer); else showFooter($footer, 'fcp-footer');
   }).always(function() {
     // Every Footer switch turned off: stop polling until the next page load.
     if (shown) setTimeout(fcpFooter, 5000);
