@@ -100,13 +100,15 @@ function fcp_backup_assignments(string $text): array {
 
 function fcp_validate_fan_config(string $text): array {
     $values = fcp_backup_assignments($text);
-    $boolean = ['service','syslog','notify','footer','log_enable','cpu_enable','aux_enable'];
+    $boolean = ['syslog','notify','footer','log_enable','cpu_enable','aux_enable'];
     $numeric = ['pwm','max','idle','idle_percent','low','high','interval','interval_sec','disk_group_count','cpu_min_temp','cpu_max_temp','aux_min_temp','aux_max_temp'];
     $string = ['custom','label','controller','controller_identity','fan','disks','cpu_sensor','aux_sensor'];
     foreach ($values as $key=>$value) {
         $group = preg_match('/^disk_group_(\d+)_(name|disks|low|high)$/D', $key, $m);
         if ($group && (strlen($m[1]) > 3 || (int)$m[1] > 255)) throw new InvalidArgumentException('Too many disk groups.');
-        if (in_array($key, $boolean, true)) {
+        if ($key === 'service') {
+            if (!in_array($value, ['0','1','2'], true)) throw new InvalidArgumentException('Invalid fan control setting.');
+        } elseif (in_array($key, $boolean, true)) {
             if ($value !== '0' && $value !== '1') throw new InvalidArgumentException('Invalid configuration switch.');
         } elseif (fcp_curve_prefix($key) !== null) {
             continue; // Curve settings are checked as a set once every key is known.

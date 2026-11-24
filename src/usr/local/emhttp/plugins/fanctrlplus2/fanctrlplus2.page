@@ -156,6 +156,7 @@ function fcp_labels_flag_enabled(string $cfg_dir, string $flag): bool {
 
 $fcp_airflow_enabled = fcp_labels_flag_enabled($cfg_dir, '__FCP_AIRFLOW__');
 $fcp_history_enabled = fcp_labels_flag_enabled($cfg_dir, '__FCP_HISTORY__');
+$fcp_footer_names_enabled = fcp_labels_flag_enabled($cfg_dir, '__FCP_FOOTER_NAMES__');
 flock($page_config_lock, LOCK_UN);
 fclose($page_config_lock);
 $cpu_sensors = detect_cpu_sensors();
@@ -380,7 +381,7 @@ $(function() {
         if (!cfgFile) return;
         const matchedKey = Object.keys(statusMap).find(k => k.toLowerCase() === cfgFile.toLowerCase());
         const status = matchedKey ? statusMap[matchedKey] : 'stopped';
-        const isRunning = status === 'running';
+        const isRunning = status === 'running' || status === 'monitoring';
 
         const fanSvg = block.find('svg')[0];
         if (!fanSvg) return;
@@ -414,9 +415,11 @@ $(function() {
             ? ` (based on ${sources.join(" and ")} temperature)`
             : '';
 
-          container.title = `Fan control: ${isRunning
-            ? `Active${sourceText}`
-            : 'Inactive (not automatically controlled)'}`;
+          container.title = status === 'monitoring'
+            ? 'Monitor only: the BIOS controls this fan'
+            : `Fan control: ${isRunning
+              ? `Active${sourceText}`
+              : 'Inactive (not automatically controlled)'}`;
         }
       });
     }).fail(function (jqXHR, textStatus, errorThrown) {
@@ -1164,6 +1167,8 @@ $(function() {
 
     const namesSeen = new Set();
     let duplicateFound = false;
+    // A rejected block shows its fan control settings even when Monitor only hides them.
+    $('.fan-block').removeClass('fcp-invalid');
 
     $('.custom-name-input').each(function() {
       const block = $(this).closest('.fan-block');
@@ -1207,6 +1212,7 @@ $(function() {
       if (!/^\d+$/.test(interval) || parseInt(interval) <= 0) {
         valid = false;
         errorMsg = 'Interval cannot be empty or 0 (recommended: 60–300 sec).';
+        block.addClass('fcp-invalid');
         return false;
       } 
     });
@@ -1218,15 +1224,16 @@ $(function() {
       const name = block.find('.custom-name-input').val() || `#${$(this).index() + 1}`;
       let curveRules;
       try { curveRules = FcpCurves.rules(block[0]); }
-      catch (error) { alert(error.message); rangeValid = false; return false; }
+      catch (error) { block.addClass('fcp-invalid'); alert(error.message); rangeValid = false; return false; }
       const curveError = Object.values(curveRules).map(FcpCurves.validate).find(Boolean);
-      if (curveError) { alert(`Fan configuration "${name}": ${curveError}`); rangeValid = false; return false; }
+      if (curveError) { block.addClass('fcp-invalid'); alert(`Fan configuration "${name}": ${curveError}`); rangeValid = false; return false; }
       FcpCurves.sync(block[0], curveRules);
       const pwmMin = FcpCurves.floor(block[0], curveRules);
       const pwmMax = FcpCurves.inputPwm(block.find('input[name^="max_percent["]')[0]);
       const idlePwm = FcpCurves.inputPwm(block.find('input[name^="idle_percent["]')[0]);
 
       if (idlePwm > Math.min(pwmMin, pwmMax)) {
+        block.addClass('fcp-invalid');
         alert(`Fan configuration "${name}": Idle Speed cannot exceed the normal cap or the first point of a disk curve or enabled CPU/Aux rule.`);
         rangeValid = false; return false;
       }
@@ -1289,11 +1296,13 @@ $(function() {
       saveAirflowSwitchState(checked);
     } else if ($input.hasClass('fcp-history-switch')) {
       saveHistorySwitchState(checked);
+    } else if ($input.hasClass('fcp-footer-names-switch')) {
+      $.post('/plugins/fanctrlplus2/include/FanctrlLogic.php', {op: 'fcp_footer_names_toggle', enabled: checked ? 1 : 0});
     }
   });
 
   // Shared change handler for the per-fan and FCP Airflow/History switches.
-  $(document).on('change', '.syslog-switch, .notify-switch, .footer-switch, .fcp-airflow-switch, .fcp-history-switch', function() {
+  $(document).on('change', '.syslog-switch, .notify-switch, .footer-switch, .fcp-airflow-switch, .fcp-history-switch, .fcp-footer-names-switch', function() {
     var checked = $(this).prop('checked');
     var $area = $(this).closest('.switch-area');
 
@@ -1745,6 +1754,7 @@ $(function() {
     <p><strong>Custom Name:</strong> This label will be used in logs, UI, and configuration files. Choose a clear name like “HDD_Bay” or “Rear” to identify each block. A valid name is required to save settings.</p>
 
     <p><strong>Fan Control:</strong> Enables or disables the selected fan configuration. When disabled, temperature monitoring and fan speed control for that configuration will stop. 
+        <strong>Monitor only</strong> never writes to the fan's PWM controller, so the BIOS or another program keeps control of it (a fan FanCtrl Plus 2 was driving goes back to the mode it had before FanCtrl Plus 2 took it; after updating from an earlier version, that can take a reboot); the Dashboard tile and the footer show its speed and PWM, even while fan control is stopped. Use it for a fan such as the CPU fan that you want to see but not control. Its temperature sources and curves are kept but not used.
         In contrast, the <strong>Stop</strong> button fully halts the fanctrlplus2 service, stopping all fan updates and logging across all configurations.
     </p>
 
@@ -1842,7 +1852,7 @@ $(function() {
 
     <p><strong>Identify PWM Controller:</strong> Use this tool to help locate which physical fan is linked to each PWM controller. After identification, adding a custom label makes it easier to recognize and configure later.</p>
 
-    <p><strong>Syslog &amp; Alerts:</strong> Enable or disable syslog logging for each fan individually. When enabled, changes in temperature and fan speed will be recorded in the system log. If a fan setup is already stable or updates too frequently, you can turn off its logging to reduce clutter. Problem alerts send Unraid notifications when a fan has a problem; turn them off for a fan whose controller raises false alarms. Footer shows the fan's speed and PWM percentage in the status bar at the bottom of every page; it is off by default.</p>
+    <p><strong>Syslog &amp; Alerts:</strong> Enable or disable syslog logging for each fan individually. When enabled, changes in temperature and fan speed will be recorded in the system log. If a fan setup is already stable or updates too frequently, you can turn off its logging to reduce clutter. Problem alerts send Unraid notifications when a fan has a problem; turn them off for a fan whose controller raises false alarms. Footer shows the fan's speed and PWM percentage in the status bar at the bottom of every page; it is off by default. Fan Names in Footer, under General Settings, adds each fan's name to its entry.</p>
 
     <p><strong>Notes:</strong></p>
     <ul>
@@ -2030,6 +2040,26 @@ $(function() {
       </div>
 
       <div class="fcp-section">
+        <dl class="fcp-formgrid">
+          <dt class="fcp-formgrid-label"><strong>Fan Names in Footer:</strong></dt>
+          <dd style="text-align: left;">
+            <span class="switch-area">
+              <div class="switch-button-background <?= $fcp_footer_names_enabled ? ' checked' : '' ?>" data-for="fcp-footer-names-switch">
+                <div class="switch-button-button"></div>
+              </div>
+              <input id="fcp-footer-names-switch" class="fcp-footer-names-switch" type="checkbox" <?= $fcp_footer_names_enabled ? 'checked' : '' ?>>
+              <span class="switch-button-label on">ENABLED</span>
+              <span class="switch-button-label off">DISABLED</span>
+            </span>
+          </dd>
+        </dl>
+        <blockquote class="inline_help fcp-help-wide">
+          Show each fan's name next to its speed in the footer, for the fans whose <strong>Footer</strong> switch is on under Syslog &amp; Alerts.
+          While disabled, the name shows only when hovering over the entry. A change shows from the next page load.
+        </blockquote>
+      </div>
+
+      <div class="fcp-section">
         <p><strong>Configuration backup</strong></p>
         <p>Download saved fan settings, PWM labels, dashboard switches and ordering.
           Restoring replaces those settings. Custom sensor scripts are not included.</p>
@@ -2106,7 +2136,11 @@ $(function() {
                 <?php foreach (['syslog' => '1', 'notify' => '1', 'footer' => '0'] as $switch => $default):
                   $is_on = ($cfg[$switch] ?? $default) != "0";
                   $switch_id = "$switch-switch-" . htmlspecialchars($cfg['custom']);
+                  // A Monitor only fan runs no loop, so nothing logs or alerts for it.
+                  if ($switch !== 'footer' && ($cfg['service'] ?? '') === '2'):
                 ?>
+                <td class="switch" title="Monitor only: FanCtrl Plus 2 does not log or send alerts for this fan.">&ndash;</td>
+                <?php continue; endif; ?>
                 <td class="switch">
                   <span class="switch-area">
                     <div class="switch-button-background<?= $is_on ? ' checked' : '' ?>"

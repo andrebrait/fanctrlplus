@@ -188,8 +188,55 @@ disk_temperature_origin() {
 # the PWM write did, so a caller records an output as applied only then. The
 # mode write stays best effort, as it always was.
 fcp_write_pwm() {
-  [[ -f "$controller_enable" ]] && echo 1 > "$controller_enable"
+  if [[ -f "$controller_enable" ]]; then
+    fcp_save_bios_mode "$controller"
+    echo 1 > "$controller_enable"
+  fi
   echo "$1" > "$controller"
+}
+
+# The mode (pwmN_enable) a controller had before fan control first set it to
+# manual, so that it is given back once no Enabled fan drives it. Kept, with
+# the controller's path, in a directory that plugin updates keep, until then
+# or the next boot. A controller already manual (an older version, or another
+# program, took it) has nothing to give back.
+fcp_bios_mode_dir="${fcp_bios_mode_dir:-/var/tmp/fanctrlplus2/bios_mode}"
+fcp_save_bios_mode() {
+  local file="$fcp_bios_mode_dir/${1//\//_}" mode
+  [[ -e "$file" ]] && return 0
+  mode=$(cat "${1}_enable" 2>/dev/null)
+  [[ "$mode" =~ ^[0-9]+$ && "$mode" != 1 ]] || return 0
+  mkdir -p "$fcp_bios_mode_dir" && printf '%s\n%s\n' "$mode" "$1" > "$file"
+}
+
+# Gives every controller fan control took back to its saved mode, unless an
+# Enabled fan among the configurations in $1 drives it: one whose fan is now
+# Monitor only or Disabled, or was moved to another controller. Run only while
+# no fan loop runs, since a loop would take it again.
+fcp_give_back_unused() {
+  local cfg file mode controller
+  local -A driven=()
+  for cfg in "$1"/fanctrlplus2_*.cfg; do
+    [[ -f "$cfg" && $(grep -Po '^service="\K[^"]+' "$cfg") == 1 ]] || continue
+    controller=$(grep -Po '^controller="\K[^"]+' "$cfg")
+    [[ -n "$controller" ]] && driven[$controller]=1
+  done
+  for file in "$fcp_bios_mode_dir"/*; do
+    [[ -f "$file" ]] || continue
+    { read -r mode; read -r controller; } < "$file"
+    [[ -n "$controller" && -n "${driven[$controller]:-}" ]] && continue
+    # A number path is never written (#41); a missing controller keeps its
+    # mode for when it returns.
+    [[ "$controller" == */class/hwmon/* ]] && { rm -f "$file"; continue; }
+    [[ -e "${controller}_enable" ]] || continue
+    # The saved mode stays until a write succeeds, so the next start or stop retries.
+    if echo "$mode" 2>/dev/null > "${controller}_enable"; then
+      rm -f "$file"
+      logger -t fanctrlplus2 "Gave $(basename "$controller") back to mode $mode: no enabled fan drives it"
+    else
+      logger -t fanctrlplus2 "Could not give $(basename "$controller") back to mode $mode; trying again at the next start or stop"
+    fi
+  done
 }
 
 # ===== Fan-history recording (dashboard history widget) =====

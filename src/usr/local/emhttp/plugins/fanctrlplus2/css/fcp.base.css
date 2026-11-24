@@ -568,6 +568,7 @@ dt.containerSettingsDt {
 
 .fcp-airflow-switch{ display: none; }
 .fcp-history-switch{ display: none; }
+.fcp-footer-names-switch{ display: none; }
 .syslog-switch, .notify-switch, .footer-switch{ display: none; }
 .switch-button-label{ font-size: 12px; }
 .switch-button-label.on{ display: none; }
@@ -776,4 +777,10 @@ dt.containerSettingsDt {
     color: var(--blue-800);
     margin-left: 1px;
   }
+}
+
+/* A Monitor only fan is never set: hide what only fan control uses, unless
+   Apply rejected one of those settings (fcp-invalid), so it can be corrected. */
+.fan-block:not(.fcp-invalid) .fan-fieldset:has(select[name^="service["] option[value="2"]:checked) .fcp-control-only {
+  display: none;
 }

@@ -52,8 +52,8 @@ if (!str_contains($page, "op: 'fcp_history_toggle'")) {
 if (!str_contains($page, "hasClass('fcp-history-switch')")) {
   $failures[] = 'The click handler must persist the History switch.';
 }
-if (!str_contains($page, ".fcp-airflow-switch, .fcp-history-switch'")) {
-  $failures[] = 'The change handler must cover the History switch.';
+if (!str_contains($page, ".fcp-airflow-switch, .fcp-history-switch, .fcp-footer-names-switch'")) {
+  $failures[] = 'The change handler must cover the History and Fan Names in Footer switches.';
 }
 if (substr_count($page, 'saveHistorySwitchState') < 2) {
   $failures[] = 'saveHistorySwitchState must be defined and called.';
@@ -86,6 +86,63 @@ if (!str_contains($footerPage, 'Menu="Buttons"') || !str_contains($footerPage, "
 if (!str_contains($footerPage, 'else if ($old.length) $old.replaceWith($footer);')) {
   $failures[] = 'The footer entry must be updated in place after it is first shown.';
 }
+
+if (!str_contains($footerPage, "<i class='icon-fan'") || !str_contains($footerPage, "document.createTextNode((names ? f.label + ' ' : '') + rpm")
+    || !str_contains($footerPage, "preg_match('/^__FCP_FOOTER_NAMES__\\s*=\\s*1\\s*\$/m'")) {
+  $failures[] = 'Each footer entry must show a fan icon, and the fan name while Fan Names in Footer is on.';
+}
+if (!str_contains($page, "fcp_labels_flag_enabled(\$cfg_dir, '__FCP_FOOTER_NAMES__')") || !str_contains($page, "op: 'fcp_footer_names_toggle'")
+    || !str_contains($logic, "'fcp_footer_names_toggle' => '__FCP_FOOTER_NAMES__'") || !str_contains($logic, "'fcp_history_toggle','fcp_footer_names_toggle']")) {
+  $failures[] = 'Fan Names in Footer must be one switch saved as __FCP_FOOTER_NAMES__ under the configuration lock.';
+}
+
+// Monitor only (service="2", #45): offered, never run, and read live.
+$block = file_get_contents($sourceRoot . '/include/FanBlockRender.php');
+if (!str_contains($block, '<option value="2"') || !str_contains($block, "<?php if ((\$cfg['service'] ?? '') !== '2'): // A Monitor only fan is never set. ?>")) {
+  $failures[] = 'Fan Control must offer Monitor only, and the settings page must not offer Run Now for it.';
+}
+$css = file_get_contents($sourceRoot . '/css/fcp.base.css');
+$controlOnly = substr($block, strpos($block, '<tbody class="fcp-control-only">'));
+if (!str_contains($block, 'class="show-chart-btn fcp-control-only"')
+    || !str_contains(strstr($controlOnly, '</tbody>', true), 'name="max_percent[')
+    || !str_contains(strstr($controlOnly, '</tbody>', true), 'class="aux-input"')
+    || !str_contains($css, '.fan-block:not(.fcp-invalid) .fan-fieldset:has(select[name^="service["] option[value="2"]:checked) .fcp-control-only {')) {
+  $failures[] = 'A Monitor only fan must hide the Chart button and every setting from Normal Cap to the Aux curve.';
+}
+$logic = file_get_contents($sourceRoot . '/include/FanctrlLogic.php');
+if (!str_contains($logic, "if (\$rpm !== '-' && \$rpm > 0) \$status = 'monitoring';")
+    || !str_contains($page, "const isRunning = status === 'running' || status === 'monitoring';")) {
+  $failures[] = 'A Monitor only fan that reports a speed must spin on the settings page, not show as stopped.';
+}
+// A setting Apply rejects must show, so a Monitor only fan's block can be corrected.
+if (substr_count($page, "block.addClass('fcp-invalid');") !== 4 || !str_contains($page, "\$('.fan-block').removeClass('fcp-invalid');")) {
+  $failures[] = 'Apply must reveal the hidden settings of a block it rejects.';
+}
+if (!str_contains($page, "if (\$switch !== 'footer' && (\$cfg['service'] ?? '') === '2'):")) {
+  $failures[] = 'A Monitor only fan must not offer Syslog or Problem Alerts switches.';
+}
+$tile = file_get_contents($sourceRoot . '/FanctrlPlus2.Dashboard.page');
+if (!str_contains($tile, "\$run = (\$cfg['service'] ?? '0') === '2' ? '' :")) {
+  $failures[] = 'The Dashboard tile must not offer Manual Run for a Monitor only fan.';
+}
+if (!str_contains($endpoint, "\$monitor = (\$cfg['service'] ?? '0') === '2';")
+    || !str_contains($endpoint, "fcp_monitor_reading((string)(\$cfg['controller'] ?? ''), \$identity, \$identities ?? null)")) {
+  $failures[] = 'The Dashboard endpoint must read a Monitor only fan live from its controller.';
+}
+$history = file_get_contents($sourceRoot . '/FanctrlPlusHistory2.Dashboard.page');
+if (!str_contains($history, "(\$cfg['service'] ?? '') === '2') continue;")) {
+  $failures[] = 'The History tile must skip Monitor only fans, which record no history.';
+}
+
+$rc = file_get_contents($sourceRoot . '/scripts/rc.fanctrlplus2');
+// Controllers go back only once the fan loops have exited, on stop and start.
+foreach (['fanctrlplus2.stop() {', 'fanctrlplus2.start_now() {'] as $fn) {
+  $body = substr($rc, (int)strpos($rc, $fn), 1500);
+  $ended = strpos($body, 'fanctrlplus2.end_loops');
+  $given = strpos($body, 'fcp_give_back_unused "$cfg_path"');
+  if ($ended === false || $given === false || $ended > $given) $failures[] = "$fn must give controllers back after the fan loops end.";
+}
+if (!str_contains($rc, "pkill -KILL -f \"bash \$loop_script\"")) $failures[] = 'A fan loop that outlives the wait must be killed.';
 
 if ($failures) {
   fwrite(STDERR, implode("\n", $failures) . "\n");

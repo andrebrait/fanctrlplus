@@ -28,7 +28,7 @@ if [[ "\$1" == -x && "\$2" == emhttpd ]]; then [[ -e $tmp/emhttpd_up ]]; exit; f
 exec /usr/bin/pgrep "\$@"
 EOF
 chmod +x "$tmp/loop.sh" "$tmp/notify" "$tmp/bin/"*
-export PATH="$tmp/bin:$PATH" fcp_notify_bin="$tmp/notify"
+export PATH="$tmp/bin:$PATH" fcp_notify_bin="$tmp/notify" fcp_bios_mode_dir="$tmp/modes"
 
 rc="$tmp/rc.fanctrlplus2"
 sed -e "s#^cfg_path=.*#cfg_path=$tmp/cfg#" \
@@ -99,6 +99,8 @@ reset
 "$rc" start >/dev/null 2>&1
 touch "$tmp/emhttpd_up"
 wait_running A
+# B is warned about right after A starts, in the same pass.
+for _ in {1..25}; do [[ "$(warnings)" == 1 ]] && break; sleep 0.2; done
 expect_equal 1 "$(warnings)" "At boot, a fan saved by its hwmon number warns at once: no driver will fix it."
 expect_equal 1 "$(grep -c 'saved by its hwmon number' "$tmp/notify.log")" "The warning says to select the controller again."
 for _ in {1..50}; do pgrep -f "$rc boot\$" >/dev/null || break; sleep 0.2; done
@@ -193,6 +195,26 @@ echo 2 > "$tmp/hw/pwm1_enable"
 echo 77 > "$tmp/hw/pwm1"
 "$rc" stop >/dev/null 2>&1
 expect_equal '2 77' "$(cat "$tmp/hw/pwm1_enable") $(cat "$tmp/hw/pwm1")" "Before emhttpd, stop does not set the fans to 50%."
+
+# ===== Start gives back a controller no Enabled fan drives (Monitor only) =====
+reset
+touch "$tmp/emhttpd_up"
+echo 1 > "$tmp/hw/pwm1_enable"
+mkdir -p "$tmp/modes"
+printf '5\n%s\n' "$tmp/hw/pwm1" > "$tmp/modes/pwm1"
+printf 'service="2"\ncustom="A"\ncontroller="%s"\n' "$tmp/hw/pwm1" > "$tmp/cfg/fanctrlplus2_A.cfg"
+"$rc" start >/dev/null 2>&1
+expect_equal '5 ' "$(cat "$tmp/hw/pwm1_enable") $(running)" "Start must give a Monitor only fan's controller back and start no loop for it."
+fan A pwm1
+
+# ===== Stop keeps the mode of a controller it takes first (a fan moved to it) =====
+reset
+touch "$tmp/emhttpd_up"
+rm -rf "$tmp/modes"
+echo 5 > "$tmp/hw/pwm1_enable"
+touch "$tmp/run/fanctrlplus2_A.pid"
+"$rc" stop >/dev/null 2>&1
+expect_equal '1 5' "$(cat "$tmp/hw/pwm1_enable") $(head -n1 "$tmp/modes/"* 2>/dev/null)" "Stop must keep the mode of a controller it sets to 50% first."
 
 if (( failures )); then
   printf '%d rc boot test(s) failed\n' "$failures" >&2

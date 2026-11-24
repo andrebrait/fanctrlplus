@@ -2,6 +2,8 @@
 header('Content-Type: application/json');
 header('Cache-Control: no-store, max-age=0');
 
+require_once __DIR__.'/include/Common.php';
+
 $plugin = "fanctrlplus2";
 $cfg_path = "/boot/config/plugins/$plugin";
 $tmp_path = "/var/tmp/$plugin";
@@ -30,6 +32,7 @@ foreach ($files as $file) {
   $custom = $cfg['custom'] ?? basename($file, '.cfg');
   $label = $custom;
   $enabled = ($cfg['service'] ?? '0') === '1';
+  $monitor = ($cfg['service'] ?? '0') === '2';
 
   // Initialize display fields.
   $temp_val    = "*";
@@ -39,7 +42,17 @@ foreach ($files as $file) {
   $pct_val     = "-";
   $status      = '<span class="red-text">Inactive</span>';
 
-  if ($enabled && $daemon_running) {
+  // A Monitor only fan is read whether or not fan control runs.
+  if ($monitor) {
+      $identity = (string)($cfg['controller_identity'] ?? '');
+      if (str_starts_with($identity, 'usb:')) $identities ??= fcp_pwm_identity_map(list_pwm());
+      $reading = fcp_monitor_reading((string)($cfg['controller'] ?? ''), $identity, $identities ?? null);
+      $rpm_val = $reading['rpm'];
+      if ($reading['pwm'] !== '-') $pct_val = round($reading['pwm'] / 255 * 100);
+      $temp_origin = 'Monitor only';
+      // Nothing to read: the controller must be selected again.
+      $status = $reading === ['rpm' => '-', 'pwm' => '-'] ? '<span class="red-text">No reading</span>' : 'Monitoring';
+  } elseif ($enabled && $daemon_running) {
       $temp_raw = trim(@file_get_contents("$tmp_path/temp_{$plugin}_$custom"));
       $rpm_raw  = trim(@file_get_contents("$tmp_path/rpm_{$plugin}_$custom"));
       $pwm_raw  = trim(@file_get_contents("$tmp_path/pwm_{$plugin}_$custom"));

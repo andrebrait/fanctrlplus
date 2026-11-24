@@ -59,6 +59,10 @@ $check(file_get_contents("$root/notes.txt") === 'keep' && file_get_contents("$ro
 
 $invalid = [];
 $encode = function ($map, $version=1) { return json_encode(['format'=>'fanctrlplus2-config','version'=>$version,'files'=>(object)$map]); };
+// Fan Control is Disabled, Enabled or Monitor only, nothing else.
+$monitorFan = str_replace('service="0"', 'service="2"', $fan);
+$check(fcp_validate_config_backup($encode(['fanctrlplus2_JBOD.cfg'=>$monitorFan]))['fanctrlplus2_JBOD.cfg'] === $monitorFan, 'A Monitor only fan must restore from a backup.');
+$invalid[] = $encode(['fanctrlplus2_JBOD.cfg'=>str_replace('service="0"', 'service="3"', $fan)]);
 $invalid[] = $encode($files, 2);
 $invalid[] = '{broken';
 $invalid[] = $encode(['../../escape.cfg'=>$fan]);

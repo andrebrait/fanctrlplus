@@ -150,12 +150,27 @@ fanctrlplus2.pwm_channels() {
   done
 }
 
+# Ends every fan loop and waits for it: one still running could take a
+# controller again after fcp_give_back_unused gives it back.
+fanctrlplus2.end_loops() {
+  pkill -f "$loop_script" 2>/dev/null
+  for _ in {1..25}; do pgrep -f "$loop_script" >/dev/null || return 0; sleep 0.2; done
+  logger -t "$plugin" "A fan loop did not stop in 5 seconds; killing it"
+  # Only the loops themselves, not an editor or tail open on the script.
+  pkill -KILL -f "bash $loop_script"
+  for _ in {1..10}; do pgrep -f "$loop_script" >/dev/null || return 0; sleep 0.2; done
+}
+
 fanctrlplus2.start_now() {
   local status=0
-  pkill -f "$loop_script" 2>/dev/null
+  fanctrlplus2.end_loops
 
   # Migrate configuration and labels before starting.
   fanctrlplus2.migrate
+
+  # Restoring a backup stops fan control before it replaces the settings, so
+  # what the new ones no longer drive is given back here.
+  fcp_give_back_unused "$cfg_path"
 
   fanctrlplus2.start_fans "$@" || status=1
 
@@ -195,8 +210,11 @@ fanctrlplus2.stop() {
     ran[${name%.pid}]=1
   done
 
-  pkill -f "$loop_script"
+  fanctrlplus2.end_loops
   rm -f "$pid_dir"/${plugin}_*.pid
+  # Saving runs stop and reads the new settings: a controller fan control
+  # took and no enabled fan drives now goes back to the BIOS.
+  fcp_give_back_unused "$cfg_path"
   logger -t "$plugin" "All fanctrlplus2 stopped"
 
   # Stop the dashboard updater.
@@ -217,6 +235,9 @@ fanctrlplus2.stop() {
 
     enable="${pwm}_enable"
     if [[ -w "$enable" ]]; then
+      # Saving runs stop with the new settings, so this may be a controller
+      # no loop has taken yet: keep its mode to give back.
+      fcp_save_bios_mode "$pwm"
       echo 1 > "$enable"
       echo 128 > "$pwm"
       logger -t "$plugin" "Stopped control of $(basename "$pwm"); set to 50% (manual mode) to ensure sufficient airflow and avoid overheating"

@@ -25,6 +25,9 @@ fail() {
   exit 1
 }
 
+[[ "${service:-}" == 2 ]] &&
+  fail "This fan is set to Monitor only, so FanCtrl Plus 2 never sets its speed. Nothing was written."
+
 # A /sys/class/hwmon path names an index, whatever chip holds it (see rc.fanctrlplus2).
 [[ "$controller" == */class/hwmon/* ]] &&
   fail "The PWM controller is saved by its hwmon number ($controller), which may now belong to another chip. Select the controller again on the settings page. Nothing was written."

@@ -219,13 +219,14 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
       <!-- Fan controls inside each fan block. -->
       <div class="fan-tools fcp-fan-tools">
-        <button type="button" class="show-chart-btn" onclick="showFanChart(this)" title="Preview this fan's speed curve based on current Disk/CPU settings">
+        <button type="button" class="show-chart-btn fcp-control-only" onclick="showFanChart(this)" title="Preview this fan's speed curve based on current Disk/CPU settings">
           <i class="fa fa-line-chart" style= "color: var(--blue-800); font:"></i> Chart
         </button>
         <button type="button" class="delete-btn" title="Delete this fan configuration">Delete</button>
       </div>
 
       <table class="fcp-w-100">
+        <tbody>
         <!-- Custom Name -->
         <tr>
           <td class="fcp-help-cursor" 
@@ -246,11 +247,12 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
         <!-- Fan Control Dropdown -->
         <tr>
-          <td class="fcp-help-cursor" title="Enable or disable this fan controller">Fan Control:</td>
+          <td class="fcp-help-cursor" title="Enabled: FanCtrl Plus 2 sets this fan's speed. Monitor only: the BIOS keeps control, and FanCtrl Plus 2 only shows the fan's speed and PWM. Disabled: neither.">Fan Control:</td>
           <td>
             <select name="service[<?=$i?>]" class="fcp-enable-select">
               <option value="0" <?=($cfg['service'] ?? '') == '0' ? 'selected' : ''?>>Disabled</option>
               <option value="1" <?=($cfg['service'] ?? '') == '1' ? 'selected' : ''?>>Enabled</option>
+              <option value="2" <?=($cfg['service'] ?? '') == '2' ? 'selected' : ''?>>Monitor only</option>
             </select>
           </td>
         </tr>
@@ -279,7 +281,10 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
             </select>
           </td>
         </tr>
+        </tbody>
 
+        <!-- Settings that only matter when FanCtrl Plus 2 sets the speed: hidden for Monitor only (fcp.base.css). -->
+        <tbody class="fcp-control-only">
         <tr>
           <td class="fcp-help-cursor" title="Limits normal output without changing curve points. Emergency cooling can bypass this cap.">Normal Cap:</td>
           <td>
@@ -318,11 +323,13 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                   value="<?=htmlspecialchars(cfg_interval_seconds($cfg) . ' sec')?>"
                   placeholder="Recommended: 60–300 sec">
 
+            <?php if (($cfg['service'] ?? '') !== '2'): // A Monitor only fan is never set. ?>
             <span class="fanctrlplus2-interval-refresh fcp-runnow"
                   title="Manual Run: Read current temperature and set fan speed immediately"
                   data-label="<?=htmlspecialchars($cfg['custom'] ?? '')?>">
               <span class="fa fa-refresh fcp-fs-13"></span> Run Now
             </span>
+            <?php endif; ?>
           </td>
         </tr>
 
@@ -424,6 +431,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
             <span class="fcp-curve-summary" data-source="aux"></span>
           </td>
         </tr>
+        </tbody>
       </table>
     </fieldset>
   </div>
