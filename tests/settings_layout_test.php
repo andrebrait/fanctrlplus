@@ -106,9 +106,14 @@ if (!str_contains($history, "(\$cfg['service'] ?? '') === '2') continue;")) {
 }
 
 $rc = file_get_contents($sourceRoot . '/scripts/rc.fanctrlplus2');
-if (!preg_match('/pkill -f "\$loop_script"\n.*\n.*pgrep -f "\$loop_script".*\n.*\n(?:.*\n){2}  fcp_give_back_unused "\$cfg_path"/', $rc)) {
-  $failures[] = 'stop must give controllers back once the fan loops have exited.';
+// Controllers go back only once the fan loops have exited, on stop and start.
+foreach (['fanctrlplus2.stop() {', 'fanctrlplus2.start_now() {'] as $fn) {
+  $body = substr($rc, (int)strpos($rc, $fn), 1500);
+  $ended = strpos($body, 'fanctrlplus2.end_loops');
+  $given = strpos($body, 'fcp_give_back_unused "$cfg_path"');
+  if ($ended === false || $given === false || $ended > $given) $failures[] = "$fn must give controllers back after the fan loops end.";
 }
+if (!str_contains($rc, "pkill -KILL -f \"\$loop_script\"")) $failures[] = 'A fan loop that outlives the wait must be killed.';
 
 if ($failures) {
   fwrite(STDERR, implode("\n", $failures) . "\n");

@@ -41,6 +41,15 @@ take "$chip/pwm1" 1
 fcp_give_back_unused "$cfgs"
 expect "A controller fan control found in manual mode must stay manual." "1" "$(< "$chip/pwm1_enable")"
 
+# A controller missing now keeps its mode until it returns.
+take "$chip/pwm3" 5
+fan CPU 2 "$chip/pwm3"
+mv "$chip/pwm3_enable" "$tmp/away"
+fcp_give_back_unused "$cfgs"
+mv "$tmp/away" "$chip/pwm3_enable"
+fcp_give_back_unused "$cfgs"
+expect "A controller missing during a save must be given back once it returns." "5" "$(< "$chip/pwm3_enable")"
+
 # A /sys/class/hwmon path names a number, whatever chip holds it (#41).
 class="$tmp/class/hwmon/hwmon2"; mkdir -p "$class"
 take "$class/pwm1" 2

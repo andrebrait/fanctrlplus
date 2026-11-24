@@ -218,16 +218,19 @@ fcp_give_back_unused() {
   local -A driven=()
   for cfg in "$1"/fanctrlplus2_*.cfg; do
     [[ -f "$cfg" && $(grep -Po '^service="\K[^"]+' "$cfg") == 1 ]] || continue
-    driven[$(grep -Po '^controller="\K[^"]+' "$cfg")]=1
+    controller=$(grep -Po '^controller="\K[^"]+' "$cfg")
+    [[ -n "$controller" ]] && driven[$controller]=1
   done
   for file in "$fcp_bios_mode_dir"/*; do
     [[ -f "$file" ]] || continue
     { read -r mode; read -r controller; } < "$file"
     [[ -n "$controller" && -n "${driven[$controller]:-}" ]] && continue
+    # A number path is never written (#41); a missing controller keeps its
+    # mode for when it returns.
+    [[ "$controller" == */class/hwmon/* ]] && { rm -f "$file"; continue; }
+    [[ -w "${controller}_enable" ]] && echo "$mode" > "${controller}_enable" || continue
     rm -f "$file"
-    fcp_drivable_controller "$controller" && [[ -w "${controller}_enable" ]] || continue
-    echo "$mode" > "${controller}_enable" &&
-      logger -t fanctrlplus2 "Gave $(basename "$controller") back to mode $mode: no enabled fan drives it"
+    logger -t fanctrlplus2 "Gave $(basename "$controller") back to mode $mode: no enabled fan drives it"
   done
 }
 
