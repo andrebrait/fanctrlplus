@@ -97,12 +97,17 @@ if (!str_contains($tile, "\$run = (\$cfg['service'] ?? '0') === '2' ? '' :")) {
   $failures[] = 'The Dashboard tile must not offer Manual Run for a Monitor only fan.';
 }
 if (!str_contains($endpoint, "\$monitor = (\$cfg['service'] ?? '0') === '2';")
-    || !str_contains($endpoint, "fcp_monitor_reading((string)(\$cfg['controller'] ?? ''), (string)(\$cfg['controller_identity'] ?? ''))")) {
+    || !str_contains($endpoint, "fcp_monitor_reading((string)(\$cfg['controller'] ?? ''), \$identity, \$identities ?? null)")) {
   $failures[] = 'The Dashboard endpoint must read a Monitor only fan live from its controller.';
 }
 $history = file_get_contents($sourceRoot . '/FanctrlPlusHistory2.Dashboard.page');
 if (!str_contains($history, "(\$cfg['service'] ?? '') === '2') continue;")) {
   $failures[] = 'The History tile must skip Monitor only fans, which record no history.';
+}
+
+$rc = file_get_contents($sourceRoot . '/scripts/rc.fanctrlplus2');
+if (!preg_match('/pkill -f "\$loop_script"\n.*\n.*pgrep -f "\$loop_script".*\n.*\n(?:.*\n){2}  fcp_give_back_unused "\$cfg_path"/', $rc)) {
+  $failures[] = 'stop must give controllers back once the fan loops have exited.';
 }
 
 if ($failures) {

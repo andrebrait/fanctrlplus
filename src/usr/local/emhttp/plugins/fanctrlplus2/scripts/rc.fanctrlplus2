@@ -42,7 +42,6 @@ fanctrlplus2.start_fans() {
     [[ -f "$cfg" ]] || continue
 
     service=$(grep -Po '^service="\K[^"]+' "$cfg")
-    [[ "$service" == 2 ]] && fcp_give_back "$(grep -Po '^controller="\K[^"]+' "$cfg")"
     [[ "$service" != "1" ]] && continue
 
     raw_custom=$(grep -Po '^custom="\K[^"]+' "$cfg")
@@ -197,7 +196,12 @@ fanctrlplus2.stop() {
   done
 
   pkill -f "$loop_script"
+  # A loop still exiting could take a controller again after it is given back.
+  for _ in {1..25}; do pgrep -f "$loop_script" >/dev/null || break; sleep 0.2; done
   rm -f "$pid_dir"/${plugin}_*.pid
+  # Saving runs stop and reads the new settings: a controller fan control
+  # took and no enabled fan drives now goes back to the BIOS.
+  fcp_give_back_unused "$cfg_path"
   logger -t "$plugin" "All fanctrlplus2 stopped"
 
   # Stop the dashboard updater.
@@ -208,8 +212,6 @@ fanctrlplus2.stop() {
     [[ -f "$cfg" ]] || continue
 
     service=$(grep -Po '^service="\K[^"]+' "$cfg")
-    # Saving runs stop first: a fan fan control drove is given back now.
-    [[ "$service" == 2 ]] && fcp_give_back "$(grep -Po '^controller="\K[^"]+' "$cfg")"
     [[ "$service" != "1" ]] && continue
 
     name=$(grep -Po '^custom="\K[^"]+' "$cfg" | tr -cd '[:alnum:]_-')

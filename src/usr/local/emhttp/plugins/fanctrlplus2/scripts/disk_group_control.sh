@@ -196,33 +196,39 @@ fcp_write_pwm() {
 }
 
 # The mode (pwmN_enable) a controller had before fan control first set it to
-# manual, so that setting its fan to Monitor only gives it back. Kept in a
-# directory, which plugin updates keep, until then or the next boot.
+# manual, so that it is given back once no Enabled fan drives it. Kept, with
+# the controller's path, in a directory that plugin updates keep, until then
+# or the next boot. A controller already manual (an older version, or another
+# program, took it) has nothing to give back.
 fcp_bios_mode_dir="${fcp_bios_mode_dir:-/var/tmp/fanctrlplus2/bios_mode}"
-fcp_bios_mode_file() {
-  printf '%s/%s' "$fcp_bios_mode_dir" "${1//\//_}"
-}
 fcp_save_bios_mode() {
-  local file mode
-  file=$(fcp_bios_mode_file "$1")
+  local file="$fcp_bios_mode_dir/${1//\//_}" mode
   [[ -e "$file" ]] && return 0
   mode=$(cat "${1}_enable" 2>/dev/null)
-  # Manual already: whatever set it keeps it, so there is nothing to give back.
   [[ "$mode" =~ ^[0-9]+$ && "$mode" != 1 ]] || return 0
-  mkdir -p "$fcp_bios_mode_dir" && echo "$mode" > "$file"
+  mkdir -p "$fcp_bios_mode_dir" && printf '%s\n%s\n' "$mode" "$1" > "$file"
 }
 
-# Gives a Monitor only fan's controller back to the mode it had before fan
-# control first took it, when fan control took it since boot.
-fcp_give_back() {
-  local file mode
-  file=$(fcp_bios_mode_file "$1")
-  [[ -f "$file" ]] || return 0
-  mode=$(< "$file")
-  fcp_drivable_controller "$1" && [[ -w "${1}_enable" ]] || return 0
-  echo "$mode" > "${1}_enable" || return 0
-  rm -f "$file"
-  logger -t fanctrlplus2 "Gave $(basename "$1") back to mode $mode: its fan is set to Monitor only"
+# Gives every controller fan control took back to its saved mode, unless an
+# Enabled fan among the configurations in $1 drives it: one whose fan is now
+# Monitor only or Disabled, or was moved to another controller. Run only while
+# no fan loop runs, since a loop would take it again.
+fcp_give_back_unused() {
+  local cfg file mode controller
+  local -A driven=()
+  for cfg in "$1"/fanctrlplus2_*.cfg; do
+    [[ -f "$cfg" && $(grep -Po '^service="\K[^"]+' "$cfg") == 1 ]] || continue
+    driven[$(grep -Po '^controller="\K[^"]+' "$cfg")]=1
+  done
+  for file in "$fcp_bios_mode_dir"/*; do
+    [[ -f "$file" ]] || continue
+    { read -r mode; read -r controller; } < "$file"
+    [[ -n "$controller" && -n "${driven[$controller]:-}" ]] && continue
+    rm -f "$file"
+    fcp_drivable_controller "$controller" && [[ -w "${controller}_enable" ]] || continue
+    echo "$mode" > "${controller}_enable" &&
+      logger -t fanctrlplus2 "Gave $(basename "$controller") back to mode $mode: no enabled fan drives it"
+  done
 }
 
 # ===== Fan-history recording (dashboard history widget) =====

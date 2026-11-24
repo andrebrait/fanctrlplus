@@ -110,11 +110,12 @@ const FCP_CLASS_FLAG = '.hwmon_numbers_converted';
 // set. A /sys/class/hwmon path is not read: it names a number whatever chip
 // holds it now (#41).
 // A USB controller is read only as the saved device ($identity), since another
-// device may hold its last path now, as Run Now and the loop require.
-function fcp_monitor_reading(string $controller, string $identity = ''): array {
+// device may hold its last path now, as Run Now and the loop require;
+// $identities is fcp_pwm_identity_map(list_pwm()), built once per request.
+function fcp_monitor_reading(string $controller, string $identity = '', ?array $identities = null): array {
     $none = ['rpm' => '-', 'pwm' => '-'];
     if (fcp_class_hwmon_path($controller) || !preg_match('#^(/.+)/pwm(\d+)$#D', $controller, $m)) return $none;
-    if (str_starts_with($identity, 'usb:') && fcp_unique_pwm_identity($controller) !== $identity) return $none;
+    if (str_starts_with($identity, 'usb:') && fcp_unique_pwm_identity($controller, $identities) !== $identity) return $none;
     $rpm = trim((string)@file_get_contents("{$m[1]}/fan{$m[2]}_input"));
     $pwm = trim((string)@file_get_contents($controller));
     return ['rpm' => ctype_digit($rpm) ? $rpm : '-', 'pwm' => ctype_digit($pwm) ? $pwm : '-'];

@@ -44,7 +44,9 @@ foreach ($files as $file) {
 
   // A Monitor only fan is read whether or not fan control runs.
   if ($monitor) {
-      $reading = fcp_monitor_reading((string)($cfg['controller'] ?? ''), (string)($cfg['controller_identity'] ?? ''));
+      $identity = (string)($cfg['controller_identity'] ?? '');
+      if (str_starts_with($identity, 'usb:')) $identities ??= fcp_pwm_identity_map(list_pwm());
+      $reading = fcp_monitor_reading((string)($cfg['controller'] ?? ''), $identity, $identities ?? null);
       $rpm_val = $reading['rpm'];
       if ($reading['pwm'] !== '-') $pct_val = round($reading['pwm'] / 255 * 100);
       $temp_origin = 'Monitor only';
