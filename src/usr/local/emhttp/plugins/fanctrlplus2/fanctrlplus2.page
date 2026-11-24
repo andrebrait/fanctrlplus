@@ -2107,7 +2107,11 @@ $(function() {
                 <?php foreach (['syslog' => '1', 'notify' => '1', 'footer' => '0'] as $switch => $default):
                   $is_on = ($cfg[$switch] ?? $default) != "0";
                   $switch_id = "$switch-switch-" . htmlspecialchars($cfg['custom']);
+                  // A Monitor only fan runs no loop, so nothing logs or alerts for it.
+                  if ($switch !== 'footer' && ($cfg['service'] ?? '') === '2'):
                 ?>
+                <td class="switch" title="Monitor only: FanCtrl Plus 2 does not log or send alerts for this fan.">&ndash;</td>
+                <?php continue; endif; ?>
                 <td class="switch">
                   <span class="switch-area">
                     <div class="switch-button-background<?= $is_on ? ' checked' : '' ?>"

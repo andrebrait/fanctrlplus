@@ -92,6 +92,17 @@ $block = file_get_contents($sourceRoot . '/include/FanBlockRender.php');
 if (!str_contains($block, '<option value="2"') || !str_contains($block, "<?php if ((\$cfg['service'] ?? '') !== '2'): // A Monitor only fan is never set. ?>")) {
   $failures[] = 'Fan Control must offer Monitor only, and the settings page must not offer Run Now for it.';
 }
+$css = file_get_contents($sourceRoot . '/css/fcp.base.css');
+$controlOnly = substr($block, strpos($block, '<tbody class="fcp-control-only">'));
+if (!str_contains($block, 'class="show-chart-btn fcp-control-only"')
+    || !str_contains(strstr($controlOnly, '</tbody>', true), 'name="max_percent[')
+    || !str_contains(strstr($controlOnly, '</tbody>', true), 'class="aux-input"')
+    || !str_contains($css, '.fan-fieldset:has(select[name^="service["] option[value="2"]:checked) .fcp-control-only {')) {
+  $failures[] = 'A Monitor only fan must hide the Chart button and every setting from Normal Cap to the Aux curve.';
+}
+if (!str_contains($page, "if (\$switch !== 'footer' && (\$cfg['service'] ?? '') === '2'):")) {
+  $failures[] = 'A Monitor only fan must not offer Syslog or Problem Alerts switches.';
+}
 $tile = file_get_contents($sourceRoot . '/FanctrlPlus2.Dashboard.page');
 if (!str_contains($tile, "\$run = (\$cfg['service'] ?? '0') === '2' ? '' :")) {
   $failures[] = 'The Dashboard tile must not offer Manual Run for a Monitor only fan.';

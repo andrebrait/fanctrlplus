@@ -777,3 +777,8 @@ dt.containerSettingsDt {
     margin-left: 1px;
   }
 }
+
+/* A Monitor only fan is never set: hide what only fan control uses. */
+.fan-fieldset:has(select[name^="service["] option[value="2"]:checked) .fcp-control-only {
+  display: none;
+}

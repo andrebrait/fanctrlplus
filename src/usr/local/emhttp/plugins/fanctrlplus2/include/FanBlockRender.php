@@ -219,13 +219,14 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
       <!-- Fan controls inside each fan block. -->
       <div class="fan-tools fcp-fan-tools">
-        <button type="button" class="show-chart-btn" onclick="showFanChart(this)" title="Preview this fan's speed curve based on current Disk/CPU settings">
+        <button type="button" class="show-chart-btn fcp-control-only" onclick="showFanChart(this)" title="Preview this fan's speed curve based on current Disk/CPU settings">
           <i class="fa fa-line-chart" style= "color: var(--blue-800); font:"></i> Chart
         </button>
         <button type="button" class="delete-btn" title="Delete this fan configuration">Delete</button>
       </div>
 
       <table class="fcp-w-100">
+        <tbody>
         <!-- Custom Name -->
         <tr>
           <td class="fcp-help-cursor" 
@@ -280,7 +281,10 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
             </select>
           </td>
         </tr>
+        </tbody>
 
+        <!-- Settings that only matter when FanCtrl Plus 2 sets the speed: hidden for Monitor only (fcp.base.css). -->
+        <tbody class="fcp-control-only">
         <tr>
           <td class="fcp-help-cursor" title="Limits normal output without changing curve points. Emergency cooling can bypass this cap.">Normal Cap:</td>
           <td>
@@ -427,6 +431,7 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
             <span class="fcp-curve-summary" data-source="aux"></span>
           </td>
         </tr>
+        </tbody>
       </table>
     </fieldset>
   </div>
