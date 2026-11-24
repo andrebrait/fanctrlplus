@@ -229,11 +229,12 @@ fcp_give_back_unused() {
     # mode for when it returns.
     [[ "$controller" == */class/hwmon/* ]] && { rm -f "$file"; continue; }
     [[ -e "${controller}_enable" ]] || continue
-    rm -f "$file"
+    # The saved mode stays until a write succeeds, so the next start or stop retries.
     if echo "$mode" 2>/dev/null > "${controller}_enable"; then
+      rm -f "$file"
       logger -t fanctrlplus2 "Gave $(basename "$controller") back to mode $mode: no enabled fan drives it"
     else
-      logger -t fanctrlplus2 "Could not give $(basename "$controller") back to mode $mode; it stays in manual mode until a reboot"
+      logger -t fanctrlplus2 "Could not give $(basename "$controller") back to mode $mode; trying again at the next start or stop"
     fi
   done
 }

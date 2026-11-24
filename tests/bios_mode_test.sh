@@ -50,6 +50,15 @@ mv "$tmp/away" "$chip/pwm3_enable"
 fcp_give_back_unused "$cfgs"
 expect "A controller missing during a save must be given back once it returns." "5" "$(< "$chip/pwm3_enable")"
 
+# A failed write keeps the saved mode for the next start or stop.
+take "$chip/pwm4" 3
+fan CPU 2 "$chip/pwm4"
+rm "$chip/pwm4_enable"; mkdir "$chip/pwm4_enable"
+fcp_give_back_unused "$cfgs"
+rmdir "$chip/pwm4_enable"; echo 1 > "$chip/pwm4_enable"
+fcp_give_back_unused "$cfgs"
+expect "A controller whose mode could not be written must be given back at the next try." "3" "$(< "$chip/pwm4_enable")"
+
 # A /sys/class/hwmon path names a number, whatever chip holds it (#41).
 class="$tmp/class/hwmon/hwmon2"; mkdir -p "$class"
 take "$class/pwm1" 2

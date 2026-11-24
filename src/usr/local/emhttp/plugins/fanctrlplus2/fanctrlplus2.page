@@ -1164,6 +1164,8 @@ $(function() {
 
     const namesSeen = new Set();
     let duplicateFound = false;
+    // A rejected block shows its fan control settings even when Monitor only hides them.
+    $('.fan-block').removeClass('fcp-invalid');
 
     $('.custom-name-input').each(function() {
       const block = $(this).closest('.fan-block');
@@ -1207,6 +1209,7 @@ $(function() {
       if (!/^\d+$/.test(interval) || parseInt(interval) <= 0) {
         valid = false;
         errorMsg = 'Interval cannot be empty or 0 (recommended: 60–300 sec).';
+        block.addClass('fcp-invalid');
         return false;
       } 
     });
@@ -1218,15 +1221,16 @@ $(function() {
       const name = block.find('.custom-name-input').val() || `#${$(this).index() + 1}`;
       let curveRules;
       try { curveRules = FcpCurves.rules(block[0]); }
-      catch (error) { alert(error.message); rangeValid = false; return false; }
+      catch (error) { block.addClass('fcp-invalid'); alert(error.message); rangeValid = false; return false; }
       const curveError = Object.values(curveRules).map(FcpCurves.validate).find(Boolean);
-      if (curveError) { alert(`Fan configuration "${name}": ${curveError}`); rangeValid = false; return false; }
+      if (curveError) { block.addClass('fcp-invalid'); alert(`Fan configuration "${name}": ${curveError}`); rangeValid = false; return false; }
       FcpCurves.sync(block[0], curveRules);
       const pwmMin = FcpCurves.floor(block[0], curveRules);
       const pwmMax = FcpCurves.inputPwm(block.find('input[name^="max_percent["]')[0]);
       const idlePwm = FcpCurves.inputPwm(block.find('input[name^="idle_percent["]')[0]);
 
       if (idlePwm > Math.min(pwmMin, pwmMax)) {
+        block.addClass('fcp-invalid');
         alert(`Fan configuration "${name}": Idle Speed cannot exceed the normal cap or the first point of a disk curve or enabled CPU/Aux rule.`);
         rangeValid = false; return false;
       }

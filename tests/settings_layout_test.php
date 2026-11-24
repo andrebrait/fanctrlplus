@@ -97,8 +97,12 @@ $controlOnly = substr($block, strpos($block, '<tbody class="fcp-control-only">')
 if (!str_contains($block, 'class="show-chart-btn fcp-control-only"')
     || !str_contains(strstr($controlOnly, '</tbody>', true), 'name="max_percent[')
     || !str_contains(strstr($controlOnly, '</tbody>', true), 'class="aux-input"')
-    || !str_contains($css, '.fan-fieldset:has(select[name^="service["] option[value="2"]:checked) .fcp-control-only {')) {
+    || !str_contains($css, '.fan-block:not(.fcp-invalid) .fan-fieldset:has(select[name^="service["] option[value="2"]:checked) .fcp-control-only {')) {
   $failures[] = 'A Monitor only fan must hide the Chart button and every setting from Normal Cap to the Aux curve.';
+}
+// A setting Apply rejects must show, so a Monitor only fan's block can be corrected.
+if (substr_count($page, "block.addClass('fcp-invalid');") !== 4 || !str_contains($page, "\$('.fan-block').removeClass('fcp-invalid');")) {
+  $failures[] = 'Apply must reveal the hidden settings of a block it rejects.';
 }
 if (!str_contains($page, "if (\$switch !== 'footer' && (\$cfg['service'] ?? '') === '2'):")) {
   $failures[] = 'A Monitor only fan must not offer Syslog or Problem Alerts switches.';
