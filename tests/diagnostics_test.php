@@ -7,6 +7,7 @@ mkdir($root, 0700, true);
 putenv("FCP_CONFIG_LOCK=$root/.config.lock");
 $failures = [];
 $check = function ($condition, string $message) use (&$failures) { if (!$condition) $failures[] = $message; };
+$check(FCP_DIAG_SETTINGS['service'] === [0, 2], 'Diagnostics must report Fan Control up to Monitor only (2).');
 // Key order is not part of the contract.
 $canon = function ($value) use (&$canon) {
     if (!is_array($value)) return $value;

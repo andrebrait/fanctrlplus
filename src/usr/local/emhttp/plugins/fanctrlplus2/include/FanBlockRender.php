@@ -319,11 +319,13 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
                   value="<?=htmlspecialchars(cfg_interval_seconds($cfg) . ' sec')?>"
                   placeholder="Recommended: 60–300 sec">
 
+            <?php if (($cfg['service'] ?? '') !== '2'): // A Monitor only fan is never set. ?>
             <span class="fanctrlplus2-interval-refresh fcp-runnow"
                   title="Manual Run: Read current temperature and set fan speed immediately"
                   data-label="<?=htmlspecialchars($cfg['custom'] ?? '')?>">
               <span class="fa fa-refresh fcp-fs-13"></span> Run Now
             </span>
+            <?php endif; ?>
           </td>
         </tr>
 

@@ -44,11 +44,12 @@ foreach ($files as $file) {
 
   // A Monitor only fan is read whether or not fan control runs.
   if ($monitor) {
-      $reading = fcp_monitor_reading((string)($cfg['controller'] ?? ''));
+      $reading = fcp_monitor_reading((string)($cfg['controller'] ?? ''), (string)($cfg['controller_identity'] ?? ''));
       $rpm_val = $reading['rpm'];
       if ($reading['pwm'] !== '-') $pct_val = round($reading['pwm'] / 255 * 100);
       $temp_origin = 'Monitor only';
-      $status = 'Monitoring';
+      // Nothing to read: the controller must be selected again.
+      $status = $reading === ['rpm' => '-', 'pwm' => '-'] ? '<span class="red-text">No reading</span>' : 'Monitoring';
   } elseif ($enabled && $daemon_running) {
       $temp_raw = trim(@file_get_contents("$tmp_path/temp_{$plugin}_$custom"));
       $rpm_raw  = trim(@file_get_contents("$tmp_path/rpm_{$plugin}_$custom"));
@@ -81,8 +82,7 @@ foreach ($files as $file) {
     'rpm_val'     => $rpm_val,
     'percent'     => $pct_val,
     'status'      => $status,
-    'footer'      => ($cfg['footer'] ?? '0') !== '0',
-    'monitor'     => $monitor
+    'footer'      => ($cfg['footer'] ?? '0') !== '0'
   ];
 }
 

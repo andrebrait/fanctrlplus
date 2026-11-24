@@ -42,6 +42,7 @@ fanctrlplus2.start_fans() {
     [[ -f "$cfg" ]] || continue
 
     service=$(grep -Po '^service="\K[^"]+' "$cfg")
+    [[ "$service" == 2 ]] && fcp_give_back "$(grep -Po '^controller="\K[^"]+' "$cfg")"
     [[ "$service" != "1" ]] && continue
 
     raw_custom=$(grep -Po '^custom="\K[^"]+' "$cfg")
@@ -207,6 +208,8 @@ fanctrlplus2.stop() {
     [[ -f "$cfg" ]] || continue
 
     service=$(grep -Po '^service="\K[^"]+' "$cfg")
+    # Saving runs stop first: a fan fan control drove is given back now.
+    [[ "$service" == 2 ]] && fcp_give_back "$(grep -Po '^controller="\K[^"]+' "$cfg")"
     [[ "$service" != "1" ]] && continue
 
     name=$(grep -Po '^custom="\K[^"]+' "$cfg" | tr -cd '[:alnum:]_-')

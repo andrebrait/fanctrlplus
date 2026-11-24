@@ -15,6 +15,8 @@ file_put_contents("$dir/class/hwmon/hwmon4/pwm2", "153\n");
 file_put_contents("$dir/class/hwmon/hwmon4/fan2_input", "1459\n");
 
 $check(fcp_monitor_reading("$chip/pwm2") === ['rpm' => '1459', 'pwm' => '153'], 'The speed and PWM must be read from the controller and its fan input.');
+$usb = 'usb:' . bin2hex(json_encode(['3904', 'f001', 'ABC123', '/interface:1.0/hwmon/hwmon*/pwm2']));
+$check(fcp_monitor_reading("$chip/pwm2", $usb) === ['rpm' => '-', 'pwm' => '-'], 'A USB controller must not be read when another device holds its path.');
 file_put_contents("$chip/fan2_input", "");
 $check(fcp_monitor_reading("$chip/pwm2") === ['rpm' => '-', 'pwm' => '153'], 'A fan input without a reading must show no speed.');
 $check(fcp_monitor_reading("$chip/pwm3") === ['rpm' => '-', 'pwm' => '-'], 'A missing controller must show no reading.');

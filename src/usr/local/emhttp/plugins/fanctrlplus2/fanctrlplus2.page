@@ -1745,7 +1745,7 @@ $(function() {
     <p><strong>Custom Name:</strong> This label will be used in logs, UI, and configuration files. Choose a clear name like “HDD_Bay” or “Rear” to identify each block. A valid name is required to save settings.</p>
 
     <p><strong>Fan Control:</strong> Enables or disables the selected fan configuration. When disabled, temperature monitoring and fan speed control for that configuration will stop. 
-        <strong>Monitor only</strong> never writes to the fan's PWM controller, so the BIOS or another program keeps control of it; the Dashboard tile and the footer show its speed and PWM, even while fan control is stopped. Use it for a fan such as the CPU fan that you want to see but not control. Its temperature sources and curves are kept but not used.
+        <strong>Monitor only</strong> never writes to the fan's PWM controller, so the BIOS or another program keeps control of it (a fan FanCtrl Plus 2 drove since boot is given back to the mode it had before); the Dashboard tile and the footer show its speed and PWM, even while fan control is stopped. Use it for a fan such as the CPU fan that you want to see but not control. Its temperature sources and curves are kept but not used.
         In contrast, the <strong>Stop</strong> button fully halts the fanctrlplus2 service, stopping all fan updates and logging across all configurations.
     </p>
 

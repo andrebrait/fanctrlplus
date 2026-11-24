@@ -188,8 +188,41 @@ disk_temperature_origin() {
 # the PWM write did, so a caller records an output as applied only then. The
 # mode write stays best effort, as it always was.
 fcp_write_pwm() {
-  [[ -f "$controller_enable" ]] && echo 1 > "$controller_enable"
+  if [[ -f "$controller_enable" ]]; then
+    fcp_save_bios_mode "$controller"
+    echo 1 > "$controller_enable"
+  fi
   echo "$1" > "$controller"
+}
+
+# The mode (pwmN_enable) a controller had before fan control first set it to
+# manual, so that setting its fan to Monitor only gives it back. Kept in a
+# directory, which plugin updates keep, until then or the next boot.
+fcp_bios_mode_dir="${fcp_bios_mode_dir:-/var/tmp/fanctrlplus2/bios_mode}"
+fcp_bios_mode_file() {
+  printf '%s/%s' "$fcp_bios_mode_dir" "${1//\//_}"
+}
+fcp_save_bios_mode() {
+  local file mode
+  file=$(fcp_bios_mode_file "$1")
+  [[ -e "$file" ]] && return 0
+  mode=$(cat "${1}_enable" 2>/dev/null)
+  # Manual already: whatever set it keeps it, so there is nothing to give back.
+  [[ "$mode" =~ ^[0-9]+$ && "$mode" != 1 ]] || return 0
+  mkdir -p "$fcp_bios_mode_dir" && echo "$mode" > "$file"
+}
+
+# Gives a Monitor only fan's controller back to the mode it had before fan
+# control first took it, when fan control took it since boot.
+fcp_give_back() {
+  local file mode
+  file=$(fcp_bios_mode_file "$1")
+  [[ -f "$file" ]] || return 0
+  mode=$(< "$file")
+  fcp_drivable_controller "$1" && [[ -w "${1}_enable" ]] || return 0
+  echo "$mode" > "${1}_enable" || return 0
+  rm -f "$file"
+  logger -t fanctrlplus2 "Gave $(basename "$1") back to mode $mode: its fan is set to Monitor only"
 }
 
 # ===== Fan-history recording (dashboard history widget) =====

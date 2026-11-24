@@ -87,6 +87,24 @@ if (!str_contains($footerPage, 'else if ($old.length) $old.replaceWith($footer);
   $failures[] = 'The footer entry must be updated in place after it is first shown.';
 }
 
+// Monitor only (service="2", #45): offered, never run, and read live.
+$block = file_get_contents($sourceRoot . '/include/FanBlockRender.php');
+if (!str_contains($block, '<option value="2"') || !str_contains($block, "<?php if ((\$cfg['service'] ?? '') !== '2'): // A Monitor only fan is never set. ?>")) {
+  $failures[] = 'Fan Control must offer Monitor only, and the settings page must not offer Run Now for it.';
+}
+$tile = file_get_contents($sourceRoot . '/FanctrlPlus2.Dashboard.page');
+if (!str_contains($tile, "\$run = (\$cfg['service'] ?? '0') === '2' ? '' :")) {
+  $failures[] = 'The Dashboard tile must not offer Manual Run for a Monitor only fan.';
+}
+if (!str_contains($endpoint, "\$monitor = (\$cfg['service'] ?? '0') === '2';")
+    || !str_contains($endpoint, "fcp_monitor_reading((string)(\$cfg['controller'] ?? ''), (string)(\$cfg['controller_identity'] ?? ''))")) {
+  $failures[] = 'The Dashboard endpoint must read a Monitor only fan live from its controller.';
+}
+$history = file_get_contents($sourceRoot . '/FanctrlPlusHistory2.Dashboard.page');
+if (!str_contains($history, "(\$cfg['service'] ?? '') === '2') continue;")) {
+  $failures[] = 'The History tile must skip Monitor only fans, which record no history.';
+}
+
 if ($failures) {
   fwrite(STDERR, implode("\n", $failures) . "\n");
   exit(1);

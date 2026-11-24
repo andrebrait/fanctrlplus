@@ -26,12 +26,13 @@ foreach (glob("$cfg_path/{$pluginname}_*.cfg") as $path) {
   if (!isset($seen[basename($path)])) $all_cfg[] = parse_ini_file($path);
 }
 
-// One chart per named fan configuration.
+// One chart per named fan configuration. Only fan control records history,
+// so a Monitor only fan has none.
 $fans = [];
 $fan_rows = "";
 foreach ($all_cfg as $cfg) {
   $name = trim($cfg['custom'] ?? '');
-  if ($name === '') continue;
+  if ($name === '' || ($cfg['service'] ?? '') === '2') continue;
 
   $canvas_id = 'fcp-history-' . count($fans);
   $fans[] = ['custom' => $name, 'canvasId' => $canvas_id];
