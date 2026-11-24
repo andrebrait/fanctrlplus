@@ -259,7 +259,8 @@ foreach ($_POST['#file'] as $i => $file) {
   $cfg = [
     'custom'     => $custom,
     'label'      => $custom,
-    'service'    => $_POST['service'][$i] ?? '0',
+    // Disabled, Enabled or Monitor only.
+    'service'    => in_array($_POST['service'][$i] ?? '0', ['0', '1', '2'], true) ? $_POST['service'][$i] : '0',
     'controller' => $controller,
     'controller_identity' => $controller_identity,
     'pwm'        => $legacy['pwm'],

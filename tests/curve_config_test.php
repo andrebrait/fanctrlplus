@@ -287,6 +287,10 @@ $saved = $bindingSave(['footer' => '1'], function (&$post) {});
 $check(($saved['footer'] ?? '') === '1', 'Saving must keep the Footer switch, which is set outside the form.');
 $saved = $bindingSave([], function (&$post) {});
 $check(($saved['footer'] ?? '') === '0', 'The Footer switch must default to off.');
+$saved = $bindingSave([], function (&$post) { $post['service'][0] = '2'; });
+$check(($saved['service'] ?? '') === '2', 'Monitor only must save.');
+$saved = $bindingSave([], function (&$post) { $post['service'][0] = '1"x'; });
+$check(($saved['service'] ?? '') === '0', 'An unknown Fan Control value must save as Disabled.');
 $write('fanctrlplus2_Raw.cfg', $rawLegacy);
 
 $write('fanctrlplus2_JBOD.cfg', $legacyFan);

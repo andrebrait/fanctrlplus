@@ -370,6 +370,13 @@ run_manual 60000
 expect_equal "0 0" "$rc $(cat "$tmp/pwm1")" "Run Now must not read a CPU sensor saved by its hwmon number."
 write_cfg ''
 
+# Monitor only: Run Now never writes the controller the BIOS keeps.
+write_cfg 'service="2"'
+fresh 100
+run_manual 60000
+expect_equal "1 100" "$rc $(cat "$tmp/pwm1")" "Run Now must not write a Monitor only fan's controller."
+write_cfg ''
+
 if (( failures > 0 )); then
   exit 1
 fi

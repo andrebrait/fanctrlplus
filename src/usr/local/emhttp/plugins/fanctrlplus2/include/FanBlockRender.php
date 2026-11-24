@@ -246,11 +246,12 @@ function render_fan_block($cfg, $i, $pwms, $disks, $pwm_labels, $cpu_sensors, $a
 
         <!-- Fan Control Dropdown -->
         <tr>
-          <td class="fcp-help-cursor" title="Enable or disable this fan controller">Fan Control:</td>
+          <td class="fcp-help-cursor" title="Enabled: FanCtrl Plus 2 sets this fan's speed. Monitor only: the BIOS keeps control, and FanCtrl Plus 2 only shows the fan's speed and PWM. Disabled: neither.">Fan Control:</td>
           <td>
             <select name="service[<?=$i?>]" class="fcp-enable-select">
               <option value="0" <?=($cfg['service'] ?? '') == '0' ? 'selected' : ''?>>Disabled</option>
               <option value="1" <?=($cfg['service'] ?? '') == '1' ? 'selected' : ''?>>Enabled</option>
+              <option value="2" <?=($cfg['service'] ?? '') == '2' ? 'selected' : ''?>>Monitor only</option>
             </select>
           </td>
         </tr>

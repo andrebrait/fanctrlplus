@@ -40,6 +40,7 @@ Configuration is done through a user-friendly interface, with custom thresholds,
 - Dashboard tile and system integration
 - Optional FCP Airflow Dashboard tile, similar to Unraid’s built-in Airflow tile but enhanced with support for custom fan labels
 - Optionally shows each fan's speed and PWM percentage in the status bar at the bottom of every Unraid page. Dynamix System Temperature shows the percentage only with Dynamix Auto Fan, which should not run alongside FanCtrlPlus. Turn it on per fan under Syslog & Alerts
+- Set a fan to Monitor only to show its speed and PWM on the Dashboard tile and in the footer while the BIOS keeps controlling it, for example the CPU fan
 - Reorder fan configurations with a button per direction, on a desktop or a phone. The new order is saved and reflected in both the UI and Dashboard.
 
 ---

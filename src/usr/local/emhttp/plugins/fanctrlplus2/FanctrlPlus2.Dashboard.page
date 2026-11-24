@@ -51,6 +51,13 @@ foreach ($all_cfg as $cfg) {
   // Skip unnamed fans.
   if (empty($cfg['custom'])) continue;
   $label = htmlspecialchars($cfg['custom'], ENT_QUOTES, 'UTF-8');
+  // A Monitor only fan is never set, so it has nothing to run.
+  $run = ($cfg['service'] ?? '0') === '2' ? '' : <<<RUN
+        <span class="fa fa-refresh fanctrlplus2-refresh"
+          data-label="$label"
+          style="cursor:pointer;font-size:13px;color:var(--blue-800);vertical-align:middle;"
+          title="Manual Run: Read current temperature and set fan speed immediately"></span>
+  RUN;
 
   $fan_rows .= <<<ROW
   <tr class="fcp-row" data-label="$label">
@@ -61,12 +68,7 @@ foreach ($all_cfg as $cfg) {
       <span class="fcp-cell fcp-num fp-rpm">--</span>
       <span class="fcp-cell fcp-num fp-pct">--</span>
       <span class="fcp-cell fcp-status fp-status">--</span>
-      <span class="fcp-cell fcp-run">
-        <span class="fa fa-refresh fanctrlplus2-refresh"
-          data-label="$label"
-          style="cursor:pointer;font-size:13px;color:var(--blue-800);vertical-align:middle;"
-          title="Manual Run: Read current temperature and set fan speed immediately"></span>
-      </span>
+      <span class="fcp-cell fcp-run">$run</span>
     </div></td>
   </tr>
   ROW;
