@@ -4,7 +4,7 @@
 <PLUGIN
   name="fanctrlplus2"
   author="ck9393 / andrebrait"
-  version="2026.11.23"
+  version="2026.11.24"
   launch="Settings/fanctrlplus2"
   pluginURL="https://raw.githubusercontent.com/andrebrait/fanctrlplus/main/plugin/fanctrlplus2.plg"
   min="6.9.0"
@@ -19,6 +19,23 @@
 
 <CHANGES>
 <![CDATA[
+### 2026.11.24
+
+## Monitor only fans
+
+Fan Control gets a third choice, **Monitor only**. FanCtrl Plus 2 then shows that fan's speed and PWM on the Dashboard tile and in the footer, but never sets its speed, so the BIOS or another program keeps control. This suits a CPU fan you want to see without controlling it (#45).
+
+- The settings page hides the settings that only matter for fan control while Monitor only is selected. Their values stay saved, so switching back to Enabled restores them. Syslog and Problem Alerts do not apply to a Monitor only fan.
+- When fan control starts or stops, a controller that no Enabled fan drives any more goes back to the mode it had before FanCtrl Plus 2 first took it, such as BIOS control. This covers a fan switched to Monitor only or Disabled, and a fan moved to another controller. A controller taken by an earlier version may need a reboot to go back to the BIOS.
+
+## Footer
+
+- Footer entries now show Unraid's fan icon.
+- A new **Fan Names in Footer** switch under General Settings, off by default, adds each fan's name to its footer entry.
+
+This is software-based fan control, not independent thermal protection. Monitor actual fan speeds and temperatures. Back up your settings before updating. If rolling back, reinstall the older plugin manifest and restore your backup; do not uninstall, because uninstalling deletes the configuration.
+
+
 ### 2026.11.23
 
 ## Fan speeds in the status bar
@@ -39,17 +56,6 @@ At boot, FanCtrl Plus 2 now starts fan control only after every plugin has insta
 ## Fans stay on their own chip
 
 A fan is never moved to another chip. Controllers, labels, and CPU and auxiliary sensors still saved in the older /sys/class/hwmon/hwmonN form are converted once, on the first start after this update, to the chip holding that number at that start: the chip earlier releases were driving. A controller or sensor that is not detected, including one saved under a number that did not exist then, stays selected and is marked on the settings page, and saving asks first. Select it again once.
-
-This is software-based fan control, not independent thermal protection. Monitor actual fan speeds and temperatures. Back up your settings before updating. If rolling back, reinstall the older plugin manifest and restore your backup; do not uninstall, because uninstalling deletes the configuration.
-
-
-### 2026.11.12
-
-## Fewer false control-loss warnings at full speed
-
-When a fan is set to full speed, some controllers report it as mode 0 instead of manual mode 1. This includes the nct6775 driver family, used by many Nuvoton boards. FanCtrl Plus 2 no longer treats this as a loss of control while full speed is both the requested and the read-back value. A fan that stops, a controller switched to automatic mode, or one that refuses to leave full speed still triggers a warning.
-
-The fan curve tooltip now names the disk group, as the current-reading marker already does. The plugin changelog shows stable releases only, and support diagnostics now record the exact test-build version.
 
 This is software-based fan control, not independent thermal protection. Monitor actual fan speeds and temperatures. Back up your settings before updating. If rolling back, reinstall the older plugin manifest and restore your backup; do not uninstall, because uninstalling deletes the configuration.
 
@@ -106,16 +112,16 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.23-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/2026.11.23/fanctrlplus2-2026.11.23-noarch-1.txz</URL>
-<SHA256>672764b3ccc4db33c5f454a5014ee9534c4fedccffa4bc21d46a28c73f1d4478</SHA256>
+<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.24-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/2026.11.24/fanctrlplus2-2026.11.24-noarch-1.txz</URL>
+<SHA256>f62a300d212c9f3d428f5664bfa6612fec9a358010ce4ad4f7c3828a11faf68b</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.23-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-2026.11.24-noarch-1.txz" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
@@ -138,7 +144,7 @@ fi
 echo ""
 echo "------------------------------------------------"
 echo " FanCtrl Plus 2 is installed."
-echo " Version: 2026.11.23"
+echo " Version: 2026.11.24"
 echo "------------------------------------------------"
 echo ""
 exit 0
