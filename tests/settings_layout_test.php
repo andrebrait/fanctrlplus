@@ -52,8 +52,8 @@ if (!str_contains($page, "op: 'fcp_history_toggle'")) {
 if (!str_contains($page, "hasClass('fcp-history-switch')")) {
   $failures[] = 'The click handler must persist the History switch.';
 }
-if (!str_contains($page, ".fcp-airflow-switch, .fcp-history-switch'")) {
-  $failures[] = 'The change handler must cover the History switch.';
+if (!str_contains($page, ".fcp-airflow-switch, .fcp-history-switch, .fcp-footer-names-switch'")) {
+  $failures[] = 'The change handler must cover the History and Fan Names in Footer switches.';
 }
 if (substr_count($page, 'saveHistorySwitchState') < 2) {
   $failures[] = 'saveHistorySwitchState must be defined and called.';
@@ -87,8 +87,13 @@ if (!str_contains($footerPage, 'else if ($old.length) $old.replaceWith($footer);
   $failures[] = 'The footer entry must be updated in place after it is first shown.';
 }
 
-if (!str_contains($footerPage, "<i class='icon-fan'") || !str_contains($footerPage, "document.createTextNode(f.label + ' ' + rpm")) {
-  $failures[] = 'Each footer entry must show a fan icon and the fan name, so fans can be told apart.';
+if (!str_contains($footerPage, "<i class='icon-fan'") || !str_contains($footerPage, "document.createTextNode((names ? f.label + ' ' : '') + rpm")
+    || !str_contains($footerPage, "preg_match('/^__FCP_FOOTER_NAMES__\\s*=\\s*1\\s*\$/m'")) {
+  $failures[] = 'Each footer entry must show a fan icon, and the fan name while Fan Names in Footer is on.';
+}
+if (!str_contains($page, "fcp_labels_flag_enabled(\$cfg_dir, '__FCP_FOOTER_NAMES__')") || !str_contains($page, "op: 'fcp_footer_names_toggle'")
+    || !str_contains($logic, "'fcp_footer_names_toggle' => '__FCP_FOOTER_NAMES__'") || !str_contains($logic, "'fcp_history_toggle','fcp_footer_names_toggle']")) {
+  $failures[] = 'Fan Names in Footer must be one switch saved as __FCP_FOOTER_NAMES__ under the configuration lock.';
 }
 
 // Monitor only (service="2", #45): offered, never run, and read live.

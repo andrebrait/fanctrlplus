@@ -35,7 +35,7 @@ header('Cache-Control: no-store, max-age=0');
 $op = $_GET['op'] ?? $_POST['op'] ?? '';
 
 // Serialize restore/export with every HTTP writer of these configuration files.
-if (in_array($op, ['savelabel','newtemp','delete','setsyslog','setnotify','setfooter','saveorder','start','stop','fcp_airflow_toggle','fcp_history_toggle'], true)) {
+if (in_array($op, ['savelabel','newtemp','delete','setsyslog','setnotify','setfooter','saveorder','start','stop','fcp_airflow_toggle','fcp_history_toggle','fcp_footer_names_toggle'], true)) {
   try { $config_lock = fcp_config_lock($cfg_dir); }
   catch (Throwable $error) { http_response_code(500); json_response(['status'=>'error','message'=>$error->getMessage()]); }
   register_shutdown_function(function () use ($config_lock) {
@@ -473,10 +473,11 @@ switch ($op) {
 
   case 'fcp_airflow_toggle':
   case 'fcp_history_toggle':
+  case 'fcp_footer_names_toggle':
 
       $cfg_dir     = "/boot/config/plugins/fanctrlplus2";
       $labels_file = $cfg_dir.'/pwm_labels.cfg';
-      $flag        = $op === 'fcp_history_toggle' ? '__FCP_HISTORY__' : '__FCP_AIRFLOW__';
+      $flag        = ['fcp_history_toggle' => '__FCP_HISTORY__', 'fcp_footer_names_toggle' => '__FCP_FOOTER_NAMES__'][$op] ?? '__FCP_AIRFLOW__';
 
       $enabled = (($_POST['enabled'] ?? '0') === '1');
       $lines   = is_file($labels_file) ? file($labels_file, FILE_IGNORE_NEW_LINES) : [];

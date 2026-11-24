@@ -12,11 +12,14 @@ foreach (glob('/boot/config/plugins/fanctrlplus2/fanctrlplus2_*.cfg') ?: [] as $
     break;
   }
 }
+// Fan names follow the Fan Names in Footer switch (__FCP_FOOTER_NAMES__ in the labels file).
+$fcp_footer_names = (bool)preg_match('/^__FCP_FOOTER_NAMES__\s*=\s*1\s*$/m', (string)@file_get_contents('/boot/config/plugins/fanctrlplus2/pwm_labels.cfg'));
 ?>
 <?if ($fcp_footer):?>
 <script>
 $(function fcpFooter() {
   var shown = true;
+  var names = <?=$fcp_footer_names ? 'true' : 'false'?>;
   $.getJSON('/plugins/fanctrlplus2/Fanctrl2Dashboard.php', function(data) {
     var $footer = $("<span id='fcp-footer' style='margin-right:24px'></span>");
     var fans = (data.fans || []).filter(function(f) { return f.footer; });
@@ -26,7 +29,7 @@ $(function fcpFooter() {
       var pct = typeof f.percent === 'number' ? ' (' + f.percent + '%)' : '';
       // icon-fan is Unraid's own fan icon, which its Dashboard uses too.
       $('<span>').attr('title', f.label)
-        .append("<i class='icon-fan' style='margin:0 6px 0 24px'></i>", document.createTextNode(f.label + ' ' + rpm + ' rpm' + pct))
+        .append("<i class='icon-fan' style='margin:0 6px 0 24px'></i>", document.createTextNode((names ? f.label + ' ' : '') + rpm + ' rpm' + pct))
         .appendTo($footer);
     });
     // showFooter() removes and prepends, so entries that other plugins also
