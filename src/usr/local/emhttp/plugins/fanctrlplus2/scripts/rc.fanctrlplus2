@@ -156,7 +156,9 @@ fanctrlplus2.end_loops() {
   pkill -f "$loop_script" 2>/dev/null
   for _ in {1..25}; do pgrep -f "$loop_script" >/dev/null || return 0; sleep 0.2; done
   logger -t "$plugin" "A fan loop did not stop in 5 seconds; killing it"
-  pkill -KILL -f "$loop_script"
+  # Only the loops themselves, not an editor or tail open on the script.
+  pkill -KILL -f "bash $loop_script"
+  for _ in {1..10}; do pgrep -f "$loop_script" >/dev/null || return 0; sleep 0.2; done
 }
 
 fanctrlplus2.start_now() {

@@ -113,7 +113,7 @@ foreach (['fanctrlplus2.stop() {', 'fanctrlplus2.start_now() {'] as $fn) {
   $given = strpos($body, 'fcp_give_back_unused "$cfg_path"');
   if ($ended === false || $given === false || $ended > $given) $failures[] = "$fn must give controllers back after the fan loops end.";
 }
-if (!str_contains($rc, "pkill -KILL -f \"\$loop_script\"")) $failures[] = 'A fan loop that outlives the wait must be killed.';
+if (!str_contains($rc, "pkill -KILL -f \"bash \$loop_script\"")) $failures[] = 'A fan loop that outlives the wait must be killed.';
 
 if ($failures) {
   fwrite(STDERR, implode("\n", $failures) . "\n");

@@ -228,9 +228,13 @@ fcp_give_back_unused() {
     # A number path is never written (#41); a missing controller keeps its
     # mode for when it returns.
     [[ "$controller" == */class/hwmon/* ]] && { rm -f "$file"; continue; }
-    [[ -w "${controller}_enable" ]] && echo "$mode" > "${controller}_enable" || continue
+    [[ -e "${controller}_enable" ]] || continue
     rm -f "$file"
-    logger -t fanctrlplus2 "Gave $(basename "$controller") back to mode $mode: no enabled fan drives it"
+    if echo "$mode" 2>/dev/null > "${controller}_enable"; then
+      logger -t fanctrlplus2 "Gave $(basename "$controller") back to mode $mode: no enabled fan drives it"
+    else
+      logger -t fanctrlplus2 "Could not give $(basename "$controller") back to mode $mode; it stays in manual mode until a reboot"
+    fi
   done
 }
 
