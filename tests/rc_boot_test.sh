@@ -207,6 +207,15 @@ printf 'service="2"\ncustom="A"\ncontroller="%s"\n' "$tmp/hw/pwm1" > "$tmp/cfg/f
 expect_equal '5 ' "$(cat "$tmp/hw/pwm1_enable") $(running)" "Start must give a Monitor only fan's controller back and start no loop for it."
 fan A pwm1
 
+# ===== Stop keeps the mode of a controller it takes first (a fan moved to it) =====
+reset
+touch "$tmp/emhttpd_up"
+rm -rf "$tmp/modes"
+echo 5 > "$tmp/hw/pwm1_enable"
+touch "$tmp/run/fanctrlplus2_A.pid"
+"$rc" stop >/dev/null 2>&1
+expect_equal '1 5' "$(cat "$tmp/hw/pwm1_enable") $(head -n1 "$tmp/modes/"* 2>/dev/null)" "Stop must keep the mode of a controller it sets to 50% first."
+
 if (( failures )); then
   printf '%d rc boot test(s) failed\n' "$failures" >&2
   exit 1

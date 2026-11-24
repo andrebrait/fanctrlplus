@@ -235,6 +235,9 @@ fanctrlplus2.stop() {
 
     enable="${pwm}_enable"
     if [[ -w "$enable" ]]; then
+      # Saving runs stop with the new settings, so this may be a controller
+      # no loop has taken yet: keep its mode to give back.
+      fcp_save_bios_mode "$pwm"
       echo 1 > "$enable"
       echo 128 > "$pwm"
       logger -t "$plugin" "Stopped control of $(basename "$pwm"); set to 50% (manual mode) to ensure sufficient airflow and avoid overheating"
