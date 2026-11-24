@@ -87,6 +87,10 @@ if (!str_contains($footerPage, 'else if ($old.length) $old.replaceWith($footer);
   $failures[] = 'The footer entry must be updated in place after it is first shown.';
 }
 
+if (!str_contains($footerPage, "<i class='icon-fan'") || !str_contains($footerPage, "document.createTextNode(f.label + ' ' + rpm")) {
+  $failures[] = 'Each footer entry must show a fan icon and the fan name, so fans can be told apart.';
+}
+
 // Monitor only (service="2", #45): offered, never run, and read live.
 $block = file_get_contents($sourceRoot . '/include/FanBlockRender.php');
 if (!str_contains($block, '<option value="2"') || !str_contains($block, "<?php if ((\$cfg['service'] ?? '') !== '2'): // A Monitor only fan is never set. ?>")) {
@@ -99,6 +103,11 @@ if (!str_contains($block, 'class="show-chart-btn fcp-control-only"')
     || !str_contains(strstr($controlOnly, '</tbody>', true), 'class="aux-input"')
     || !str_contains($css, '.fan-block:not(.fcp-invalid) .fan-fieldset:has(select[name^="service["] option[value="2"]:checked) .fcp-control-only {')) {
   $failures[] = 'A Monitor only fan must hide the Chart button and every setting from Normal Cap to the Aux curve.';
+}
+$logic = file_get_contents($sourceRoot . '/include/FanctrlLogic.php');
+if (!str_contains($logic, "if (\$rpm !== '-' && \$rpm > 0) \$status = 'monitoring';")
+    || !str_contains($page, "const isRunning = status === 'running' || status === 'monitoring';")) {
+  $failures[] = 'A Monitor only fan that reports a speed must spin on the settings page, not show as stopped.';
 }
 // A setting Apply rejects must show, so a Monitor only fan's block can be corrected.
 if (substr_count($page, "block.addClass('fcp-invalid');") !== 4 || !str_contains($page, "\$('.fan-block').removeClass('fcp-invalid');")) {

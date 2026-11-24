@@ -24,8 +24,9 @@ $(function fcpFooter() {
     fans.forEach(function(f) {
       var rpm = /^\d+$/.test(f.rpm_val) ? f.rpm_val : '⋅⋅⋅';
       var pct = typeof f.percent === 'number' ? ' (' + f.percent + '%)' : '';
+      // icon-fan is Unraid's own fan icon, which its Dashboard uses too.
       $('<span>').attr('title', f.label)
-        .append("<i class='fa fa-flag-o' style='margin:0 6px 0 24px'></i>", document.createTextNode(rpm + ' rpm' + pct))
+        .append("<i class='icon-fan' style='margin:0 6px 0 24px'></i>", document.createTextNode(f.label + ' ' + rpm + ' rpm' + pct))
         .appendTo($footer);
     });
     // showFooter() removes and prepends, so entries that other plugins also

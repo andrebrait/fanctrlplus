@@ -380,7 +380,7 @@ $(function() {
         if (!cfgFile) return;
         const matchedKey = Object.keys(statusMap).find(k => k.toLowerCase() === cfgFile.toLowerCase());
         const status = matchedKey ? statusMap[matchedKey] : 'stopped';
-        const isRunning = status === 'running';
+        const isRunning = status === 'running' || status === 'monitoring';
 
         const fanSvg = block.find('svg')[0];
         if (!fanSvg) return;
@@ -414,9 +414,11 @@ $(function() {
             ? ` (based on ${sources.join(" and ")} temperature)`
             : '';
 
-          container.title = `Fan control: ${isRunning
-            ? `Active${sourceText}`
-            : 'Inactive (not automatically controlled)'}`;
+          container.title = status === 'monitoring'
+            ? 'Monitor only: the BIOS controls this fan'
+            : `Fan control: ${isRunning
+              ? `Active${sourceText}`
+              : 'Inactive (not automatically controlled)'}`;
         }
       });
     }).fail(function (jqXHR, textStatus, errorThrown) {

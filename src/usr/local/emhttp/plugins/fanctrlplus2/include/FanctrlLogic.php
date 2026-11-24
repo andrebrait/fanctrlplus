@@ -351,8 +351,17 @@ switch ($op) {
         }
       }
 
+      $status = $running ? 'running' : 'stopped';
+      // A Monitor only fan spins in the BIOS's hands: shown as monitored while it reports a speed.
+      if (trim($cfg['service'] ?? '0') === '2') {
+        $identity = (string)($cfg['controller_identity'] ?? '');
+        if (str_starts_with($identity, 'usb:')) $identities ??= fcp_pwm_identity_map(list_pwm());
+        $rpm = fcp_monitor_reading((string)($cfg['controller'] ?? ''), $identity, $identities ?? null)['rpm'];
+        if ($rpm !== '-' && $rpm > 0) $status = 'monitoring';
+      }
+
       if ($name !== '') {
-        $result[basename($file)] = $running ? 'running' : 'stopped';
+        $result[basename($file)] = $status;
       }
     }
   
