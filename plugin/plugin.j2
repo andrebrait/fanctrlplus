@@ -72,8 +72,8 @@ exit 0
 </INLINE>
 </FILE>
 
-<FILE Name="/boot/config/plugins/fanctrlplus2/fanctrlplus2-{{ env['PLUGIN_VERSION'] }}-noarch-1.txz" Run="upgradepkg --install-new --reinstall">
-<URL>https://github.com/andrebrait/fanctrlplus/releases/download/{{ env['PLUGIN_TAG'] }}/fanctrlplus2-{{ env['PLUGIN_VERSION'] }}-noarch-1.txz</URL>
+<FILE Name="/boot/config/plugins/fanctrlplus2/{{ env['PLUGIN_PACKAGE_FILE'] }}" Run="upgradepkg --install-new --reinstall">
+<URL>https://github.com/andrebrait/fanctrlplus/releases/download/{{ env['PLUGIN_TAG'] }}/{{ env['PLUGIN_PACKAGE_FILE'] }}</URL>
 <SHA256>{{ env['PLUGIN_CHECKSUM'] }}</SHA256>
 </FILE>
 
@@ -81,7 +81,7 @@ exit 0
 <INLINE>
 <![CDATA[
 for package in /boot/config/plugins/fanctrlplus2/fanctrlplus2-*.txz; do
-  [[ "$package" == "/boot/config/plugins/fanctrlplus2/fanctrlplus2-{{ env['PLUGIN_VERSION'] }}-noarch-1.txz" ]] || rm -f "$package"
+  [[ "$package" == "/boot/config/plugins/fanctrlplus2/{{ env['PLUGIN_PACKAGE_FILE'] }}" ]] || rm -f "$package"
 done
 
 src="/usr/local/emhttp/plugins/fanctrlplus2/scripts/rc.fanctrlplus2"
